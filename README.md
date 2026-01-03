@@ -38,18 +38,39 @@ Smart Shopping Price Tracker for Dana - Track prices, get alerts on drops, and f
    cd danavision
    ```
 
-2. Start the application:
+2. Configure environment:
+   ```bash
+   cp .env.example .env
+   # Generate APP_KEY:
+   docker run --rm php:8.3-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+   # Add the generated key to .env file
+   ```
+
+3. Start the application:
    ```bash
    docker compose up -d
    ```
 
-3. Run migrations and seed:
+4. Run migrations and seed:
    ```bash
    docker compose exec danavision php artisan migrate --force
    docker compose exec danavision php artisan db:seed --force
    ```
 
-4. Open http://localhost:8080
+5. Open http://localhost:8080
+
+### Using Pre-built Docker Image
+
+Docker images are automatically built and pushed to GitHub Container Registry on every push to the main branch. You can use the pre-built image instead of building locally:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/jpittelkow/danavision:latest
+
+# Or use docker-compose with the pre-built image (update docker-compose.yml to use image instead of build)
+```
+
+View the package: https://github.com/jpittelkow/danavision/pkgs/container/danavision
 
 ## Test Credentials
 
@@ -155,6 +176,17 @@ test('users can perform action', function () {
     $this->assertDatabaseHas('table', ['column' => 'value']);
 });
 ```
+
+## CI/CD
+
+This repository uses GitHub Actions to automatically build and push Docker images to GitHub Container Registry (ghcr.io) on every push to the main branch. The workflow:
+
+- Builds the Docker image using Docker Buildx
+- Tags images as `ghcr.io/jpittelkow/danavision:latest` and `ghcr.io/jpittelkow/danavision:main-{sha}`
+- Pushes to GitHub Container Registry
+- Uses GitHub Actions cache for faster builds
+
+View the workflow: [.github/workflows/docker-build.yml](.github/workflows/docker-build.yml)
 
 ## Architecture
 
