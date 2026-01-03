@@ -75,4 +75,60 @@ class VendorSuppressionTest extends TestCase
             ->where('settings.suppressed_vendors', [])
         );
     }
+
+    public function test_user_can_suppress_vendor_via_api(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/settings/suppress-vendor', [
+                'vendor' => 'Amazon',
+            ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+        ]);
+
+        // Verify the vendor was added
+        $saved = Setting::get(Setting::SUPPRESSED_VENDORS, $this->user->id);
+        $vendors = json_decode($saved, true);
+        $this->assertContains('Amazon', $vendors);
+    }
+
+    public function test_suppress_vendor_api_does_not_duplicate_vendor(): void
+    {
+        // First, set the vendor
+        Setting::set(Setting::SUPPRESSED_VENDORS, json_encode(['Amazon']), $this->user->id);
+
+        // Try to add it again
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/settings/suppress-vendor', [
+                'vendor' => 'Amazon',
+            ]);
+
+        $response->assertOk();
+
+        // Verify there's still only one entry
+        $saved = Setting::get(Setting::SUPPRESSED_VENDORS, $this->user->id);
+        $vendors = json_decode($saved, true);
+        $this->assertCount(1, $vendors);
+        $this->assertEquals(['Amazon'], $vendors);
+    }
+
+    public function test_suppress_vendor_api_requires_vendor_name(): void
+    {
+        $response = $this->actingAs($this->user)
+            ->postJson('/api/settings/suppress-vendor', []);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['vendor']);
+    }
+
+    public function test_suppress_vendor_api_requires_authentication(): void
+    {
+        $response = $this->postJson('/api/settings/suppress-vendor', [
+            'vendor' => 'Amazon',
+        ]);
+
+        $response->assertUnauthorized();
+    }
 }

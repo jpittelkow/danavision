@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Head, Link, useForm, router } from '@inertiajs/react';
-import { PageProps, ListItem, VendorPrice } from '@/types';
+import { PageProps, ListItem, VendorPrice, SmartFillResult } from '@/types';
 import AppLayout from '@/Layouts/AppLayout';
 import { Button } from '@/Components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
@@ -26,6 +26,8 @@ import {
   BarChart3,
   MapPin,
   Scale,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import {
   Select,
@@ -98,12 +100,17 @@ interface Props extends PageProps {
 export default function ItemShow({ auth, item, list, price_history, can_edit, flash }: Props) {
   const [isEditing, setIsEditing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSmartFilling, setIsSmartFilling] = useState(false);
+  const [smartFillMessage, setSmartFillMessage] = useState<string | null>(null);
+  const [hiddenVendors, setHiddenVendors] = useState<string[]>([]);
+  const [suppressingVendor, setSuppressingVendor] = useState<string | null>(null);
 
   const { data, setData, patch, processing, errors, reset } = useForm({
     product_name: item.product_name,
     product_url: item.product_url || '',
     product_image_url: item.product_image_url || '',
     sku: item.sku || '',
+    upc: item.upc || '',
     target_price: item.target_price?.toString() || '',
     notes: item.notes || '',
     priority: item.priority,
@@ -130,7 +137,101 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
     setIsEditing(false);
   };
 
-  const vendorPrices = item.vendor_prices || [];
+  /**
+   * Handle Smart Fill - uses AI to populate product information
+   */
+  const handleSmartFill = async () => {
+    setIsSmartFilling(true);
+    setSmartFillMessage(null);
+
+    try {
+      const response = await fetch(`/items/${item.id}/smart-fill`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'Accept': 'application/json',
+        },
+      });
+
+      const result: SmartFillResult = await response.json();
+
+      if (!result.success) {
+        setSmartFillMessage(result.error || 'Smart fill failed');
+        return;
+      }
+
+      // Open edit mode if not already open
+      if (!isEditing) {
+        setIsEditing(true);
+      }
+
+      // Populate form fields with discovered data
+      if (result.product_image_url) {
+        setData('product_image_url', result.product_image_url);
+      }
+      if (result.sku && !data.sku) {
+        setData('sku', result.sku);
+      }
+      if (result.upc && !data.upc) {
+        setData('upc', result.upc);
+      }
+      if (result.description && !data.notes) {
+        setData('notes', result.description);
+      }
+      if (result.suggested_target_price && !data.target_price) {
+        setData('target_price', result.suggested_target_price.toString());
+      }
+      if (result.is_generic !== undefined) {
+        setData('is_generic', result.is_generic);
+        if (result.is_generic && result.unit_of_measure) {
+          setData('unit_of_measure', result.unit_of_measure);
+        }
+      }
+
+      // Show success message with providers used
+      const providers = result.providers_used.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ');
+      setSmartFillMessage(`Found product info using ${providers || 'AI'}!`);
+
+    } catch (error) {
+      console.error('Smart fill error:', error);
+      setSmartFillMessage('Failed to connect to AI service');
+    } finally {
+      setIsSmartFilling(false);
+    }
+  };
+
+  /**
+   * Handle vendor suppression (add to global blacklist)
+   */
+  const handleSuppressVendor = async (vendorName: string) => {
+    setSuppressingVendor(vendorName);
+
+    try {
+      const response = await fetch('/api/settings/suppress-vendor', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ vendor: vendorName }),
+      });
+
+      if (response.ok) {
+        // Hide the vendor row immediately
+        setHiddenVendors((prev) => [...prev, vendorName]);
+      }
+    } catch (error) {
+      console.error('Failed to suppress vendor:', error);
+    } finally {
+      setSuppressingVendor(null);
+    }
+  };
+
+  const vendorPrices = (item.vendor_prices || []).filter(
+    (vp) => !hiddenVendors.includes(vp.vendor)
+  );
   const hasPriceHistory = Object.keys(price_history).length > 0;
 
   // Calculate best and worst prices (only from vendors with prices)
@@ -165,6 +266,25 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
         {flash?.success && (
           <div className="bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-700 text-green-700 dark:text-green-300 px-4 py-3 rounded-xl mb-6">
             {flash.success}
+          </div>
+        )}
+
+        {/* Smart Fill Message */}
+        {smartFillMessage && (
+          <div className={cn(
+            'px-4 py-3 rounded-xl mb-6 flex items-center gap-2',
+            smartFillMessage.includes('Found') || smartFillMessage.includes('success')
+              ? 'bg-violet-100 dark:bg-violet-900/30 border border-violet-400 dark:border-violet-700 text-violet-700 dark:text-violet-300'
+              : 'bg-amber-100 dark:bg-amber-900/30 border border-amber-400 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+          )}>
+            <Sparkles className="h-4 w-4 flex-shrink-0" />
+            <span>{smartFillMessage}</span>
+            <button
+              onClick={() => setSmartFillMessage(null)}
+              className="ml-auto p-1 hover:opacity-70"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
@@ -251,8 +371,23 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
                     <div className="flex gap-2 flex-shrink-0">
                       <Button
                         variant="outline"
+                        onClick={handleSmartFill}
+                        disabled={isSmartFilling}
+                        title="Use AI to auto-fill product details"
+                        className="gap-1"
+                      >
+                        {isSmartFilling ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                        <span className="hidden sm:inline">Smart Fill</span>
+                      </Button>
+                      <Button
+                        variant="outline"
                         onClick={handleRefresh}
                         disabled={isRefreshing}
+                        title="Refresh prices"
                       >
                         {isRefreshing ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -335,12 +470,40 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
                     )}
                   </div>
                   <div>
-                    <Label htmlFor="sku">SKU</Label>
+                    <Label htmlFor="sku">SKU / Model Number</Label>
                     <Input
                       id="sku"
                       value={data.sku}
                       onChange={(e) => setData('sku', e.target.value)}
-                      placeholder="Product SKU"
+                      placeholder="e.g., WH-1000XM5"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="upc">UPC / Barcode</Label>
+                    <Input
+                      id="upc"
+                      value={data.upc}
+                      onChange={(e) => setData('upc', e.target.value)}
+                      placeholder="12-digit barcode (for packaged products)"
+                      className="mt-1"
+                      maxLength={14}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Optional - helps with precise price matching
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="product_image_url">Image URL</Label>
+                    <Input
+                      id="product_image_url"
+                      type="url"
+                      value={data.product_image_url}
+                      onChange={(e) => setData('product_image_url', e.target.value)}
+                      placeholder="https://..."
                       className="mt-1"
                     />
                   </div>
@@ -502,13 +665,24 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
                         <tr
                           key={vp.id}
                           className={cn(
-                            'border-b last:border-0',
+                            'group border-b last:border-0 transition-colors',
                             isBest && 'bg-green-500/5'
                           )}
                         >
                           <td className="py-3 px-3">
                             <div className="flex items-center gap-2">
-                              <span className="font-medium">{vp.vendor}</span>
+                              {vp.product_url ? (
+                                <a
+                                  href={vp.product_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-medium text-primary hover:underline"
+                                >
+                                  {vp.vendor}
+                                </a>
+                              ) : (
+                                <span className="font-medium">{vp.vendor}</span>
+                              )}
                               {isBest && (
                                 <Badge className="text-xs bg-green-600 hover:bg-green-600">Best Price</Badge>
                               )}
@@ -556,17 +730,32 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
                           <td className="py-3 px-3 text-right text-xs text-muted-foreground">
                             {formatRelativeTime(vp.last_checked_at)}
                           </td>
-                          <td className="py-3 px-3 text-center">
-                            {vp.product_url && (
-                              <a
-                                href={vp.product_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline"
+                          <td className="py-3 px-3 text-center relative">
+                            <div className="flex items-center justify-center gap-1">
+                              {vp.product_url && (
+                                <a
+                                  href={vp.product_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline p-1"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                              )}
+                              {/* Blacklist button - appears on hover */}
+                              <button
+                                onClick={() => handleSuppressVendor(vp.vendor)}
+                                disabled={suppressingVendor === vp.vendor}
+                                className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+                                title={`Hide ${vp.vendor} from all results`}
                               >
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            )}
+                                {suppressingVendor === vp.vendor ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-red-500" />
+                                ) : (
+                                  <X className="h-4 w-4 text-red-500" />
+                                )}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

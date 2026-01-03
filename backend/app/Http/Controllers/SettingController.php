@@ -276,6 +276,38 @@ class SettingController extends Controller
     }
 
     /**
+     * Add a vendor to the suppressed vendors list.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function suppressVendor(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'vendor' => ['required', 'string', 'max:255'],
+        ]);
+
+        $userId = $request->user()->id;
+        $vendorName = trim($validated['vendor']);
+
+        // Get current suppressed vendors
+        $suppressedJson = Setting::get(Setting::SUPPRESSED_VENDORS, $userId);
+        $suppressed = $suppressedJson ? json_decode($suppressedJson, true) ?: [] : [];
+
+        // Add vendor if not already in the list
+        if (!in_array($vendorName, $suppressed)) {
+            $suppressed[] = $vendorName;
+            Setting::set(Setting::SUPPRESSED_VENDORS, json_encode($suppressed), $userId);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "'{$vendorName}' has been added to your suppressed vendors list.",
+            'suppressed_vendors' => $suppressed,
+        ]);
+    }
+
+    /**
      * Test email configuration by sending a test email.
      */
     public function testEmail(Request $request): RedirectResponse

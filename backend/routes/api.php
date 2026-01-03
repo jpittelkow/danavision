@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ListShareController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\SettingController as WebSettingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -96,4 +97,5 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     Route::post('/settings/price-api/test', [SettingController::class, 'testPriceApi']);
     Route::get('/settings/email', [SettingController::class, 'emailSettings']);
     Route::post('/settings/email/test', [SettingController::class, 'testEmail']);
+    Route::post('/settings/suppress-vendor', [WebSettingController::class, 'suppressVendor']);
 });

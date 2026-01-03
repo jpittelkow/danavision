@@ -177,6 +177,26 @@ export interface AIPrompt {
   updated_at: string;
 }
 
+/**
+ * Result from the Smart Fill AI feature.
+ * Contains product information discovered by AI analysis.
+ */
+export interface SmartFillResult {
+  success: boolean;
+  error?: string;
+  product_image_url?: string;
+  sku?: string;
+  upc?: string;
+  description?: string;
+  suggested_target_price?: number;
+  common_price?: number;
+  brand?: string;
+  category?: string;
+  is_generic?: boolean;
+  unit_of_measure?: string;
+  providers_used: string[];
+}
+
 export type PageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {
   auth: {
     user: User | null;

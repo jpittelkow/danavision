@@ -56,6 +56,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('items/{item}', [ListItemController::class, 'destroy'])->name('items.destroy');
     Route::post('items/{item}/refresh', [ListItemController::class, 'refresh'])->name('items.refresh');
     Route::post('items/{item}/purchased', [ListItemController::class, 'markPurchased'])->name('items.purchased');
+    Route::post('items/{item}/smart-fill', [ListItemController::class, 'smartFill'])->name('items.smart-fill');
 
     // Search
     Route::get('search', [SearchController::class, 'index'])->name('search');

@@ -304,4 +304,226 @@ class ListItemController extends Controller
 
         return back()->with('success', 'Item marked as purchased!');
     }
+
+    /**
+     * Smart fill item details using AI.
+     *
+     * Uses AI to analyze the product name and find additional information
+     * including images, SKU/UPC, description, and suggested pricing.
+     *
+     * @param Request $request
+     * @param ListItem $item
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function smartFill(Request $request, ListItem $item): \Illuminate\Http\JsonResponse
+    {
+        $this->authorize('update', $item);
+
+        $userId = $request->user()->id;
+        $multiAI = \App\Services\AI\MultiAIService::forUser($userId);
+        $priceService = AIPriceSearchService::forUser($userId);
+
+        // Check if AI is available
+        if (!$multiAI->isAvailable()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No AI providers configured. Please set up an AI provider in Settings.',
+            ], 422);
+        }
+
+        $productName = $item->product_name;
+        $providersUsed = [];
+
+        // Build prompt for AI to analyze the product
+        $prompt = $this->buildSmartFillPrompt($productName, $item);
+
+        try {
+            // Query AI for product information
+            $result = $multiAI->processWithAllProviders($prompt);
+
+            if ($result['error'] && !$result['aggregated_response']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $result['error'] ?? 'AI analysis failed',
+                ], 422);
+            }
+
+            // Parse the AI response
+            $aiData = $this->parseSmartFillResponse($result['aggregated_response']);
+
+            // Track providers used
+            $providersUsed = collect($result['individual_responses'] ?? [])
+                ->filter(fn ($r) => $r['error'] === null)
+                ->keys()
+                ->toArray();
+
+            // Now search for prices to get current market data and images
+            $searchQuery = $productName;
+            $searchResult = $priceService->search($searchQuery, [
+                'is_generic' => $item->is_generic ?? false,
+                'unit_of_measure' => $item->unit_of_measure,
+            ]);
+
+            // Calculate suggested target price (median of all found prices)
+            $suggestedTargetPrice = null;
+            $commonPrice = null;
+            $foundImageUrl = $aiData['image_url'] ?? null;
+
+            if ($searchResult->hasResults()) {
+                $prices = array_filter(array_column($searchResult->results, 'price'));
+                if (!empty($prices)) {
+                    sort($prices);
+                    $count = count($prices);
+                    // Use median price as suggested target (good deal)
+                    $medianIndex = floor($count / 2);
+                    $commonPrice = $count % 2 === 0
+                        ? ($prices[$medianIndex - 1] + $prices[$medianIndex]) / 2
+                        : $prices[$medianIndex];
+                    
+                    // Suggest target price slightly below median (10% discount)
+                    $suggestedTargetPrice = round($commonPrice * 0.9, 2);
+                }
+
+                // Get image from first result with an image if AI didn't provide one
+                if (!$foundImageUrl) {
+                    foreach ($searchResult->results as $priceResult) {
+                        if (!empty($priceResult['image_url'])) {
+                            $foundImageUrl = $priceResult['image_url'];
+                            break;
+                        }
+                    }
+                }
+
+                // Add web_search to providers if used
+                if (in_array('web_search', $searchResult->providersUsed)) {
+                    $providersUsed[] = 'web_search';
+                }
+            }
+
+            // Build the response
+            $response = [
+                'success' => true,
+                'product_image_url' => $foundImageUrl,
+                'sku' => $aiData['sku'] ?? null,
+                'upc' => $aiData['upc'] ?? null,
+                'description' => $aiData['description'] ?? null,
+                'suggested_target_price' => $suggestedTargetPrice,
+                'common_price' => $commonPrice,
+                'brand' => $aiData['brand'] ?? null,
+                'category' => $aiData['category'] ?? null,
+                'is_generic' => $aiData['is_generic'] ?? $item->is_generic ?? false,
+                'unit_of_measure' => $aiData['unit_of_measure'] ?? $item->unit_of_measure,
+                'providers_used' => array_unique($providersUsed),
+            ];
+
+            return response()->json($response);
+
+        } catch (\Exception $e) {
+            \Log::error('Smart fill failed', [
+                'item_id' => $item->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Smart fill failed: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Build the prompt for smart fill AI analysis.
+     *
+     * @param string $productName
+     * @param ListItem $item
+     * @return string
+     */
+    protected function buildSmartFillPrompt(string $productName, ListItem $item): string
+    {
+        $existingInfo = [];
+        if ($item->sku) {
+            $existingInfo[] = "SKU: {$item->sku}";
+        }
+        if ($item->upc) {
+            $existingInfo[] = "UPC: {$item->upc}";
+        }
+        if ($item->notes) {
+            $existingInfo[] = "Notes: {$item->notes}";
+        }
+
+        $existingContext = !empty($existingInfo)
+            ? "\n\nExisting information about this item:\n" . implode("\n", $existingInfo)
+            : '';
+
+        return <<<PROMPT
+Analyze this product and provide detailed information: "{$productName}"{$existingContext}
+
+Return a JSON object with the following fields:
+{
+    "sku": "Product SKU/model number if known (e.g., 'WH-1000XM5' for Sony headphones)",
+    "upc": "12-digit UPC barcode if this is a packaged retail product, null for generic items",
+    "description": "A helpful 1-2 sentence description of the product for shopping purposes",
+    "brand": "The brand name if identifiable",
+    "category": "Product category (e.g., Electronics, Groceries, Home & Garden)",
+    "image_url": "A valid product image URL if you know one from a major retailer",
+    "is_generic": false,
+    "unit_of_measure": null
+}
+
+Guidelines:
+- SKU: Provide the manufacturer's SKU, model number, or part number if identifiable. This helps with price tracking.
+- UPC: Only provide the 12-digit barcode for packaged retail products. Generic items (produce, bulk goods, deli) do NOT have UPCs - use null.
+- Description: Write a brief, helpful description that would help someone shopping for this item.
+- Brand: Identify the brand if possible from the product name.
+- Category: Classify the product into a helpful category.
+- Image URL: Only provide if you're confident it's a valid, direct image URL from a major retailer.
+- is_generic: Set to true for items sold by weight/volume/count (produce, meat, dairy), false for branded products with SKUs.
+- unit_of_measure: If is_generic is true, specify the unit (lb, oz, kg, gallon, each, dozen, etc.).
+
+Examples:
+- "Sony WH-1000XM5" → sku: "WH-1000XM5", upc: "027242917576", is_generic: false
+- "Organic Blueberries" → sku: null, upc: null, is_generic: true, unit_of_measure: "lb"
+- "iPhone 15 Pro Max 256GB" → sku: "MU773LL/A", upc: "194253389316", is_generic: false
+
+Return ONLY the JSON object, no other text.
+PROMPT;
+    }
+
+    /**
+     * Parse the AI response for smart fill.
+     *
+     * @param string|null $response
+     * @return array
+     */
+    protected function parseSmartFillResponse(?string $response): array
+    {
+        $defaults = [
+            'sku' => null,
+            'upc' => null,
+            'description' => null,
+            'brand' => null,
+            'category' => null,
+            'image_url' => null,
+            'is_generic' => false,
+            'unit_of_measure' => null,
+        ];
+
+        if (!$response) {
+            return $defaults;
+        }
+
+        // Try to extract JSON from the response
+        if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
+            $json = json_decode($matches[0], true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                // Ensure is_generic is a boolean
+                if (isset($json['is_generic'])) {
+                    $json['is_generic'] = (bool) $json['is_generic'];
+                }
+                return array_merge($defaults, array_filter($json, fn ($v) => $v !== null && $v !== ''));
+            }
+        }
+
+        return $defaults;
+    }
 }
