@@ -40,6 +40,9 @@ class SettingController extends Controller
             Setting::MAIL_FROM_NAME,
             Setting::MAIL_ENCRYPTION,
             Setting::HOME_ZIP_CODE,
+            Setting::HOME_ADDRESS,
+            Setting::HOME_LATITUDE,
+            Setting::HOME_LONGITUDE,
             Setting::NOTIFY_PRICE_DROPS,
             Setting::NOTIFY_DAILY_SUMMARY,
             Setting::PRICE_CHECK_TIME,
@@ -112,6 +115,9 @@ class SettingController extends Controller
                 'mail_encryption' => $settings[Setting::MAIL_ENCRYPTION] ?? 'tls',
                 // Location
                 'home_zip_code' => $settings[Setting::HOME_ZIP_CODE] ?? '',
+                'home_address' => $settings[Setting::HOME_ADDRESS] ?? '',
+                'home_latitude' => $settings[Setting::HOME_LATITUDE] ? (float) $settings[Setting::HOME_LATITUDE] : null,
+                'home_longitude' => $settings[Setting::HOME_LONGITUDE] ? (float) $settings[Setting::HOME_LONGITUDE] : null,
                 // Notification preferences
                 'notification_email' => $settings[Setting::MAIL_FROM_ADDRESS],
                 'notify_price_drops' => (bool) ($settings[Setting::NOTIFY_PRICE_DROPS] ?? true),
@@ -151,6 +157,9 @@ class SettingController extends Controller
             'mail_encryption' => ['nullable', 'in:tls,ssl,none'],
             // Location
             'home_zip_code' => ['nullable', 'string', 'max:20'],
+            'home_address' => ['nullable', 'string', 'max:500'],
+            'home_latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'home_longitude' => ['nullable', 'numeric', 'between:-180,180'],
             // Notification preferences
             'notification_email' => ['nullable', 'email'],
             'notify_price_drops' => ['nullable', 'boolean'],
@@ -229,6 +238,15 @@ class SettingController extends Controller
         // Location
         if (isset($validated['home_zip_code'])) {
             Setting::set(Setting::HOME_ZIP_CODE, $validated['home_zip_code'], $userId);
+        }
+        if (array_key_exists('home_address', $validated)) {
+            Setting::set(Setting::HOME_ADDRESS, $validated['home_address'] ?? '', $userId);
+        }
+        if (array_key_exists('home_latitude', $validated)) {
+            Setting::set(Setting::HOME_LATITUDE, $validated['home_latitude'] !== null ? (string) $validated['home_latitude'] : '', $userId);
+        }
+        if (array_key_exists('home_longitude', $validated)) {
+            Setting::set(Setting::HOME_LONGITUDE, $validated['home_longitude'] !== null ? (string) $validated['home_longitude'] : '', $userId);
         }
 
         // Notification Email (legacy field - now we use mail_from_address)

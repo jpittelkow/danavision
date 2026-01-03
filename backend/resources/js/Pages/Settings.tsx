@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import { PageProps, Settings as SettingsType } from '@/types';
 import AppLayout from '@/Layouts/AppLayout';
+import AddressTypeahead from '@/Components/AddressTypeahead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
@@ -675,6 +676,9 @@ export default function Settings({ auth, settings, providers, availableProviders
     mail_encryption: settings?.mail_encryption || 'tls',
     // Location
     home_zip_code: settings?.home_zip_code || '',
+    home_address: settings?.home_address || '',
+    home_latitude: settings?.home_latitude || null,
+    home_longitude: settings?.home_longitude || null,
     // Price check schedule
     price_check_time: settings?.price_check_time || '03:00',
     // Vendor settings
@@ -764,22 +768,30 @@ export default function Settings({ auth, settings, providers, availableProviders
                     Location
                   </CardTitle>
                   <CardDescription>
-                    Set your home zip code for local price searches
+                    Set your home address for local price searches and store discovery
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div>
-                    <Label htmlFor="home_zip_code">Home Zip Code</Label>
-                    <Input
-                      id="home_zip_code"
-                      type="text"
-                      value={data.home_zip_code}
-                      onChange={(e) => setData('home_zip_code', e.target.value)}
-                      placeholder="e.g., 90210"
-                      className="mt-1 max-w-[200px]"
+                    <Label>Home Address</Label>
+                    <AddressTypeahead
+                      value={data.home_address}
+                      latitude={data.home_latitude}
+                      longitude={data.home_longitude}
+                      onChange={(address, lat, lon, postcode) => {
+                        setData((prev) => ({
+                          ...prev,
+                          home_address: address,
+                          home_latitude: lat,
+                          home_longitude: lon,
+                          home_zip_code: postcode || prev.home_zip_code,
+                        }));
+                      }}
+                      placeholder="Search for your address..."
+                      className="mt-1"
                     />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Used to find local deals and accurate shipping estimates
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Used to find local deals, nearby stores, and accurate shipping estimates
                     </p>
                   </div>
                 </CardContent>

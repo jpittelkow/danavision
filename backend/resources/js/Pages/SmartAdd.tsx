@@ -39,12 +39,20 @@ import {
 } from 'lucide-react';
 import { UNITS_OF_MEASURE, UnitOfMeasure } from '@/types';
 
+interface OtherPrice {
+  retailer: string;
+  price: number;
+  url: string;
+}
+
 interface PriceResult {
   title: string;
   price: number;
   url: string;
   image_url?: string;
   retailer: string;
+  upc?: string;
+  other_prices?: OtherPrice[];
 }
 
 interface Analysis {
@@ -52,6 +60,7 @@ interface Analysis {
   brand: string | null;
   model: string | null;
   category: string | null;
+  upc: string | null;
   is_generic: boolean;
   unit_of_measure: string | null;
   search_terms: string[];
@@ -208,6 +217,7 @@ export default function SmartAdd({
     product_image_url: '',
     uploaded_image: '',
     sku: '',
+    upc: '',
     current_price: '',
     current_retailer: '',
     target_price: '',
@@ -353,6 +363,7 @@ export default function SmartAdd({
       product_image_url: result.image_url || '',
       uploaded_image: uploaded_image || '',
       sku: '',
+      upc: result.upc || analysis?.upc || '',
       current_price: String(result.price),
       current_retailer: result.retailer,
       target_price: '',
@@ -878,17 +889,50 @@ export default function SmartAdd({
                                 ${formatPrice(result.price)}
                               </span>
                               <Badge variant="secondary">{result.retailer}</Badge>
+                              {result.other_prices && result.other_prices.length > 0 && (
+                                <Badge variant="outline" className="text-xs">
+                                  +{result.other_prices.length} more retailer{result.other_prices.length > 1 ? 's' : ''}
+                                </Badge>
+                              )}
                             </div>
-                            <a
-                              href={result.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-2"
-                            >
-                              View on {result.retailer}
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
+                            {result.upc && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                UPC: {result.upc}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-3 mt-2">
+                              <a
+                                href={result.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                              >
+                                View on {result.retailer}
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </div>
+                            {result.other_prices && result.other_prices.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {result.other_prices.slice(0, 3).map((other, i) => (
+                                  <a
+                                    key={i}
+                                    href={other.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-xs text-muted-foreground hover:text-primary"
+                                  >
+                                    {other.retailer}: ${formatPrice(other.price)}
+                                  </a>
+                                ))}
+                                {result.other_prices.length > 3 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    +{result.other_prices.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                           {selectedResult === result && (
                             <div className="flex items-center">

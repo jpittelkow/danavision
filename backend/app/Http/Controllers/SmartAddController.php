@@ -70,6 +70,7 @@ class SmartAddController extends Controller
             'brand' => null,
             'model' => null,
             'category' => null,
+            'upc' => null,
             'is_generic' => false,
             'unit_of_measure' => null,
             'search_terms' => [],
@@ -205,6 +206,7 @@ class SmartAddController extends Controller
             'product_image_url' => ['nullable', 'url', 'max:2048'],
             'uploaded_image' => ['nullable', 'string'], // Base64 data URL
             'sku' => ['nullable', 'string', 'max:100'],
+            'upc' => ['nullable', 'string', 'max:20'],
             'current_price' => ['nullable', 'numeric', 'min:0'],
             'current_retailer' => ['nullable', 'string', 'max:255'],
             'target_price' => ['nullable', 'numeric', 'min:0'],
@@ -231,6 +233,7 @@ class SmartAddController extends Controller
             'product_image_url' => $validated['product_image_url'] ?? null,
             'uploaded_image_path' => $uploadedImagePath,
             'sku' => $validated['sku'] ?? null,
+            'upc' => $validated['upc'] ?? null,
             'current_price' => $validated['current_price'] ?? null,
             'lowest_price' => $validated['current_price'] ?? null,
             'highest_price' => $validated['current_price'] ?? null,
@@ -305,6 +308,7 @@ class SmartAddController extends Controller
     "brand": "The brand name if visible or identifiable",
     "model": "The model number/name if visible",
     "category": "Product category (e.g., Electronics, Kitchen Appliance, Produce, Dairy, etc.)",
+    "upc": "123456789012 or null if not visible or not applicable",
     "is_generic": false,
     "unit_of_measure": null,
     "search_terms": ["array", "of", "suggested", "search", "terms", "for", "price", "lookup"],
@@ -318,6 +322,13 @@ Guidelines:
 - search_terms should include variations that would help find this product for price comparison
 - If you cannot identify something with confidence, use null for that field
 
+UPC/Barcode:
+- Include the UPC (Universal Product Code) if visible on the product packaging
+- UPCs are 12-digit barcodes found on packaged retail products
+- If the UPC is visible in the image, include it in the "upc" field
+- If you can identify the product and know its UPC, include it
+- Generic items like produce, bulk goods, and deli items do NOT have UPCs - use null for these
+
 Generic vs Specific Items:
 - Set "is_generic": true for items sold by weight, volume, or count without a specific SKU (e.g., fruits, vegetables, meat, bulk goods, dairy, deli items)
 - Set "is_generic": false for branded products with specific model numbers or SKUs (e.g., electronics, appliances, specific packaged goods)
@@ -326,12 +337,12 @@ Generic vs Specific Items:
   - Volume: "gallon", "liter", "quart", "pint", "fl_oz" (fluid ounce)
   - Count: "each", "dozen"
 - Examples:
-  - Blueberries → is_generic: true, unit_of_measure: "lb" or "oz"
-  - Ground beef → is_generic: true, unit_of_measure: "lb"
-  - Milk → is_generic: true, unit_of_measure: "gallon"
-  - Eggs → is_generic: true, unit_of_measure: "dozen"
-  - Avocados → is_generic: true, unit_of_measure: "each"
-  - Sony WH-1000XM5 → is_generic: false, unit_of_measure: null
+  - Blueberries → is_generic: true, unit_of_measure: "lb" or "oz", upc: null
+  - Ground beef → is_generic: true, unit_of_measure: "lb", upc: null
+  - Milk → is_generic: true, unit_of_measure: "gallon", upc: null
+  - Eggs → is_generic: true, unit_of_measure: "dozen", upc: null
+  - Avocados → is_generic: true, unit_of_measure: "each", upc: null
+  - Sony WH-1000XM5 → is_generic: false, unit_of_measure: null, upc: "027242917576"
 
 Only return the JSON object, no other text.
 PROMPT;
@@ -347,6 +358,7 @@ PROMPT;
             'brand' => null,
             'model' => null,
             'category' => null,
+            'upc' => null,
             'is_generic' => false,
             'unit_of_measure' => null,
             'search_terms' => [],

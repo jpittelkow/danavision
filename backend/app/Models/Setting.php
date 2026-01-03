@@ -62,6 +62,9 @@ class Setting extends Model
 
     // Location Settings
     public const HOME_ZIP_CODE = 'home_zip_code';
+    public const HOME_ADDRESS = 'home_address';
+    public const HOME_LATITUDE = 'home_latitude';
+    public const HOME_LONGITUDE = 'home_longitude';
 
     // Vendor Settings
     public const SUPPRESSED_VENDORS = 'suppressed_vendors';

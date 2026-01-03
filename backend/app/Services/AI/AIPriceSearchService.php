@@ -416,6 +416,7 @@ Based on your knowledge of typical retail prices, provide realistic current pric
 - Retailer/store name
 - Product URL (if known)
 - Product image URL (if known)
+- UPC/barcode (if this is a packaged retail product)
 - Stock availability
 
 Return your findings as a JSON object in this exact format:
@@ -427,6 +428,7 @@ Return your findings as a JSON object in this exact format:
             "retailer": "Store Name",
             "url": "https://example.com/product",
             "image_url": "https://example.com/image.jpg",
+            "upc": "123456789012 or null",
             "in_stock": true
         }
     ],
@@ -442,6 +444,8 @@ Important guidelines:
 - Prices should be numeric (no $ symbol in the price field)
 - If you don't know a URL, use an empty string
 - If this is a generic item (like produce), set is_generic to true and unit_of_measure to the appropriate unit
+- Include UPC (12-digit barcode) for packaged retail products if known
+- Generic items (produce, bulk goods, deli) do NOT have UPCs - use null
 - Note: This is a best-effort estimate. For accurate real-time prices, configure a SerpAPI key.
 
 Return ONLY the JSON object, no other text.
@@ -512,6 +516,7 @@ Return a JSON object with the best 10 results in this format:
             "retailer": "Store Name",
             "url": "product url",
             "image_url": "image url or null",
+            "upc": "123456789012 or null",
             "in_stock": true
         }
     ],
@@ -526,6 +531,7 @@ Guidelines:
 - If shop local is requested, put local store results first
 - Prices should be numeric (no $ symbol)
 - Keep all valid results, remove obviously wrong or duplicate entries
+- Include UPC (barcode) for packaged products if known; use null for generic items
 
 Return ONLY the JSON object, no other text.
 PROMPT;
@@ -557,6 +563,7 @@ PROMPT;
                             'retailer' => $item['retailer'] ?? 'Unknown',
                             'url' => $item['url'] ?? '',
                             'image_url' => $item['image_url'] ?? null,
+                            'upc' => $item['upc'] ?? null,
                             'in_stock' => $item['in_stock'] ?? true,
                         ];
                     }
@@ -593,22 +600,79 @@ PROMPT;
     }
 
     /**
-     * Deduplicate results by URL.
+     * Deduplicate results by unique product, keeping the lowest price.
+     * Groups results by normalized product title and stores other prices.
      */
     protected function deduplicateResults(array $results): array
     {
-        $seen = [];
-        $unique = [];
+        $grouped = [];
 
         foreach ($results as $result) {
-            $key = $result['url'] ?? $result['title'] . $result['retailer'];
-            if (!isset($seen[$key])) {
-                $seen[$key] = true;
-                $unique[] = $result;
+            $key = $this->normalizeProductTitle($result['title'] ?? '');
+            
+            if (empty($key)) {
+                continue;
+            }
+
+            $price = $result['price'] ?? PHP_INT_MAX;
+
+            if (!isset($grouped[$key])) {
+                // First occurrence of this product
+                $result['other_prices'] = [];
+                $grouped[$key] = $result;
+            } elseif ($price < ($grouped[$key]['price'] ?? PHP_INT_MAX)) {
+                // This price is lower, swap it
+                $oldResult = $grouped[$key];
+                
+                // Keep existing other_prices and add the old result to it
+                $otherPrices = $oldResult['other_prices'] ?? [];
+                $otherPrices[] = [
+                    'retailer' => $oldResult['retailer'] ?? 'Unknown',
+                    'price' => $oldResult['price'] ?? 0,
+                    'url' => $oldResult['url'] ?? '',
+                ];
+                
+                // Assign to new result and replace
+                $result['other_prices'] = $otherPrices;
+                $grouped[$key] = $result;
+            } else {
+                // Add to other_prices
+                $grouped[$key]['other_prices'][] = [
+                    'retailer' => $result['retailer'] ?? 'Unknown',
+                    'price' => $result['price'] ?? 0,
+                    'url' => $result['url'] ?? '',
+                ];
             }
         }
 
-        return $unique;
+        return array_values($grouped);
+    }
+
+    /**
+     * Normalize a product title for comparison.
+     * Removes common variations to identify the same product.
+     */
+    protected function normalizeProductTitle(string $title): string
+    {
+        // Convert to lowercase
+        $normalized = strtolower(trim($title));
+        
+        // Remove common suffixes that indicate retailer-specific listings
+        $normalized = preg_replace('/\s*[-–]\s*(amazon|walmart|target|best buy|costco|ebay).*$/i', '', $normalized);
+        
+        // Remove size/quantity variations at the end (e.g., "- 1 pack", "/ 2 ct")
+        $normalized = preg_replace('/\s*[-\/]\s*\d+\s*(pack|ct|count|pc|pcs|piece|pieces).*$/i', '', $normalized);
+        
+        // Remove common filler words
+        $normalized = preg_replace('/\b(new|used|refurbished|renewed|certified)\b/i', '', $normalized);
+        
+        // Remove extra whitespace
+        $normalized = preg_replace('/\s+/', ' ', $normalized);
+        
+        // Trim again
+        $normalized = trim($normalized);
+        
+        return $normalized;
     }
 }
 

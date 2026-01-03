@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AddressController;
 use App\Http\Controllers\AIProviderController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
@@ -65,6 +66,10 @@ Route::middleware('auth')->group(function () {
     Route::get('settings', [SettingController::class, 'index'])->name('settings');
     Route::patch('settings', [SettingController::class, 'update']);
     Route::post('settings/test-email', [SettingController::class, 'testEmail'])->name('settings.test-email');
+
+    // Address lookup (Nominatim proxy)
+    Route::get('api/address/search', [AddressController::class, 'search'])->name('address.search');
+    Route::get('api/address/reverse', [AddressController::class, 'reverse'])->name('address.reverse');
 
     // AI Providers (redirect old URL to main settings page)
     Route::get('settings/ai', function () {

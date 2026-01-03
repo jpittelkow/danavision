@@ -57,6 +57,7 @@ class ListItemController extends Controller
                 'product_url' => $item->product_url,
                 'product_image_url' => $item->getDisplayImageUrl(),
                 'sku' => $item->sku,
+                'upc' => $item->upc,
                 'notes' => $item->notes,
                 'target_price' => $item->target_price,
                 'current_price' => $item->current_price,
@@ -142,6 +143,7 @@ class ListItemController extends Controller
             'priority' => ['in:low,medium,high'],
             'is_generic' => ['nullable', 'boolean'],
             'unit_of_measure' => ['nullable', 'string', 'max:20'],
+            'upc' => ['nullable', 'string', 'max:20'],
         ]);
 
         $validated['added_by_user_id'] = $request->user()->id;
@@ -165,6 +167,7 @@ class ListItemController extends Controller
             'product_url' => ['nullable', 'url', 'max:2048'],
             'product_image_url' => ['nullable', 'url', 'max:2048'],
             'sku' => ['nullable', 'string', 'max:100'],
+            'upc' => ['nullable', 'string', 'max:20'],
             'target_price' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'priority' => ['in:low,medium,high'],

@@ -24,6 +24,7 @@ class ListItem extends Model
         'product_image_url',
         'product_url',
         'sku',
+        'upc',
         'uploaded_image_path',
         'notes',
         'target_price',

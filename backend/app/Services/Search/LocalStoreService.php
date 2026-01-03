@@ -11,12 +11,18 @@ class LocalStoreService
 {
     protected int $userId;
     protected ?string $homeZipCode;
+    protected ?string $homeAddress;
+    protected ?float $homeLatitude;
+    protected ?float $homeLongitude;
     protected WebSearchService $webSearch;
 
     public function __construct(int $userId)
     {
         $this->userId = $userId;
         $this->homeZipCode = Setting::get(Setting::HOME_ZIP_CODE, $userId);
+        $this->homeAddress = Setting::get(Setting::HOME_ADDRESS, $userId);
+        $this->homeLatitude = Setting::get(Setting::HOME_LATITUDE, $userId) ? (float) Setting::get(Setting::HOME_LATITUDE, $userId) : null;
+        $this->homeLongitude = Setting::get(Setting::HOME_LONGITUDE, $userId) ? (float) Setting::get(Setting::HOME_LONGITUDE, $userId) : null;
         $this->webSearch = WebSearchService::forUser($userId);
     }
 
@@ -30,10 +36,13 @@ class LocalStoreService
 
     /**
      * Check if local store service is available.
+     * Service is available if we have either a zip code, address, or coordinates.
      */
     public function isAvailable(): bool
     {
-        return !empty($this->homeZipCode);
+        return !empty($this->homeZipCode) 
+            || !empty($this->homeAddress) 
+            || ($this->homeLatitude !== null && $this->homeLongitude !== null);
     }
 
     /**
@@ -45,23 +54,64 @@ class LocalStoreService
     }
 
     /**
+     * Get the user's home address.
+     */
+    public function getHomeAddress(): ?string
+    {
+        return $this->homeAddress;
+    }
+
+    /**
+     * Get the user's home coordinates.
+     */
+    public function getHomeCoordinates(): ?array
+    {
+        if ($this->homeLatitude !== null && $this->homeLongitude !== null) {
+            return [
+                'latitude' => $this->homeLatitude,
+                'longitude' => $this->homeLongitude,
+            ];
+        }
+        return null;
+    }
+
+    /**
+     * Get a location string for search queries.
+     * Uses address or coordinates if available, falls back to zip code.
+     */
+    public function getLocationString(): ?string
+    {
+        if ($this->homeAddress) {
+            return $this->homeAddress;
+        }
+        
+        if ($this->homeLatitude !== null && $this->homeLongitude !== null) {
+            return "{$this->homeLatitude},{$this->homeLongitude}";
+        }
+        
+        return $this->homeZipCode;
+    }
+
+    /**
      * Discover and cache local stores for the user.
      *
-     * @param string|null $zipCode Override zip code (defaults to user's home_zip_code)
+     * @param string|null $location Override location (zip code, address, or coordinates)
      * @param bool $forceRefresh Force refresh even if cached
      * @return array Array of discovered stores
      */
-    public function discoverLocalStores(?string $zipCode = null, bool $forceRefresh = false): array
+    public function discoverLocalStores(?string $location = null, bool $forceRefresh = false): array
     {
-        $zipCode = $zipCode ?? $this->homeZipCode;
+        // Use provided location or get from user settings
+        $location = $location ?? $this->getLocationString();
+        $cacheKey = $this->getCacheKey($location);
 
-        if (!$zipCode) {
+        if (!$location) {
             return [];
         }
 
         // Check if we have cached stores and don't need refresh
         if (!$forceRefresh) {
-            $cached = $this->getCachedStores($zipCode);
+            $cached = $this->getCachedStores($cacheKey);
             if (!empty($cached)) {
                 return $cached;
             }
@@ -72,7 +122,7 @@ class LocalStoreService
         $allStores = [];
 
         foreach ($storeTypes as $type) {
-            $stores = $this->webSearch->searchLocalStoresWithCache($zipCode, $type, 86400);
+            $stores = $this->webSearch->searchLocalStoresWithCache($location, $type, 86400);
             foreach ($stores as $store) {
                 $store['store_type'] = $store['store_type'] ?? $type;
                 $allStores[] = $store;
@@ -86,32 +136,63 @@ class LocalStoreService
             ->toArray();
 
         // Cache the discovered stores
-        $this->cacheStores($zipCode, $uniqueStores);
+        $this->cacheStores($cacheKey, $uniqueStores);
 
         return $uniqueStores;
     }
 
     /**
+     * Get a cache key from a location string.
+     * This normalizes the location for caching purposes.
+     */
+    protected function getCacheKey(?string $location): string
+    {
+        if (!$location) {
+            return '';
+        }
+        
+        // If it looks like coordinates, use them as-is
+        if (preg_match('/^-?\d+\.?\d*,-?\d+\.?\d*$/', $location)) {
+            return $location;
+        }
+        
+        // For zip codes (5 digits), use directly
+        if (preg_match('/^\d{5}(-\d{4})?$/', $location)) {
+            return $location;
+        }
+        
+        // For addresses, extract the zip code if possible, otherwise hash
+        if (preg_match('/\b(\d{5}(-\d{4})?)\b/', $location, $matches)) {
+            return $matches[1];
+        }
+        
+        // Fallback: hash the location for cache key
+        return md5($location);
+    }
+
+    /**
      * Get local stores for a user.
      *
-     * @param string|null $zipCode Override zip code
+     * @param string|null $location Override location (zip code, address, or coordinates)
      * @param string|null $storeType Filter by store type
      * @return array Array of local stores
      */
-    public function getLocalStores(?string $zipCode = null, ?string $storeType = null): array
+    public function getLocalStores(?string $location = null, ?string $storeType = null): array
     {
-        $zipCode = $zipCode ?? $this->homeZipCode;
+        // Use provided location or get from user settings
+        $location = $location ?? $this->getLocationString();
+        $cacheKey = $this->getCacheKey($location);
 
-        if (!$zipCode) {
+        if (!$location) {
             return [];
         }
 
         // First try to get from database cache
-        $stores = $this->getCachedStores($zipCode, $storeType);
+        $stores = $this->getCachedStores($cacheKey, $storeType);
 
         // If no cached stores, discover them
         if (empty($stores)) {
-            $stores = $this->discoverLocalStores($zipCode);
+            $stores = $this->discoverLocalStores($location);
             
             // Filter by type if specified
             if ($storeType) {
@@ -126,9 +207,9 @@ class LocalStoreService
     /**
      * Get local grocery stores.
      */
-    public function getLocalGroceryStores(?string $zipCode = null): array
+    public function getLocalGroceryStores(?string $location = null): array
     {
-        $stores = $this->getLocalStores($zipCode);
+        $stores = $this->getLocalStores($location);
         
         return array_values(array_filter($stores, function ($store) {
             $type = strtolower($store['store_type'] ?? '');
@@ -139,9 +220,9 @@ class LocalStoreService
     /**
      * Get store names for use in search queries.
      */
-    public function getLocalStoreNames(?string $zipCode = null, int $limit = 5): array
+    public function getLocalStoreNames(?string $location = null, int $limit = 5): array
     {
-        $stores = $this->getLocalStores($zipCode);
+        $stores = $this->getLocalStores($location);
         
         return array_slice(
             array_column($stores, 'store_name'),
@@ -153,10 +234,10 @@ class LocalStoreService
     /**
      * Get cached stores from database.
      */
-    protected function getCachedStores(string $zipCode, ?string $storeType = null): array
+    protected function getCachedStores(string $locationKey, ?string $storeType = null): array
     {
         $query = LocalStoreCache::where('user_id', $this->userId)
-            ->where('zip_code', $zipCode)
+            ->where('zip_code', $locationKey) // Using zip_code column for any location key
             ->where('discovered_at', '>=', now()->subDays(7)); // Cache valid for 7 days
 
         if ($storeType) {
@@ -178,11 +259,11 @@ class LocalStoreService
     /**
      * Cache discovered stores in database.
      */
-    protected function cacheStores(string $zipCode, array $stores): void
+    protected function cacheStores(string $locationKey, array $stores): void
     {
-        // Delete old cache entries for this user/zip
+        // Delete old cache entries for this user/location
         LocalStoreCache::where('user_id', $this->userId)
-            ->where('zip_code', $zipCode)
+            ->where('zip_code', $locationKey)
             ->delete();
 
         // Insert new stores
@@ -190,7 +271,7 @@ class LocalStoreService
             try {
                 LocalStoreCache::create([
                     'user_id' => $this->userId,
-                    'zip_code' => $zipCode,
+                    'zip_code' => $locationKey, // Using zip_code column for any location key
                     'store_name' => $store['store_name'] ?? 'Unknown',
                     'store_type' => $store['store_type'] ?? 'retail',
                     'address' => $store['address'] ?? null,
@@ -211,20 +292,21 @@ class LocalStoreService
     /**
      * Refresh the local store cache.
      */
-    public function refreshStoreCache(?string $zipCode = null): array
+    public function refreshStoreCache(?string $location = null): array
     {
-        return $this->discoverLocalStores($zipCode, forceRefresh: true);
+        return $this->discoverLocalStores($location, forceRefresh: true);
     }
 
     /**
      * Clear the local store cache.
      */
-    public function clearCache(?string $zipCode = null): void
+    public function clearCache(?string $location = null): void
     {
         $query = LocalStoreCache::where('user_id', $this->userId);
         
-        if ($zipCode) {
-            $query->where('zip_code', $zipCode);
+        if ($location) {
+            $locationKey = $this->getCacheKey($location);
+            $query->where('zip_code', $locationKey);
         }
 
         $query->delete();

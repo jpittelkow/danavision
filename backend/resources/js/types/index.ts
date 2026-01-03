@@ -48,6 +48,7 @@ export interface ListItem {
   product_url?: string;
   product_image_url?: string;
   sku?: string;
+  upc?: string;
   uploaded_image_path?: string;
   current_price?: number;
   previous_price?: number;
@@ -136,6 +137,9 @@ export interface Settings {
   mail_encryption: string;
   // Location
   home_zip_code: string;
+  home_address: string;
+  home_latitude?: number | null;
+  home_longitude?: number | null;
   // Notification preferences
   notification_email?: string;
   notify_price_drops: boolean;
