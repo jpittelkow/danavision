@@ -29,6 +29,9 @@ COPY docker/supervisord.conf /etc/supervisord.conf
 # Configure PHP
 COPY docker/php.ini /usr/local/etc/php/conf.d/custom.ini
 
+# Configure PHP-FPM to run as root (for bind mount compatibility)
+COPY docker/www.conf /usr/local/etc/php-fpm.d/www.conf
+
 # Set working directory
 WORKDIR /var/www/html
 
