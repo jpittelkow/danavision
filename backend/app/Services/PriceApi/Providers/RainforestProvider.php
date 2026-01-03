@@ -54,7 +54,7 @@ class RainforestProvider implements PriceProviderInterface
                 'shipping' => $item['delivery']['tagline'] ?? null,
                 'condition' => 'new',
                 'title' => $item['title'] ?? '',
-                'image' => $item['image'] ?? null,
+                'image_url' => $item['image'] ?? null,
                 'rating' => $item['rating'] ?? null,
                 'reviews_count' => $item['ratings_total'] ?? null,
                 'asin' => $item['asin'] ?? null,

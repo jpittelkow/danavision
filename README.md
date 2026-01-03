@@ -72,6 +72,136 @@ docker pull ghcr.io/jpittelkow/danavision:latest
 
 View the package: https://github.com/jpittelkow/danavision/pkgs/container/danavision
 
+## Docker Deployment
+
+### Ports
+
+| Port | Description |
+|------|-------------|
+| `80` (container) → `8080` (host) | HTTP web server (Nginx) |
+
+You can change the host port by modifying `docker-compose.yml`:
+```yaml
+ports:
+  - "3000:80"  # Access via http://localhost:3000
+```
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `APP_KEY` | **Yes** | - | Laravel encryption key (generate with command below) |
+| `APP_NAME` | No | `DanaVision` | Application name shown in UI |
+| `APP_URL` | No | `http://localhost:8080` | Full URL where app is accessed |
+| `APP_ENV` | No | `local` | Environment: `local`, `production` |
+| `APP_DEBUG` | No | `true` | Enable debug mode (set `false` in production) |
+| `DB_CONNECTION` | No | `sqlite` | Database driver |
+| `DB_DATABASE` | No | `/var/www/html/database/database.sqlite` | Database path |
+| `TZ` | No | `America/Chicago` | Timezone for app and scheduler |
+| `SCHEDULE_TIMEZONE` | No | `America/Chicago` | Timezone for scheduled tasks |
+
+**Generate APP_KEY:**
+```bash
+docker run --rm php:8.3-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+```
+
+### Volumes
+
+| Volume | Container Path | Description |
+|--------|----------------|-------------|
+| `danavision_data` | `/var/www/html/database` | SQLite database (persistent) |
+| `danavision_storage` | `/var/www/html/storage/app` | Uploaded files (persistent) |
+
+### Example docker-compose.yml for Production
+
+```yaml
+services:
+  danavision:
+    image: ghcr.io/jpittelkow/danavision:latest
+    container_name: danavision
+    ports:
+      - "8080:80"
+    volumes:
+      - danavision_data:/var/www/html/database
+      - danavision_storage:/var/www/html/storage/app
+    environment:
+      - APP_KEY=base64:YOUR_GENERATED_KEY_HERE
+      - APP_URL=https://your-domain.com
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - TZ=America/Chicago
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  danavision_data:
+  danavision_storage:
+```
+
+### Deployment Steps
+
+1. **Create your deployment directory:**
+   ```bash
+   mkdir danavision && cd danavision
+   ```
+
+2. **Create docker-compose.yml** (use example above)
+
+3. **Generate and set APP_KEY:**
+   ```bash
+   docker run --rm php:8.3-cli php -r "echo 'base64:' . base64_encode(random_bytes(32)) . PHP_EOL;"
+   # Copy the output and replace YOUR_GENERATED_KEY_HERE in docker-compose.yml
+   ```
+
+4. **Start the container:**
+   ```bash
+   docker compose up -d
+   ```
+
+5. **Seed the database (first time only):**
+   ```bash
+   docker compose exec danavision php artisan db:seed --force
+   ```
+
+6. **Access the application** at `http://your-server:8080`
+
+### Container Features
+
+The container automatically handles on startup:
+- ✅ Creates SQLite database if missing
+- ✅ Sets correct file permissions
+- ✅ Runs database migrations
+- ✅ Caches configuration in production mode
+
+### Health Check
+
+The container includes a health check endpoint at `/health`. Docker will monitor this and restart the container if it becomes unhealthy.
+
+### Logs
+
+```bash
+# View all container logs
+docker compose logs -f danavision
+
+# View Laravel logs specifically
+docker compose exec danavision tail -f /var/www/html/storage/logs/laravel.log
+```
+
+### Updating
+
+```bash
+# Pull latest image
+docker compose pull
+
+# Recreate container with new image
+docker compose up -d
+```
+
 ## Test Credentials
 
 After seeding the database, the following test users are available:
@@ -212,6 +342,7 @@ DanaVision/
 │           └── ShoppingLists/
 ├── docker/
 │   ├── Dockerfile
+│   ├── entrypoint.sh        # Container startup script
 │   ├── nginx.conf
 │   └── supervisord.conf
 ├── docker-compose.yml

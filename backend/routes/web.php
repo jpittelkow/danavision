@@ -3,6 +3,7 @@
 use App\Http\Controllers\AIProviderController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ImageProxyController;
 use App\Http\Controllers\ListItemController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SettingController;
@@ -16,6 +17,9 @@ use Inertia\Inertia;
 | Web Routes
 |--------------------------------------------------------------------------
 */
+
+// Image proxy (public, no auth required)
+Route::get('api/proxy-image', [ImageProxyController::class, 'proxy'])->name('proxy-image');
 
 // Public routes
 Route::middleware('guest')->group(function () {
@@ -37,6 +41,7 @@ Route::middleware('auth')->group(function () {
     Route::get('smart-add', [SmartAddController::class, 'index'])->name('smart-add');
     Route::post('smart-add/analyze', [SmartAddController::class, 'analyzeImage'])->name('smart-add.analyze');
     Route::post('smart-add/search', [SmartAddController::class, 'searchText'])->name('smart-add.search');
+    Route::get('smart-add/stream-search', [SmartAddController::class, 'streamSearch'])->name('smart-add.stream');
     Route::post('smart-add/add', [SmartAddController::class, 'addToList'])->name('smart-add.add');
 
     // Shopping Lists
@@ -71,6 +76,8 @@ Route::middleware('auth')->group(function () {
     Route::post('ai-providers/{provider}/primary', [AIProviderController::class, 'setPrimary'])->name('ai-providers.primary');
     Route::post('ai-providers/{provider}/toggle', [AIProviderController::class, 'toggleActive'])->name('ai-providers.toggle');
     Route::post('ai-providers/{provider}/test', [AIProviderController::class, 'test'])->name('ai-providers.test');
+    Route::get('ai-providers/{provider}/models', [AIProviderController::class, 'fetchModels'])->name('ai-providers.models');
+    Route::post('ai-providers/{provider}/models/refresh', [AIProviderController::class, 'refreshModels'])->name('ai-providers.models.refresh');
     Route::get('api/ollama-models', [AIProviderController::class, 'ollamaModels'])->name('ai-providers.ollama-models');
 
     // AI Prompts

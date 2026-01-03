@@ -109,4 +109,38 @@ class ShopLocalTest extends TestCase
         $item->refresh();
         $this->assertNull($item->shop_local);
     }
+
+    public function test_item_show_returns_shop_local_field(): void
+    {
+        $item = ListItem::factory()->for($this->list)->create([
+            'added_by_user_id' => $this->user->id,
+            'shop_local' => true,
+        ]);
+
+        $response = $this->actingAs($this->user)->get("/items/{$item->id}");
+
+        $response->assertSuccessful();
+        $response->assertInertia(fn ($page) => 
+            $page->component('Items/Show')
+                ->has('item')
+                ->where('item.shop_local', true)
+        );
+    }
+
+    public function test_item_show_returns_null_shop_local_when_inheriting(): void
+    {
+        $item = ListItem::factory()->for($this->list)->create([
+            'added_by_user_id' => $this->user->id,
+            'shop_local' => null,
+        ]);
+
+        $response = $this->actingAs($this->user)->get("/items/{$item->id}");
+
+        $response->assertSuccessful();
+        $response->assertInertia(fn ($page) => 
+            $page->component('Items/Show')
+                ->has('item')
+                ->where('item.shop_local', null)
+        );
+    }
 }

@@ -65,6 +65,10 @@ RUN ln -sfn /var/www/html/storage/app/public /var/www/html/public/storage || tru
 # Copy logo images to public folder
 RUN mkdir -p /var/www/html/public/images
 
+# Copy entrypoint script
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 80
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+ENTRYPOINT ["/entrypoint.sh"]

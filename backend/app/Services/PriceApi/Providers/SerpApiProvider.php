@@ -49,7 +49,7 @@ class SerpApiProvider implements PriceProviderInterface
                 'shipping' => $item['delivery'] ?? null,
                 'condition' => $this->parseCondition($item['second_hand_condition'] ?? null),
                 'title' => $item['title'] ?? '',
-                'image' => $item['thumbnail'] ?? null,
+                'image_url' => $item['thumbnail'] ?? null,
             ];
         }
 

@@ -7,7 +7,7 @@ use App\Models\ListItem;
 use App\Models\PriceHistory;
 use App\Models\Setting;
 use App\Models\ShoppingList;
-use App\Services\PriceApi\PriceApiService;
+use App\Services\AI\AIPriceSearchService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -66,6 +66,9 @@ class ListItemController extends Controller
                 'current_retailer' => $item->current_retailer,
                 'priority' => $item->priority,
                 'is_purchased' => $item->is_purchased,
+                'is_generic' => $item->is_generic,
+                'unit_of_measure' => $item->unit_of_measure,
+                'shop_local' => $item->shop_local,
                 'purchased_at' => $item->purchased_at?->toISOString(),
                 'last_checked_at' => $item->last_checked_at?->toISOString(),
                 'is_at_all_time_low' => $item->isAtAllTimeLow(),
@@ -137,6 +140,8 @@ class ListItemController extends Controller
             'current_retailer' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'priority' => ['in:low,medium,high'],
+            'is_generic' => ['nullable', 'boolean'],
+            'unit_of_measure' => ['nullable', 'string', 'max:20'],
         ]);
 
         $validated['added_by_user_id'] = $request->user()->id;
@@ -164,6 +169,8 @@ class ListItemController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
             'priority' => ['in:low,medium,high'],
             'shop_local' => ['nullable', 'boolean'],
+            'is_generic' => ['nullable', 'boolean'],
+            'unit_of_measure' => ['nullable', 'string', 'max:20'],
         ]);
 
         $item->update($validated);
@@ -184,24 +191,35 @@ class ListItemController extends Controller
     }
 
     /**
-     * Refresh price for a single item.
+     * Refresh price for a single item using AI search.
      */
     public function refresh(Request $request, ListItem $item): RedirectResponse
     {
         $this->authorize('update', $item);
 
-        $priceService = PriceApiService::forUser($request->user()->id);
+        $priceService = AIPriceSearchService::forUser($request->user()->id);
         
-        if (!$priceService->isAvailable()) {
-            return back()->with('error', 'Price API is not configured. Please set up a price provider in Settings.');
+        // Check if either AI or web search is available
+        if (!$priceService->isAvailable() && !$priceService->isWebSearchAvailable()) {
+            return back()->with('error', 'No AI providers or web search configured. Please set up an AI provider or SerpAPI key in Settings.');
         }
 
-        $searchQuery = $item->product_query ?? $item->product_name;
+        // Get user's home zip code for local searches
+        $homeZipCode = Setting::get(Setting::HOME_ZIP_CODE, $request->user()->id);
+
+        // Determine if shop_local is enabled (item-level takes precedence over list-level)
         $shopLocal = $item->shouldShopLocal();
-        $searchResult = $priceService->search($searchQuery, 'product', $shopLocal);
+
+        $searchQuery = $item->product_query ?? $item->product_name;
+        $searchResult = $priceService->search($searchQuery, [
+            'is_generic' => $item->is_generic ?? false,
+            'unit_of_measure' => $item->unit_of_measure,
+            'shop_local' => $shopLocal,
+            'zip_code' => $homeZipCode,
+        ]);
 
         if ($searchResult->hasError()) {
-            return back()->with('error', 'Price search failed: ' . $searchResult->error);
+            return back()->with('error', 'AI price search failed: ' . $searchResult->error);
         }
 
         if (!$searchResult->hasResults()) {
@@ -232,7 +250,7 @@ class ListItemController extends Controller
                     'current_price' => $price,
                     'lowest_price' => $price,
                     'highest_price' => $price,
-                    'in_stock' => true,
+                    'in_stock' => $result['in_stock'] ?? true,
                     'last_checked_at' => now(),
                 ]);
             }
@@ -252,7 +270,16 @@ class ListItemController extends Controller
             PriceHistory::captureFromItem($item, 'user_refresh');
         }
 
-        return back()->with('success', 'Prices updated successfully!');
+        // Update generic info from search if not already set
+        if ($searchResult->isGeneric && !$item->is_generic) {
+            $item->update([
+                'is_generic' => true,
+                'unit_of_measure' => $searchResult->unitOfMeasure,
+            ]);
+        }
+
+        $providerNames = implode(', ', array_map('ucfirst', $searchResult->providersUsed));
+        return back()->with('success', "Prices updated using {$providerNames}!");
     }
 
     /**

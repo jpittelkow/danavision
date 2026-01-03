@@ -39,10 +39,24 @@ class ListItemFactory extends Factory
             'priority' => fake()->randomElement(['low', 'medium', 'high']),
             'is_purchased' => false,
             'shop_local' => null,
+            'is_generic' => false,
+            'unit_of_measure' => null,
             'purchased_at' => null,
             'purchased_price' => null,
             'last_checked_at' => now(),
         ];
+    }
+
+    /**
+     * Indicate that this is a generic item (sold by weight/volume).
+     */
+    public function generic(string $unit = 'lb'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_generic' => true,
+            'unit_of_measure' => $unit,
+            'sku' => null, // Generic items don't have SKUs
+        ]);
     }
 
     /**

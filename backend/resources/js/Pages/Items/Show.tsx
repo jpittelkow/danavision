@@ -25,12 +25,33 @@ import {
   DollarSign,
   BarChart3,
   MapPin,
+  Scale,
 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/Components/ui/select';
 
 // Helper to safely format a number
 const formatPrice = (value: number | string | null | undefined, decimals = 2): string => {
   const num = Number(value) || 0;
   return num.toFixed(decimals);
+};
+
+// Helper to format price with unit for generic items
+const formatPriceWithUnit = (
+  price: number | string | null | undefined,
+  isGeneric: boolean | undefined,
+  unit: string | null | undefined
+): string => {
+  const formattedPrice = '$' + formatPrice(price);
+  if (isGeneric && unit) {
+    return `${formattedPrice}/${unit}`;
+  }
+  return formattedPrice;
 };
 
 // Format relative time
@@ -86,6 +107,8 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
     target_price: item.target_price?.toString() || '',
     notes: item.notes || '',
     priority: item.priority,
+    is_generic: item.is_generic || false,
+    unit_of_measure: item.unit_of_measure || '',
   });
 
   const handleSubmit = (e: FormEvent) => {
@@ -178,7 +201,18 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
                           All-Time Low!
                         </Badge>
                       )}
-                      {item.sku && (
+                      {item.is_generic && (
+                        <Badge variant="secondary" className="gap-1">
+                          <Scale className="h-3 w-3" />
+                          Generic
+                          {item.unit_of_measure && (
+                            <span className="text-xs opacity-75">
+                              (per {item.unit_of_measure})
+                            </span>
+                          )}
+                        </Badge>
+                      )}
+                      {item.sku && !item.is_generic && (
                         <Badge variant="outline" className="gap-1">
                           <Tag className="h-3 w-3" />
                           SKU: {item.sku}
@@ -242,7 +276,7 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
                     <p className="text-xs text-muted-foreground">Current Best</p>
                     <p className="text-xl font-bold text-primary">
                       {bestVendor?.current_price != null
-                        ? `$${formatPrice(bestVendor.current_price)}`
+                        ? formatPriceWithUnit(bestVendor.current_price, item.is_generic, item.unit_of_measure)
                         : '—'}
                     </p>
                     {bestVendor && (
@@ -350,6 +384,59 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
                     placeholder="https://..."
                     className="mt-1"
                   />
+                </div>
+
+                {/* Generic Item Settings */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      checked={data.is_generic}
+                      onCheckedChange={(checked) => {
+                        setData('is_generic', checked);
+                        if (!checked) {
+                          setData('unit_of_measure', '');
+                        } else if (!data.unit_of_measure) {
+                          setData('unit_of_measure', 'lb');
+                        }
+                      }}
+                      className="data-[state=checked]:bg-violet-600"
+                    />
+                    <div>
+                      <Label className="flex items-center gap-1">
+                        <Scale className="h-3.5 w-3.5" />
+                        Generic Item
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Sold by weight, volume, or count
+                      </p>
+                    </div>
+                  </div>
+                  {data.is_generic && (
+                    <div>
+                      <Label>Unit of Measure</Label>
+                      <Select
+                        value={data.unit_of_measure}
+                        onValueChange={(value) => setData('unit_of_measure', value)}
+                      >
+                        <SelectTrigger className="w-full mt-1">
+                          <SelectValue placeholder="Select unit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="lb">Pound (lb)</SelectItem>
+                          <SelectItem value="oz">Ounce (oz)</SelectItem>
+                          <SelectItem value="kg">Kilogram (kg)</SelectItem>
+                          <SelectItem value="g">Gram (g)</SelectItem>
+                          <SelectItem value="gallon">Gallon</SelectItem>
+                          <SelectItem value="liter">Liter</SelectItem>
+                          <SelectItem value="quart">Quart</SelectItem>
+                          <SelectItem value="pint">Pint</SelectItem>
+                          <SelectItem value="fl_oz">Fluid Ounce</SelectItem>
+                          <SelectItem value="each">Each</SelectItem>
+                          <SelectItem value="dozen">Dozen</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
 
                 <div>

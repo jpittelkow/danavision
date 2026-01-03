@@ -36,9 +36,36 @@ class ListItem extends Model
         'priority',
         'is_purchased',
         'shop_local',
+        'is_generic',
+        'unit_of_measure',
         'purchased_at',
         'purchased_price',
         'last_checked_at',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    /**
+     * Valid units of measure for generic items.
+     */
+    public const UNITS_OF_MEASURE = [
+        // Weight
+        'lb' => 'pound',
+        'oz' => 'ounce',
+        'kg' => 'kilogram',
+        'g' => 'gram',
+        // Volume
+        'gallon' => 'gallon',
+        'liter' => 'liter',
+        'quart' => 'quart',
+        'pint' => 'pint',
+        'fl_oz' => 'fluid ounce',
+        // Count
+        'each' => 'each',
+        'dozen' => 'dozen',
     ];
 
     /**
@@ -58,9 +85,38 @@ class ListItem extends Model
             'in_stock' => 'boolean',
             'is_purchased' => 'boolean',
             'shop_local' => 'boolean',
+            'is_generic' => 'boolean',
             'purchased_at' => 'datetime',
             'last_checked_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Check if this is a generic item (sold by weight/volume).
+     */
+    public function isGeneric(): bool
+    {
+        return $this->is_generic ?? false;
+    }
+
+    /**
+     * Get the formatted price with unit of measure for generic items.
+     */
+    public function getFormattedPrice(?float $price = null): string
+    {
+        $price = $price ?? $this->current_price;
+        
+        if ($price === null) {
+            return '—';
+        }
+
+        $formatted = '$' . number_format((float) $price, 2);
+
+        if ($this->isGeneric() && $this->unit_of_measure) {
+            return $formatted . '/' . $this->unit_of_measure;
+        }
+
+        return $formatted;
     }
 
     /**

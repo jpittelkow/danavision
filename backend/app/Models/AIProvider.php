@@ -85,11 +85,14 @@ class AIProvider extends Model
             'company' => 'Google',
             'icon' => 'google',
             'models' => [
+                'gemini-2.5-flash-preview-05-20' => 'Gemini 2.5 Flash (Preview)',
+                'gemini-2.0-flash' => 'Gemini 2.0 Flash',
                 'gemini-1.5-pro' => 'Gemini 1.5 Pro',
                 'gemini-1.5-flash' => 'Gemini 1.5 Flash',
-                'gemini-pro' => 'Gemini Pro',
+                'gemini-1.5-flash-8b' => 'Gemini 1.5 Flash 8B',
             ],
-            'default_model' => 'gemini-1.5-pro',
+            'default_model' => 'gemini-2.0-flash',
+            'default_base_url' => 'https://generativelanguage.googleapis.com/v1beta',
             'requires_api_key' => true,
         ],
         self::PROVIDER_LOCAL => [

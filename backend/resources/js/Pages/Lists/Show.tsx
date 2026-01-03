@@ -23,12 +23,26 @@ import {
   ChevronUp,
   Package,
   MapPin,
+  Scale,
 } from 'lucide-react';
 
 // Helper to safely format a number
 const formatPrice = (value: number | string | null | undefined, decimals = 2): string => {
   const num = Number(value) || 0;
   return num.toFixed(decimals);
+};
+
+// Helper to format price with unit for generic items
+const formatPriceWithUnit = (
+  price: number | string | null | undefined,
+  isGeneric: boolean | undefined,
+  unit: string | null | undefined
+): string => {
+  const formattedPrice = '$' + formatPrice(price);
+  if (isGeneric && unit) {
+    return `${formattedPrice}/${unit}`;
+  }
+  return formattedPrice;
 };
 
 // Format relative time
@@ -67,6 +81,8 @@ interface VendorPrice {
 
 interface ExtendedListItem extends Omit<ListItem, 'vendor_prices'> {
   vendor_prices?: VendorPrice[];
+  is_generic?: boolean;
+  unit_of_measure?: string | null;
 }
 
 interface ExtendedShoppingList extends Omit<ShoppingList, 'items'> {
@@ -171,7 +187,13 @@ function ItemCard({
                       High Priority
                     </Badge>
                   )}
-                  {item.sku && (
+                  {item.is_generic && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      <Scale className="h-2.5 w-2.5" />
+                      {item.unit_of_measure ? `per ${item.unit_of_measure}` : 'Generic'}
+                    </Badge>
+                  )}
+                  {item.sku && !item.is_generic && (
                     <Badge variant="outline" className="text-xs">
                       SKU: {item.sku}
                     </Badge>
@@ -219,7 +241,7 @@ function ItemCard({
               {bestVendor && (
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold text-primary">
-                    ${formatPrice(bestVendor.current_price)}
+                    {formatPriceWithUnit(bestVendor.current_price, item.is_generic, item.unit_of_measure)}
                   </span>
                   <span className="text-muted-foreground">@ {bestVendor.vendor}</span>
                   {bestVendor.product_url && (

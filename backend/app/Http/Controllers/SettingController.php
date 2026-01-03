@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AIPrompt;
 use App\Models\AIProvider;
 use App\Models\Setting;
+use App\Services\AI\AIModelService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -45,12 +46,19 @@ class SettingController extends Controller
             Setting::SUPPRESSED_VENDORS,
         ], $userId);
 
-        // Get AI providers
+        // Get AI providers with dynamic model fetching
+        $modelService = new AIModelService();
+        
         $providers = $user->aiProviders()
             ->orderBy('is_primary', 'desc')
             ->orderBy('created_at', 'asc')
             ->get()
-            ->map(function (AIProvider $provider) {
+            ->map(function (AIProvider $provider) use ($modelService) {
+                // Get dynamic models if provider has API key configured
+                $availableModels = $provider->hasApiKey()
+                    ? $modelService->getModelsForProvider($provider)
+                    : $provider->getAvailableModels();
+                    
                 return [
                     'id' => $provider->id,
                     'provider' => $provider->provider,
@@ -64,7 +72,7 @@ class SettingController extends Controller
                     'test_error' => $provider->test_error,
                     'last_tested_at' => $provider->last_tested_at?->toISOString(),
                     'display_name' => $provider->getDisplayName(),
-                    'available_models' => $provider->getAvailableModels(),
+                    'available_models' => $availableModels,
                 ];
             });
 

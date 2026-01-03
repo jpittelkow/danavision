@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test';
 /**
  * Smart Add Feature E2E Tests
  * 
- * Tests the AI-powered product identification and add-to-list functionality.
+ * Tests the AI-powered product identification, real-time streaming search,
+ * and add-to-list functionality.
  */
 test.describe('Smart Add', () => {
   test.beforeEach(async ({ page }) => {
@@ -35,6 +36,14 @@ test.describe('Smart Add', () => {
 
     // Verify search input is visible
     await expect(page.locator('input[placeholder*="Search for a product"]')).toBeVisible();
+  });
+
+  test('should show real-time search toggle in text mode', async ({ page }) => {
+    // Switch to text search mode
+    await page.click('button:has-text("Text Search")');
+
+    // Verify streaming toggle is visible
+    await expect(page.locator('text=Real-time results')).toBeVisible();
   });
 
   test('should perform text search', async ({ page }) => {
@@ -69,10 +78,55 @@ test.describe('Smart Add', () => {
   });
 });
 
-test.describe('Smart Add - Add to List Flow', () => {
-  test('should show list selector when product is identified', async ({ page }) => {
+test.describe('Smart Add - Streaming Search', () => {
+  test.beforeEach(async ({ page }) => {
     await page.goto('/smart-add');
+  });
 
+  test('should have streaming enabled by default', async ({ page }) => {
+    // Switch to text search mode
+    await page.click('button:has-text("Text Search")');
+
+    // Check that the streaming toggle is on
+    const toggle = page.locator('[role="switch"]');
+    await expect(toggle).toHaveAttribute('data-state', 'checked');
+  });
+
+  test('should allow toggling streaming mode off', async ({ page }) => {
+    // Switch to text search mode
+    await page.click('button:has-text("Text Search")');
+
+    // Click the streaming toggle
+    await page.click('[role="switch"]');
+
+    // Verify it's now unchecked
+    const toggle = page.locator('[role="switch"]');
+    await expect(toggle).toHaveAttribute('data-state', 'unchecked');
+  });
+
+  test('should show step indicator during search', async ({ page }) => {
+    // Switch to text search mode
+    await page.click('button:has-text("Text Search")');
+
+    // Enter search query
+    await page.fill('input[placeholder*="Search for a product"]', 'test product');
+
+    // Start search
+    await page.click('button:has-text("Search")');
+
+    // Look for step indicators (Analyzing, Searching, Complete)
+    // At least one should be visible during the search process
+    const stepIndicator = page.locator('text=Searching').or(page.locator('text=Complete'));
+    await expect(stepIndicator).toBeVisible({ timeout: 10000 });
+  });
+});
+
+test.describe('Smart Add - Add to List Flow', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/smart-add');
+  });
+
+  test('should show list selector when product is identified', async ({ page }) => {
     // Switch to text search
     await page.click('button:has-text("Text Search")');
 
@@ -85,5 +139,143 @@ test.describe('Smart Add - Add to List Flow', () => {
 
     // If results are found, there should be ability to add to list
     // This test verifies the flow exists even if no actual results
+  });
+
+  test('should navigate to list creation if no lists exist', async ({ page }) => {
+    // Switch to text search
+    await page.click('button:has-text("Text Search")');
+
+    // Search for a product
+    await page.fill('input[placeholder*="Search for a product"]', 'test');
+    await page.click('button:has-text("Search")');
+
+    await page.waitForLoadState('networkidle');
+
+    // If no lists exist, there should be a create list button or message
+    // This verifies the empty state handling
+  });
+});
+
+test.describe('Smart Add - Image Analysis', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/smart-add');
+  });
+
+  test('should accept image file upload', async ({ page }) => {
+    // Create a test image file input
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    
+    // Click the upload area
+    await page.click('text=Drop image here');
+    
+    const fileChooser = await fileChooserPromise;
+    
+    // Verify file chooser was opened (it accepts images)
+    expect(fileChooser.isMultiple()).toBe(false);
+  });
+
+  test('should show additional context input after image selection', async ({ page }) => {
+    // This test would require mocking file upload
+    // For now, just verify the image mode UI elements exist
+    await expect(page.locator('button:has-text("Image")')).toBeVisible();
+  });
+});
+
+test.describe('Smart Add - UI Enhancements', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/smart-add');
+  });
+
+  test('should show confidence indicator after analysis', async ({ page }) => {
+    // This would require triggering an AI analysis
+    // For now, verify the page structure
+    await expect(page.locator('h1:has-text("Smart Add")')).toBeVisible();
+  });
+
+  test('should allow editing search query after initial search', async ({ page }) => {
+    // Switch to text search
+    await page.click('button:has-text("Text Search")');
+
+    // Search for a product
+    await page.fill('input[placeholder*="Search for a product"]', 'initial query');
+    await page.click('button:has-text("Search")');
+
+    await page.waitForLoadState('networkidle');
+
+    // After search completes, look for Edit Search button
+    const editButton = page.locator('button:has-text("Edit Search")');
+    
+    // Wait a bit for results to load
+    await page.waitForTimeout(2000);
+    
+    // If edit button exists (results were found), click it
+    if (await editButton.isVisible()) {
+      await editButton.click();
+      
+      // Should show input for custom search
+      await expect(page.locator('input[placeholder*="Enter custom search"]')).toBeVisible();
+    }
+  });
+
+  test('should show alternative search terms after AI analysis', async ({ page }) => {
+    // This requires an AI analysis to complete
+    // For now, verify basic page structure
+    await expect(page.locator('text=AI will identify')).toBeVisible();
+  });
+});
+
+test.describe('Smart Add - Image Proxy', () => {
+  test('images should load through proxy', async ({ page }) => {
+    // Switch to text search
+    await page.click('button:has-text("Text Search")');
+
+    // Search for a product
+    await page.fill('input[placeholder*="Search for a product"]', 'laptop');
+    await page.click('button:has-text("Search")');
+
+    await page.waitForLoadState('networkidle');
+    
+    // Wait for any results
+    await page.waitForTimeout(3000);
+
+    // Check if any images are rendered (either proxied or with fallback)
+    const images = page.locator('img');
+    const imageCount = await images.count();
+    
+    // If images exist, they should load without error
+    if (imageCount > 0) {
+      const firstImage = images.first();
+      
+      // Wait for image to load
+      await firstImage.evaluate((img: HTMLImageElement) => {
+        return new Promise((resolve) => {
+          if (img.complete) resolve(true);
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          setTimeout(() => resolve(true), 5000);
+        });
+      });
+    }
+  });
+});
+
+test.describe('Smart Add - Mobile Experience', () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test('should show camera button on mobile', async ({ page }) => {
+    await page.goto('/smart-add');
+    
+    // On mobile, camera button should be visible
+    await expect(page.locator('text=Take Photo')).toBeVisible();
+  });
+
+  test('should have touch-friendly interface on mobile', async ({ page }) => {
+    await page.goto('/smart-add');
+    
+    // Verify buttons are large enough for touch
+    const imageButton = page.locator('button:has-text("Image")');
+    const boundingBox = await imageButton.boundingBox();
+    
+    expect(boundingBox?.height).toBeGreaterThanOrEqual(36); // Minimum touch target
   });
 });

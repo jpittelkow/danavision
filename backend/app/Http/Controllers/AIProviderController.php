@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AIPrompt;
 use App\Models\AIProvider;
 use App\Models\DefaultPrompts;
+use App\Services\AI\AIModelService;
 use App\Services\AI\AIService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,11 +19,18 @@ class AIProviderController extends Controller
      */
     public function index(Request $request): Response
     {
+        $modelService = new AIModelService();
+        
         $providers = $request->user()->aiProviders()
             ->orderBy('is_primary', 'desc')
             ->orderBy('created_at', 'asc')
             ->get()
-            ->map(function (AIProvider $provider) {
+            ->map(function (AIProvider $provider) use ($modelService) {
+                // Get dynamic models if provider has API key configured
+                $availableModels = $provider->hasApiKey()
+                    ? $modelService->getModelsForProvider($provider)
+                    : $provider->getAvailableModels();
+                
                 return [
                     'id' => $provider->id,
                     'provider' => $provider->provider,
@@ -36,7 +44,7 @@ class AIProviderController extends Controller
                     'test_error' => $provider->test_error,
                     'last_tested_at' => $provider->last_tested_at?->toISOString(),
                     'display_name' => $provider->getDisplayName(),
-                    'available_models' => $provider->getAvailableModels(),
+                    'available_models' => $availableModels,
                 ];
             });
 
@@ -243,6 +251,52 @@ class AIProviderController extends Controller
         return response()->json([
             'models' => $models,
             'available' => !empty($models),
+        ]);
+    }
+
+    /**
+     * Fetch available models for a provider.
+     */
+    public function fetchModels(Request $request, AIProvider $provider): \Illuminate\Http\JsonResponse
+    {
+        // Ensure user owns this provider
+        if ($provider->user_id !== $request->user()->id) {
+            abort(403);
+        }
+
+        $modelService = new AIModelService();
+        $models = $modelService->getModelsForProvider($provider);
+
+        return response()->json([
+            'models' => $models,
+            'provider' => $provider->provider,
+        ]);
+    }
+
+    /**
+     * Refresh cached models for a provider.
+     */
+    public function refreshModels(Request $request, AIProvider $provider): \Illuminate\Http\JsonResponse
+    {
+        // Ensure user owns this provider
+        if ($provider->user_id !== $request->user()->id) {
+            abort(403);
+        }
+
+        $modelService = new AIModelService();
+        
+        // Clear cache and fetch fresh models
+        $modelService->clearCache(
+            $provider->provider,
+            $provider->getDecryptedApiKey(),
+            $provider->base_url
+        );
+        
+        $models = $modelService->getModelsForProvider($provider);
+
+        return response()->json([
+            'models' => $models,
+            'provider' => $provider->provider,
         ]);
     }
 

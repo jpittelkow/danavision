@@ -10,11 +10,75 @@ Before writing ANY code, understand these requirements. Changes will be rejected
 
 ### Quick Checklist
 
+- [ ] Containers are running - Check Docker containers first
 - [ ] Tests are written - Every feature/bugfix requires tests
 - [ ] Tests pass - Run full test suite before completion
 - [ ] E2E tests pass - Frontend features require Playwright tests
 - [ ] ADR created - If this is a significant architectural change
 - [ ] Documentation updated - TypeScript types, API docs if needed
+
+---
+
+## ⚠️ CRITICAL: Containerized Development Environment
+
+**This project runs ENTIRELY in Docker containers. NOTHING runs locally on the host machine.**
+
+### Before Running ANY Command
+
+1. **Check that containers are running first:**
+   ```bash
+   docker compose ps
+   ```
+
+2. **If containers are not running, start them:**
+   ```bash
+   docker compose up -d
+   ```
+
+### Running Commands
+
+All commands (tests, artisan, npm, composer, etc.) MUST be executed inside containers:
+
+```bash
+# Backend commands (PHP/Laravel)
+docker compose exec app php artisan migrate
+docker compose exec app ./vendor/bin/pest
+docker compose exec app composer install
+
+# Frontend commands (Node/npm)
+docker compose exec app npm install
+docker compose exec app npm run dev
+docker compose exec app npm run test:e2e
+
+# Database access
+docker compose exec db mysql -u root -p
+```
+
+### NEVER Do This
+
+```bash
+# WRONG - These will fail or affect wrong environment
+php artisan migrate          # No local PHP
+./vendor/bin/pest           # No local vendor
+npm install                 # Wrong node_modules location
+composer install            # No local composer
+```
+
+### Common Container Commands
+
+```bash
+# View logs
+docker compose logs -f app
+
+# Restart containers
+docker compose restart
+
+# Rebuild containers (after Dockerfile changes)
+docker compose up -d --build
+
+# Shell into container
+docker compose exec app bash
+```
 
 ---
 
@@ -35,14 +99,14 @@ EVERY new feature, bug fix, or change MUST include tests. No exceptions.
 ### Running Tests
 
 ```bash
-# Backend tests (Pest PHP)
-cd backend && ./vendor/bin/pest
+# Backend tests (Pest PHP) - run inside container
+docker compose exec app ./vendor/bin/pest
 
 # E2E tests (Playwright) - requires app running
-cd backend && npm run test:e2e
+docker compose exec app npm run test:e2e
 
 # E2E with UI mode (debugging)
-cd backend && npm run test:e2e:ui
+docker compose exec app npm run test:e2e:ui
 ```
 
 ### 2. Frontend Testing with Playwright
@@ -194,13 +258,14 @@ export default function ListShow({ auth, list, can_edit, flash }: Props) {
 
 Before marking ANY feature as complete:
 
-1. [ ] Backend tests pass: `cd backend && ./vendor/bin/pest`
-2. [ ] E2E tests pass: `cd backend && npm run test:e2e`
-3. [ ] New features have E2E tests in `backend/e2e/`
-4. [ ] TypeScript types updated if API changed
-5. [ ] No console.log/debug statements left
-6. [ ] Error handling uses proper messages
-7. [ ] Loading states handled in UI
+1. [ ] Containers running: `docker compose ps`
+2. [ ] Backend tests pass: `docker compose exec app ./vendor/bin/pest`
+3. [ ] E2E tests pass: `docker compose exec app npm run test:e2e`
+4. [ ] New features have E2E tests in `backend/e2e/`
+5. [ ] TypeScript types updated if API changed
+6. [ ] No console.log/debug statements left
+7. [ ] Error handling uses proper messages
+8. [ ] Loading states handled in UI
 
 ---
 
@@ -208,19 +273,21 @@ Before marking ANY feature as complete:
 
 When implementing a new feature:
 
-1. Write the backend code
-2. Write Pest PHP tests for the controller/service
-3. Write the frontend React component
-4. Write Playwright E2E tests
-5. Run all tests
-6. Fix any failures
-7. Feature is complete only when ALL tests pass
+1. Verify containers are running: `docker compose ps`
+2. Write the backend code
+3. Write Pest PHP tests for the controller/service
+4. Write the frontend React component
+5. Write Playwright E2E tests
+6. Run all tests (inside container): `docker compose exec app ./vendor/bin/pest`
+7. Fix any failures
+8. Feature is complete only when ALL tests pass
 
 ---
 
 ## Questions?
 
-1. Check if the pattern exists elsewhere in the codebase
-2. Look for user_id filtering pattern
-3. Verify Policy authorization is in place
-4. Run tests - they catch many issues
+1. Are containers running? `docker compose ps`
+2. Check if the pattern exists elsewhere in the codebase
+3. Look for user_id filtering pattern
+4. Verify Policy authorization is in place
+5. Run tests - they catch many issues

@@ -656,7 +656,6 @@ function PromptEditor({ prompt, onUpdate }: { prompt: PromptData; onUpdate: () =
 
 export default function Settings({ auth, settings, providers, availableProviders, prompts, flash }: Props) {
   const [showMailPassword, setShowMailPassword] = useState(false);
-  const [showPriceApiKey, setShowPriceApiKey] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
 
   const { data, setData, patch, processing } = useForm({
@@ -665,9 +664,6 @@ export default function Settings({ auth, settings, providers, availableProviders
     notify_price_drops: settings?.notify_price_drops ?? true,
     notify_daily_summary: settings?.notify_daily_summary ?? false,
     notify_all_time_lows: settings?.notify_all_time_lows ?? true,
-    // Price provider
-    price_provider: settings?.price_provider || 'serpapi',
-    price_api_key: settings?.price_api_key || '',
     // Email/SMTP settings
     mail_driver: settings?.mail_driver || 'smtp',
     mail_host: settings?.mail_host || '',
@@ -1026,58 +1022,43 @@ export default function Settings({ auth, settings, providers, availableProviders
                 </CardContent>
               </Card>
 
-              {/* Price API Settings */}
+              {/* Price Search Info */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Price Provider
+                    <Brain className="h-5 w-5" />
+                    Price Search
                   </CardTitle>
                   <CardDescription>
-                    Configure your price tracking API
+                    AI-powered price search and product identification
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="price_provider">Provider</Label>
-                    <select
-                      id="price_provider"
-                      value={data.price_provider}
-                      onChange={(e) => setData('price_provider', e.target.value as 'serpapi' | 'rainforest')}
-                      className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    >
-                      <option value="serpapi">SerpApi (Google Shopping)</option>
-                      <option value="rainforest">Rainforest (Amazon)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="price_api_key">API Key</Label>
-                    <div className="relative mt-1">
-                      <Input
-                        id="price_api_key"
-                        type={showPriceApiKey ? 'text' : 'password'}
-                        value={data.price_api_key}
-                        onChange={(e) => setData('price_api_key', e.target.value)}
-                        placeholder={settings?.has_price_api_key ? 'Leave blank to keep current' : 'Enter your API key'}
-                        className="pr-10"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 top-0 h-full px-3"
-                        onClick={() => setShowPriceApiKey(!showPriceApiKey)}
-                      >
-                        {showPriceApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
+                  <div className="bg-primary/10 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                      <span className="font-medium text-foreground">AI-Powered Search</span>
                     </div>
-                    {settings?.has_price_api_key && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        API key is configured. Leave blank to keep the current key.
-                      </p>
+                    <p className="text-sm text-muted-foreground">
+                      DanaVision uses your configured AI providers to search for current prices across retailers. 
+                      This provides more accurate and comprehensive results than traditional price APIs.
+                    </p>
+                    {providers.length === 0 ? (
+                      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                        <AlertCircle className="h-4 w-4" />
+                        <span className="text-sm">No AI providers configured. Please set up an AI provider in the AI Providers tab.</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span className="text-sm">{providers.filter(p => p.is_active).length} active AI provider(s) configured for price search</span>
+                      </div>
                     )}
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    For best results, configure multiple AI providers with web search capabilities. 
+                    The system will aggregate results from all providers for comprehensive price data.
+                  </p>
                 </CardContent>
               </Card>
 

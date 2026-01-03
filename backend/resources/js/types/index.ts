@@ -59,6 +59,8 @@ export interface ListItem {
   priority: 'low' | 'medium' | 'high';
   is_purchased: boolean;
   shop_local?: boolean | null;
+  is_generic?: boolean;
+  unit_of_measure?: string | null;
   purchased_at?: string;
   purchased_price?: number;
   last_checked_at?: string;
@@ -68,6 +70,22 @@ export interface ListItem {
   created_at: string;
   updated_at: string;
 }
+
+export type UnitOfMeasure = 'lb' | 'oz' | 'kg' | 'g' | 'gallon' | 'liter' | 'quart' | 'pint' | 'fl_oz' | 'each' | 'dozen';
+
+export const UNITS_OF_MEASURE: Record<UnitOfMeasure, string> = {
+  lb: 'pound',
+  oz: 'ounce',
+  kg: 'kilogram',
+  g: 'gram',
+  gallon: 'gallon',
+  liter: 'liter',
+  quart: 'quart',
+  pint: 'pint',
+  fl_oz: 'fluid ounce',
+  each: 'each',
+  dozen: 'dozen',
+};
 
 export interface ListShare {
   id: number;

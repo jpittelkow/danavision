@@ -6,7 +6,7 @@ use App\Models\ItemVendorPrice;
 use App\Models\PriceHistory;
 use App\Models\Setting;
 use App\Models\ShoppingList;
-use App\Services\PriceApi\PriceApiService;
+use App\Services\AI\AIPriceSearchService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -105,6 +105,8 @@ class ShoppingListController extends Controller
                 'current_retailer' => $item->current_retailer,
                 'priority' => $item->priority,
                 'is_purchased' => $item->is_purchased,
+                'is_generic' => $item->is_generic,
+                'unit_of_measure' => $item->unit_of_measure,
                 'purchased_at' => $item->purchased_at?->toISOString(),
                 'last_checked_at' => $item->last_checked_at?->toISOString(),
                 'is_at_all_time_low' => $item->isAtAllTimeLow(),
@@ -215,16 +217,17 @@ class ShoppingListController extends Controller
     }
 
     /**
-     * Refresh prices for all items in the list.
+     * Refresh prices for all items in the list using AI search.
      */
     public function refresh(Request $request, ShoppingList $list): RedirectResponse
     {
         $this->authorize('update', $list);
 
-        $priceService = PriceApiService::forUser($request->user()->id);
+        $priceService = AIPriceSearchService::forUser($request->user()->id);
         
-        if (!$priceService->isAvailable()) {
-            return back()->with('error', 'Price API is not configured. Please set up a price provider in Settings.');
+        // Check if either AI or web search is available
+        if (!$priceService->isAvailable() && !$priceService->isWebSearchAvailable()) {
+            return back()->with('error', 'No AI providers or web search configured. Please set up an AI provider or SerpAPI key in Settings.');
         }
 
         $items = $list->items()->where('is_purchased', false)->get();
@@ -233,13 +236,30 @@ class ShoppingListController extends Controller
             return back()->with('error', 'No items to refresh.');
         }
 
+        // Get user's home zip code for local searches
+        $homeZipCode = Setting::get(Setting::HOME_ZIP_CODE, $request->user()->id);
+
+        // Get list-level shop_local setting
+        $listShopLocal = $list->shop_local ?? false;
+
         $updated = 0;
         $errors = [];
+        $providersUsed = [];
 
         foreach ($items as $item) {
-            $searchQuery = $item->product_query ?? $item->product_name;
+            // Determine if shop_local is enabled (item-level takes precedence over list-level)
             $shopLocal = $item->shouldShopLocal();
-            $searchResult = $priceService->search($searchQuery, 'product', $shopLocal);
+
+            $searchQuery = $item->product_query ?? $item->product_name;
+            $searchResult = $priceService->search($searchQuery, [
+                'is_generic' => $item->is_generic ?? false,
+                'unit_of_measure' => $item->unit_of_measure,
+                'shop_local' => $shopLocal,
+                'zip_code' => $homeZipCode,
+            ]);
+
+            // Track providers used
+            $providersUsed = array_unique(array_merge($providersUsed, $searchResult->providersUsed));
 
             if ($searchResult->hasError() || !$searchResult->hasResults()) {
                 $errors[] = $item->product_name;
@@ -269,7 +289,7 @@ class ShoppingListController extends Controller
                         'current_price' => $price,
                         'lowest_price' => $price,
                         'highest_price' => $price,
-                        'in_stock' => true,
+                        'in_stock' => $result['in_stock'] ?? true,
                         'last_checked_at' => now(),
                     ]);
                 }
@@ -286,9 +306,18 @@ class ShoppingListController extends Controller
                 PriceHistory::captureFromItem($item, 'user_refresh');
                 $updated++;
             }
+
+            // Update generic info from search if not already set
+            if ($searchResult->isGeneric && !$item->is_generic) {
+                $item->update([
+                    'is_generic' => true,
+                    'unit_of_measure' => $searchResult->unitOfMeasure,
+                ]);
+            }
         }
 
-        $message = "Updated prices for {$updated} item" . ($updated !== 1 ? 's' : '');
+        $providerNames = implode(', ', array_map('ucfirst', $providersUsed));
+        $message = "Updated prices for {$updated} item" . ($updated !== 1 ? 's' : '') . " using {$providerNames}";
         
         if (!empty($errors)) {
             $message .= '. Failed: ' . implode(', ', array_slice($errors, 0, 3));

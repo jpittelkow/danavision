@@ -250,17 +250,26 @@ function ProviderCard({ provider, onUpdate }: { provider: AIProviderData; onUpda
               </Select>
             </div>
 
-            {provider.provider === 'local' && (
+            {(provider.provider === 'local' || provider.provider === 'gemini') && (
               <div>
-                <Label htmlFor={`base_url_${provider.id}`}>Base URL</Label>
+                <Label htmlFor={`base_url_${provider.id}`}>
+                  {provider.provider === 'gemini' ? 'Base URL (Optional)' : 'Base URL'}
+                </Label>
                 <Input
                   id={`base_url_${provider.id}`}
                   type="url"
                   value={data.base_url}
                   onChange={(e) => setData('base_url', e.target.value)}
-                  placeholder="http://localhost:11434"
+                  placeholder={provider.provider === 'gemini' 
+                    ? 'https://generativelanguage.googleapis.com/v1beta' 
+                    : 'http://localhost:11434'}
                   className="mt-1"
                 />
+                {provider.provider === 'gemini' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Leave blank to use the default Google API endpoint
+                  </p>
+                )}
               </div>
             )}
 
@@ -281,15 +290,17 @@ function ProviderCard({ provider, onUpdate }: { provider: AIProviderData; onUpda
           <>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">API Key</span>
-              <span className="font-mono">
-                {provider.has_api_key ? provider.masked_api_key : 'Not configured'}
+              <span className="font-mono text-muted-foreground">
+                {provider.has_api_key ? 'API key saved ••••••••' : 'Not configured'}
               </span>
             </div>
 
-            {provider.provider === 'local' && provider.base_url && (
+            {(provider.provider === 'local' || provider.provider === 'gemini') && provider.base_url && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Base URL</span>
-                <span className="font-mono text-xs">{provider.base_url}</span>
+                <span className="font-mono text-xs truncate max-w-[200px]" title={provider.base_url}>
+                  {provider.base_url}
+                </span>
               </div>
             )}
 
@@ -486,17 +497,26 @@ function AddProviderDialog({ availableProviders, onAdd }: { availableProviders: 
             </div>
           )}
 
-          {selectedProvider?.provider === 'local' && (
+          {(selectedProvider?.provider === 'local' || selectedProvider?.provider === 'gemini') && (
             <div>
-              <Label htmlFor="base_url">Ollama Base URL</Label>
+              <Label htmlFor="base_url">
+                {selectedProvider.provider === 'gemini' ? 'Base URL (Optional)' : 'Ollama Base URL'}
+              </Label>
               <Input
                 id="base_url"
                 type="url"
                 value={data.base_url}
                 onChange={(e) => setData('base_url', e.target.value)}
-                placeholder="http://localhost:11434"
+                placeholder={selectedProvider.provider === 'gemini' 
+                  ? 'https://generativelanguage.googleapis.com/v1beta' 
+                  : 'http://localhost:11434'}
                 className="mt-1"
               />
+              {selectedProvider.provider === 'gemini' && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Leave blank to use the default Google API endpoint
+                </p>
+              )}
             </div>
           )}
 

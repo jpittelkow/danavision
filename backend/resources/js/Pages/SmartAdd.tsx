@@ -6,6 +6,7 @@ import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Card, CardContent } from '@/Components/ui/card';
 import { Badge } from '@/Components/ui/badge';
+import { Switch } from '@/Components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import {
   SelectValue,
 } from '@/Components/ui/select';
 import { cn, isMobileDevice } from '@/lib/utils';
+import StreamingSearchResults from '@/Components/StreamingSearchResults';
 import {
   Sparkles,
   Camera,
@@ -28,7 +30,14 @@ import {
   ImageIcon,
   Zap,
   ShoppingCart,
+  RefreshCw,
+  Edit3,
+  Tag,
+  Radio,
+  Scale,
+  Package,
 } from 'lucide-react';
+import { UNITS_OF_MEASURE, UnitOfMeasure } from '@/types';
 
 interface PriceResult {
   title: string;
@@ -43,6 +52,8 @@ interface Analysis {
   brand: string | null;
   model: string | null;
   category: string | null;
+  is_generic: boolean;
+  unit_of_measure: string | null;
   search_terms: string[];
   confidence: number;
   error: string | null;
@@ -63,6 +74,94 @@ const formatPrice = (value: number | string | null | undefined, decimals = 2): s
   return num.toFixed(decimals);
 };
 
+// Confidence indicator component
+function ConfidenceIndicator({ confidence }: { confidence: number }) {
+  const getColor = () => {
+    if (confidence >= 80) return 'bg-green-500';
+    if (confidence >= 60) return 'bg-yellow-500';
+    return 'bg-orange-500';
+  };
+
+  const getLabel = () => {
+    if (confidence >= 80) return 'High confidence';
+    if (confidence >= 60) return 'Medium confidence';
+    return 'Low confidence';
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+        <div
+          className={cn('h-full transition-all duration-500', getColor())}
+          style={{ width: `${confidence}%` }}
+        />
+      </div>
+      <span className="text-xs text-muted-foreground whitespace-nowrap">
+        {confidence}% - {getLabel()}
+      </span>
+    </div>
+  );
+}
+
+// Step indicator component
+function StepIndicator({ 
+  currentStep 
+}: { 
+  currentStep: 'idle' | 'analyzing' | 'searching' | 'complete' 
+}) {
+  const steps = [
+    { id: 'analyzing', label: 'Analyzing', icon: Sparkles },
+    { id: 'searching', label: 'Searching', icon: Search },
+    { id: 'complete', label: 'Complete', icon: CheckCircle2 },
+  ];
+
+  const getCurrentIndex = () => {
+    if (currentStep === 'idle') return -1;
+    return steps.findIndex(s => s.id === currentStep);
+  };
+
+  const currentIndex = getCurrentIndex();
+
+  return (
+    <div className="flex items-center justify-center gap-2 mb-6">
+      {steps.map((step, index) => {
+        const Icon = step.icon;
+        const isActive = index === currentIndex;
+        const isComplete = index < currentIndex;
+        const isPending = index > currentIndex;
+
+        return (
+          <div key={step.id} className="flex items-center gap-2">
+            <div
+              className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all',
+                isActive && 'bg-violet-500 text-white',
+                isComplete && 'bg-green-500/20 text-green-600 dark:text-green-400',
+                isPending && 'bg-muted text-muted-foreground'
+              )}
+            >
+              {isActive && currentStep !== 'complete' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Icon className="h-4 w-4" />
+              )}
+              <span className="font-medium">{step.label}</span>
+            </div>
+            {index < steps.length - 1 && (
+              <div
+                className={cn(
+                  'w-8 h-0.5',
+                  index < currentIndex ? 'bg-green-500' : 'bg-muted'
+                )}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function SmartAdd({
   auth,
   lists,
@@ -80,6 +179,14 @@ export default function SmartAdd({
   const [selectedListId, setSelectedListId] = useState<string>(
     lists.length > 0 ? String(lists[0].id) : ''
   );
+  const [isEditingQuery, setIsEditingQuery] = useState(false);
+  const [customSearchQuery, setCustomSearchQuery] = useState('');
+  
+  // Streaming search state
+  const [useStreaming, setUseStreaming] = useState(true);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingQuery, setStreamingQuery] = useState('');
+  const [streamedResults, setStreamedResults] = useState<PriceResult[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -99,17 +206,29 @@ export default function SmartAdd({
     product_query: '',
     product_url: '',
     product_image_url: '',
+    uploaded_image: '',
     sku: '',
     current_price: '',
     current_retailer: '',
     target_price: '',
     notes: '',
     priority: 'medium',
+    is_generic: false,
+    unit_of_measure: '' as string,
   });
 
   const isMobile = isMobileDevice();
   const hasAnalysis = analysis && analysis.product_name;
-  const hasResults = price_results && price_results.length > 0;
+  const hasResults = (price_results && price_results.length > 0) || streamedResults.length > 0;
+  const displayResults = streamedResults.length > 0 ? streamedResults : (price_results || []);
+
+  // Determine current step for indicator
+  const getCurrentStep = (): 'idle' | 'analyzing' | 'searching' | 'complete' => {
+    if (analyzeForm.processing) return 'analyzing';
+    if (searchForm.processing || isStreaming) return 'searching';
+    if (hasAnalysis || hasResults) return 'complete';
+    return 'idle';
+  };
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -168,7 +287,54 @@ export default function SmartAdd({
   const submitTextSearch = (e: FormEvent) => {
     e.preventDefault();
     if (!searchForm.data.query.trim()) return;
-    searchForm.post('/smart-add/search');
+    
+    if (useStreaming) {
+      // Use streaming mode
+      setStreamingQuery(searchForm.data.query);
+      setStreamedResults([]);
+      setIsStreaming(true);
+    } else {
+      // Use traditional mode
+      searchForm.post('/smart-add/search');
+    }
+  };
+
+  // Handle streaming search completion
+  const handleStreamingComplete = (results: PriceResult[]) => {
+    setStreamedResults(results);
+    setIsStreaming(false);
+  };
+
+  // Handle streaming search cancel
+  const handleStreamingCancel = () => {
+    setIsStreaming(false);
+    setStreamingQuery('');
+  };
+
+  // Re-search with custom query
+  const handleCustomSearch = (query: string) => {
+    setIsEditingQuery(false);
+    
+    if (useStreaming) {
+      setStreamingQuery(query);
+      setStreamedResults([]);
+      setIsStreaming(true);
+    } else {
+      searchForm.setData('query', query);
+      searchForm.post('/smart-add/search');
+    }
+  };
+
+  // Search using a specific search term chip
+  const handleSearchTermClick = (term: string) => {
+    if (useStreaming) {
+      setStreamingQuery(term);
+      setStreamedResults([]);
+      setIsStreaming(true);
+    } else {
+      searchForm.setData('query', term);
+      searchForm.post('/smart-add/search');
+    }
   };
 
   const handleClearImage = () => {
@@ -185,12 +351,15 @@ export default function SmartAdd({
       product_query: analysis?.product_name || result.title,
       product_url: result.url,
       product_image_url: result.image_url || '',
+      uploaded_image: uploaded_image || '',
       sku: '',
       current_price: String(result.price),
       current_retailer: result.retailer,
       target_price: '',
       notes: '',
       priority: 'medium',
+      is_generic: analysis?.is_generic || false,
+      unit_of_measure: analysis?.unit_of_measure || '',
     });
   };
 
@@ -204,10 +373,21 @@ export default function SmartAdd({
     setImagePreview(null);
     setSelectedResult(null);
     setMode('idle');
+    setIsEditingQuery(false);
+    setCustomSearchQuery('');
+    setIsStreaming(false);
+    setStreamingQuery('');
+    setStreamedResults([]);
     analyzeForm.reset();
     searchForm.reset();
     addForm.reset();
     router.get('/smart-add');
+  };
+
+  // Get proxy URL for external images
+  const getProxiedImageUrl = (url: string | undefined) => {
+    if (!url) return undefined;
+    return `/api/proxy-image?url=${encodeURIComponent(url)}`;
   };
 
   return (
@@ -225,6 +405,11 @@ export default function SmartAdd({
           </p>
         </div>
 
+        {/* Step Indicator - Show during processing */}
+        {(analyzeForm.processing || searchForm.processing || isStreaming || hasAnalysis || hasResults) && (
+          <StepIndicator currentStep={getCurrentStep()} />
+        )}
+
         {/* Error Display */}
         {(search_error || analysis?.error) && (
           <Card className="mb-6 border-destructive">
@@ -235,8 +420,8 @@ export default function SmartAdd({
           </Card>
         )}
 
-        {/* Input Section - Show when no results yet */}
-        {!hasAnalysis && !hasResults && (
+        {/* Input Section - Show when no results yet and not streaming */}
+        {!hasAnalysis && !hasResults && !isStreaming && (
           <>
             {/* Mode Toggle */}
             <div className="flex justify-center gap-2 mb-6">
@@ -393,33 +578,62 @@ export default function SmartAdd({
 
             {/* Text Search Mode */}
             {mode === 'text' && (
-              <form onSubmit={submitTextSearch} className="mb-8">
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      value={searchForm.data.query}
-                      onChange={(e) => searchForm.setData('query', e.target.value)}
-                      className="pl-12 h-14 text-lg rounded-xl"
-                      placeholder="Search for a product..."
-                    />
+              <div className="mb-8 space-y-4">
+                <form onSubmit={submitTextSearch}>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        value={searchForm.data.query}
+                        onChange={(e) => searchForm.setData('query', e.target.value)}
+                        className="pl-12 h-14 text-lg rounded-xl"
+                        placeholder="Search for a product..."
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      disabled={searchForm.processing || isStreaming || !searchForm.data.query.trim()}
+                      className="h-14 px-8 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
+                    >
+                      {(searchForm.processing || isStreaming) ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        'Search'
+                      )}
+                    </Button>
                   </div>
-                  <Button
-                    type="submit"
-                    disabled={searchForm.processing || !searchForm.data.query.trim()}
-                    className="h-14 px-8 rounded-xl bg-gradient-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600"
-                  >
-                    {searchForm.processing ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      'Search'
-                    )}
-                  </Button>
+                </form>
+                
+                {/* Streaming Toggle */}
+                <div className="flex items-center justify-end gap-2">
+                  <Switch
+                    checked={useStreaming}
+                    onCheckedChange={setUseStreaming}
+                    className="data-[state=checked]:bg-violet-500"
+                  />
+                  <span className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Radio className="h-3.5 w-3.5" />
+                    Real-time results
+                  </span>
                 </div>
-              </form>
+              </div>
             )}
           </>
+        )}
+
+        {/* Streaming Search Results - Show immediately when streaming starts */}
+        {(isStreaming || (streamingQuery && streamedResults.length > 0)) && (
+          <div className="space-y-6">
+            <StreamingSearchResults
+              query={streamingQuery}
+              onComplete={handleStreamingComplete}
+              onSelectResult={handleSelectResult}
+              selectedResult={selectedResult}
+              isActive={isStreaming}
+              onCancel={handleStreamingCancel}
+            />
+          </div>
         )}
 
         {/* Results Section */}
@@ -443,15 +657,40 @@ export default function SmartAdd({
                         <span className="text-sm font-medium text-green-600 dark:text-green-400">
                           Product Identified
                         </span>
-                        {analysis.confidence > 0 && (
-                          <Badge variant="secondary" className="ml-2">
-                            {analysis.confidence}% confident
-                          </Badge>
-                        )}
                       </div>
+
+                      {/* Product Name with Edit */}
                       <h2 className="text-xl font-bold text-foreground mb-2">
                         {analysis.product_name}
                       </h2>
+
+                      {/* Item Type Badge */}
+                      <div className="flex items-center gap-2 mb-2">
+                        {analysis.is_generic ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <Scale className="h-3 w-3" />
+                            Generic Item
+                            {analysis.unit_of_measure && (
+                              <span className="text-xs opacity-75">
+                                (per {analysis.unit_of_measure})
+                              </span>
+                            )}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1">
+                            <Package className="h-3 w-3" />
+                            Specific Item
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Confidence Indicator */}
+                      {analysis.confidence > 0 && (
+                        <div className="mb-3 max-w-xs">
+                          <ConfidenceIndicator confidence={analysis.confidence} />
+                        </div>
+                      )}
+
                       <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                         {analysis.brand && (
                           <span>
@@ -469,6 +708,37 @@ export default function SmartAdd({
                           </span>
                         )}
                       </div>
+
+                      {/* Alternative Search Terms */}
+                      {analysis.search_terms && analysis.search_terms.length > 0 && (
+                        <div className="mt-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Tag className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
+                              Try alternative searches:
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {analysis.search_terms.slice(0, 5).map((term, index) => (
+                              <button
+                                key={index}
+                                type="button"
+                                onClick={() => handleSearchTermClick(term)}
+                                disabled={searchForm.processing}
+                                className={cn(
+                                  'px-3 py-1 text-sm rounded-full border transition-colors',
+                                  'bg-background hover:bg-violet-500/10 hover:border-violet-400',
+                                  'text-foreground hover:text-violet-600 dark:hover:text-violet-400',
+                                  searchForm.processing && 'opacity-50 cursor-not-allowed'
+                                )}
+                              >
+                                {term}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {analysis.providers_used && analysis.providers_used.length > 0 && (
                         <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
                           <Sparkles className="h-3 w-3" />
@@ -478,26 +748,97 @@ export default function SmartAdd({
                         </div>
                       )}
                     </div>
-                    <Button variant="ghost" size="sm" onClick={resetAll}>
-                      <X className="h-4 w-4 mr-1" />
-                      New Search
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      <Button variant="ghost" size="sm" onClick={resetAll}>
+                        <X className="h-4 w-4 mr-1" />
+                        New
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Editable Search Query */}
+                  <div className="mt-4 pt-4 border-t border-border">
+                    {isEditingQuery ? (
+                      <div className="flex gap-2">
+                        <Input
+                          type="text"
+                          value={customSearchQuery}
+                          onChange={(e) => setCustomSearchQuery(e.target.value)}
+                          placeholder="Enter custom search query..."
+                          className="flex-1"
+                          autoFocus
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleCustomSearch(customSearchQuery)}
+                          disabled={!customSearchQuery.trim() || searchForm.processing}
+                        >
+                          {searchForm.processing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Search className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setIsEditingQuery(false);
+                            setCustomSearchQuery('');
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">
+                          Searched for: <span className="text-foreground font-medium">{search_query || analysis.product_name}</span>
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setCustomSearchQuery(search_query || analysis.product_name || '');
+                            setIsEditingQuery(true);
+                          }}
+                          className="gap-1"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          Edit Search
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Price Results */}
-            {hasResults && (
+            {/* Static Price Results (non-streaming) */}
+            {hasResults && !isStreaming && streamedResults.length === 0 && (
               <>
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-foreground">
-                    {price_results.length} Price{price_results.length !== 1 ? 's' : ''} Found
+                    {displayResults.length} Price{displayResults.length !== 1 ? 's' : ''} Found
                   </h3>
+                  {hasAnalysis && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCustomSearchQuery(analysis?.product_name || '');
+                        setIsEditingQuery(true);
+                      }}
+                      className="gap-1"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Re-search
+                    </Button>
+                  )}
                 </div>
 
                 <div className="grid gap-4">
-                  {price_results.map((result, index) => (
+                  {displayResults.map((result, index) => (
                     <Card
                       key={index}
                       className={cn(
@@ -512,9 +853,16 @@ export default function SmartAdd({
                         <div className="flex gap-4">
                           {result.image_url ? (
                             <img
-                              src={result.image_url}
+                              src={getProxiedImageUrl(result.image_url)}
                               alt={result.title}
                               className="w-20 h-20 object-contain rounded-lg bg-muted flex-shrink-0"
+                              onError={(e) => {
+                                // Fallback to original URL if proxy fails
+                                const target = e.target as HTMLImageElement;
+                                if (!target.src.includes(result.image_url!)) {
+                                  target.src = result.image_url!;
+                                }
+                              }}
                             />
                           ) : (
                             <div className="w-20 h-20 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
@@ -563,9 +911,24 @@ export default function SmartAdd({
                   <p className="text-muted-foreground">
                     No price results found for "{analysis.product_name}"
                   </p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Try a different search or check your price API configuration.
+                  <p className="text-sm text-muted-foreground mt-2 mb-4">
+                    Try a different search term or check your price API configuration.
                   </p>
+                  {analysis.search_terms && analysis.search_terms.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {analysis.search_terms.slice(0, 3).map((term, index) => (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSearchTermClick(term)}
+                          disabled={searchForm.processing}
+                        >
+                          Try "{term}"
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -643,6 +1006,61 @@ export default function SmartAdd({
                           </SelectContent>
                         </Select>
                       </div>
+                    </div>
+                    
+                    {/* Generic Item Settings */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={addForm.data.is_generic}
+                          onCheckedChange={(checked) => {
+                            addForm.setData('is_generic', checked);
+                            if (!checked) {
+                              addForm.setData('unit_of_measure', '');
+                            } else if (!addForm.data.unit_of_measure) {
+                              addForm.setData('unit_of_measure', 'lb');
+                            }
+                          }}
+                          className="data-[state=checked]:bg-violet-600"
+                        />
+                        <div>
+                          <label className="text-sm font-medium text-foreground flex items-center gap-1">
+                            <Scale className="h-3.5 w-3.5" />
+                            Generic Item
+                          </label>
+                          <p className="text-xs text-muted-foreground">
+                            Sold by weight, volume, or count
+                          </p>
+                        </div>
+                      </div>
+                      {addForm.data.is_generic && (
+                        <div>
+                          <label className="block text-sm font-medium text-foreground mb-1">
+                            Unit of Measure
+                          </label>
+                          <Select
+                            value={addForm.data.unit_of_measure}
+                            onValueChange={(value) => addForm.setData('unit_of_measure', value)}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select unit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="lb">Pound (lb)</SelectItem>
+                              <SelectItem value="oz">Ounce (oz)</SelectItem>
+                              <SelectItem value="kg">Kilogram (kg)</SelectItem>
+                              <SelectItem value="g">Gram (g)</SelectItem>
+                              <SelectItem value="gallon">Gallon</SelectItem>
+                              <SelectItem value="liter">Liter</SelectItem>
+                              <SelectItem value="quart">Quart</SelectItem>
+                              <SelectItem value="pint">Pint</SelectItem>
+                              <SelectItem value="fl_oz">Fluid Ounce</SelectItem>
+                              <SelectItem value="each">Each</SelectItem>
+                              <SelectItem value="dozen">Dozen</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-foreground mb-1">
