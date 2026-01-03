@@ -150,7 +150,9 @@ export function StreamingSearchResults({
     }
   }, [isActive, query, startSearch]);
 
-  if (!isActive) {
+  // Only return null if not active AND no results to display
+  // This allows completed searches to still show their results
+  if (!isActive && results.length === 0 && !isComplete) {
     return null;
   }
 
