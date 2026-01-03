@@ -99,6 +99,8 @@ ports:
 | `DB_DATABASE` | No | `/var/www/html/database/database.sqlite` | Database path |
 | `TZ` | No | `America/Chicago` | Timezone for app and scheduler |
 | `SCHEDULE_TIMEZONE` | No | `America/Chicago` | Timezone for scheduled tasks |
+| `PUID` | No | `82` | User ID for file permissions (Unraid: use `99`) |
+| `PGID` | No | `82` | Group ID for file permissions (Unraid: use `100`) |
 
 **Generate APP_KEY:**
 ```bash
@@ -117,6 +119,13 @@ docker run --rm php:8.3-cli php -r "echo 'base64:' . base64_encode(random_bytes(
 
 #### For Unraid / Portainer (bind mounts)
 
+**Required environment variables for Unraid:**
+```
+PUID=99
+PGID=100
+```
+
+**Volume mappings:**
 ```
 Host Path                                → Container Path
 /mnt/user/appdata/danavision/data        → /var/www/html/data

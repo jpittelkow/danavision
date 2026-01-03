@@ -16,6 +16,23 @@ EOF
 echo "=== Starting DanaVision ==="
 echo "Environment: ${APP_ENV:-local}"
 
+# Handle PUID/PGID for Unraid compatibility
+# Default to www-data's UID/GID (82 on Alpine) if not set
+PUID=${PUID:-82}
+PGID=${PGID:-82}
+
+if [ "$PUID" != "82" ] || [ "$PGID" != "82" ]; then
+    echo "🔧 Custom PUID/PGID detected: $PUID/$PGID"
+    
+    # Modify www-data user to match requested UID/GID
+    # This makes PHP-FPM run as the same user that owns host bind mounts
+    deluser www-data 2>/dev/null || true
+    addgroup -g "$PGID" www-data 2>/dev/null || true
+    adduser -D -u "$PUID" -G www-data -s /bin/sh www-data 2>/dev/null || true
+    
+    echo "   Modified www-data to UID=$PUID, GID=$PGID"
+fi
+
 # Ensure data directory exists and has correct permissions
 # NOTE: Database is in /data (separate from /database which contains migrations)
 # SQLite needs write access to the directory for journal/WAL files
