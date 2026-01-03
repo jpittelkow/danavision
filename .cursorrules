@@ -43,17 +43,17 @@ All commands (tests, artisan, npm, composer, etc.) MUST be executed inside conta
 
 ```bash
 # Backend commands (PHP/Laravel)
-docker compose exec app php artisan migrate
-docker compose exec app ./vendor/bin/pest
-docker compose exec app composer install
+docker compose exec danavision php artisan migrate
+docker compose exec danavision ./vendor/bin/pest
+docker compose exec danavision composer install
 
 # Frontend commands (Node/npm)
-docker compose exec app npm install
-docker compose exec app npm run dev
-docker compose exec app npm run test:e2e
+docker compose exec danavision npm install
+docker compose exec danavision npm run dev
+docker compose exec danavision npm run test:e2e
 
 # Database access
-docker compose exec db mysql -u root -p
+docker compose exec danavision sqlite3 /var/www/html/data/database.sqlite
 ```
 
 ### NEVER Do This
@@ -79,7 +79,7 @@ docker compose restart
 docker compose up -d --build
 
 # Shell into container
-docker compose exec app bash
+docker compose exec danavision bash
 ```
 
 ---
@@ -102,13 +102,13 @@ EVERY new feature, bug fix, or change MUST include tests. No exceptions.
 
 ```bash
 # Backend tests (Pest PHP) - run inside container
-docker compose exec app ./vendor/bin/pest
+docker compose exec danavision ./vendor/bin/pest
 
 # E2E tests (Playwright) - requires app running
-docker compose exec app npm run test:e2e
+docker compose exec danavision npm run test:e2e
 
 # E2E with UI mode (debugging)
-docker compose exec app npm run test:e2e:ui
+docker compose exec danavision npm run test:e2e:ui
 ```
 
 ### 2. Frontend Testing with Playwright
@@ -400,8 +400,8 @@ export default function ListShow({ auth, list, can_edit, flash }: Props) {
 Before marking ANY feature as complete:
 
 1. [ ] Containers running: `docker compose ps`
-2. [ ] Backend tests pass: `docker compose exec app ./vendor/bin/pest`
-3. [ ] E2E tests pass: `docker compose exec app npm run test:e2e`
+2. [ ] Backend tests pass: `docker compose exec danavision ./vendor/bin/pest`
+3. [ ] E2E tests pass: `docker compose exec danavision npm run test:e2e`
 4. [ ] New features have E2E tests in `backend/e2e/`
 5. [ ] TypeScript types updated if API changed
 6. [ ] No console.log/debug statements left
@@ -425,7 +425,7 @@ When implementing a new feature:
 4. Write Pest PHP tests for the controller/service
 5. Write the frontend React component with JSDoc comments
 6. Write Playwright E2E tests
-7. Run all tests (inside container): `docker compose exec app ./vendor/bin/pest`
+7. Run all tests (inside container): `docker compose exec danavision ./vendor/bin/pest`
 8. Fix any failures
 9. **Perform code review** of all newly written code
 10. **Create/update documentation** for the feature
