@@ -65,9 +65,9 @@ RUN ln -sfn /var/www/html/storage/app/public /var/www/html/public/storage || tru
 # Copy logo images to public folder
 RUN mkdir -p /var/www/html/public/images
 
-# Copy entrypoint script
+# Copy entrypoint script and fix Windows line endings
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 
 EXPOSE 80
 
