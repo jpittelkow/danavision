@@ -99,8 +99,6 @@ ports:
 | `DB_DATABASE` | No | `/var/www/html/database/database.sqlite` | Database path |
 | `TZ` | No | `America/Chicago` | Timezone for app and scheduler |
 | `SCHEDULE_TIMEZONE` | No | `America/Chicago` | Timezone for scheduled tasks |
-| `PUID` | No | `82` | User ID for file permissions (Unraid: use `99`) |
-| `PGID` | No | `82` | Group ID for file permissions (Unraid: use `100`) |
 
 **Generate APP_KEY:**
 ```bash
@@ -118,12 +116,6 @@ docker run --rm php:8.3-cli php -r "echo 'base64:' . base64_encode(random_bytes(
 > ℹ️ **Note:** The database is stored in `/var/www/html/data/` (separate from `/var/www/html/database/` which contains migrations). This allows you to safely mount the entire data directory without affecting migrations.
 
 #### For Unraid / Portainer (bind mounts)
-
-**Required environment variables for Unraid:**
-```
-PUID=99
-PGID=100
-```
 
 **Volume mappings:**
 ```
