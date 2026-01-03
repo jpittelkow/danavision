@@ -97,9 +97,9 @@ else
     fi
 fi
 
-# Make database writable by anyone (works with any bind mount)
-chmod 666 "$DB_FILE" 2>/dev/null || true
-chmod 777 /var/www/html/data 2>/dev/null || true
+# Make everything in data directory writable (running as root makes this work on bind mounts)
+echo "Setting permissions on data directory..."
+chmod -R 777 /var/www/html/data
 echo "Data directory contents:"
 ls -la /var/www/html/data/
 
