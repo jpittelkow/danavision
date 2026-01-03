@@ -30,7 +30,14 @@ docker compose up -d
 - URL: http://localhost:8080
 - Create an account on first visit
 
-## docker-compose.yml
+## Docker Compose Configurations
+
+DanaVision has two Docker Compose configurations:
+
+- **`docker-compose.yml`** - Development (database at `/var/www/html/data/`)
+- **`docker-compose.prod.yml`** - Production (database at `/var/www/html/database/`)
+
+### Development (docker-compose.yml)
 
 ```yaml
 services:
@@ -43,8 +50,8 @@ services:
     ports:
       - "8080:80"
     volumes:
-      # Persistent data
-      - danavision_data:/var/www/html/database
+      # Persistent data (dev uses /data directory)
+      - danavision_data:/var/www/html/data
       - danavision_storage:/var/www/html/storage/app
       # Development: mount source code
       - ./backend/app:/var/www/html/app
@@ -59,19 +66,64 @@ services:
       - APP_ENV=${APP_ENV:-local}
       - APP_DEBUG=${APP_DEBUG:-true}
       - DB_CONNECTION=sqlite
-      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - DB_DATABASE=/var/www/html/data/database.sqlite
       - TZ=America/Chicago
+      - SCHEDULE_TIMEZONE=America/Chicago
+      - ALLOW_DB_INIT=${ALLOW_DB_INIT:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
 volumes:
   danavision_data:
   danavision_storage:
 ```
+
+### Production (docker-compose.prod.yml)
+
+```yaml
+services:
+  danavision:
+    image: ghcr.io/jpittelkow/danavision:latest
+    container_name: danavision
+    ports:
+      - "8080:80"
+    volumes:
+      # Persistent data (prod uses /database directory)
+      - danavision_data:/var/www/html/database
+      - danavision_storage:/var/www/html/storage/app
+    environment:
+      - APP_NAME=${APP_NAME:-DanaVision}
+      - APP_KEY=${APP_KEY}
+      - APP_URL=${APP_URL:-http://localhost:8080}
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - TZ=America/Chicago
+      - SCHEDULE_TIMEZONE=America/Chicago
+      - ALLOW_DB_INIT=${ALLOW_DB_INIT:-false}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  danavision_data:
+  danavision_storage:
+```
+
+> **Note:** First-time production setup requires `ALLOW_DB_INIT=true`:
+> ```bash
+> ALLOW_DB_INIT=true docker compose -f docker-compose.prod.yml up -d
+> ```
 
 ## Dockerfile
 
@@ -116,11 +168,24 @@ CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 | APP_NAME | Application name | DanaVision |
 | APP_KEY | Encryption key (required) | - |
 | APP_URL | Application URL | http://localhost:8080 |
-| APP_ENV | Environment | local |
+| APP_ENV | Environment (`local` or `production`) | local |
 | APP_DEBUG | Debug mode | true |
 | DB_CONNECTION | Database driver | sqlite |
-| DB_DATABASE | Database path | /var/www/html/database/database.sqlite |
-| TZ | Timezone | UTC |
+| DB_DATABASE | Database path | Dev: `/var/www/html/data/database.sqlite`<br>Prod: `/var/www/html/database/database.sqlite` |
+| TZ | Timezone | America/Chicago |
+| SCHEDULE_TIMEZONE | Timezone for scheduled tasks | America/Chicago |
+| ALLOW_DB_INIT | Allow creating new database in production (safety flag) | false |
+
+### ALLOW_DB_INIT Safety Flag
+
+In production mode (`APP_ENV=production`), the container includes safety checks to prevent accidental data loss:
+
+- If a volume marker exists but database is missing, the container refuses to start
+- If the database file is empty (0 bytes), the container refuses to start
+
+Set `ALLOW_DB_INIT=true` only when:
+1. First-time setup of a new production instance
+2. Intentionally creating a fresh database
 
 ## Volumes
 
@@ -128,6 +193,13 @@ CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 Stores the SQLite database file. Mount to persist data across container restarts.
 
+**Development:**
+```yaml
+volumes:
+  - danavision_data:/var/www/html/data
+```
+
+**Production:**
 ```yaml
 volumes:
   - danavision_data:/var/www/html/database
@@ -272,14 +344,10 @@ healthcheck:
   retries: 3
 ```
 
-The `/health` endpoint returns:
+The `/health` endpoint returns plain text:
 
-```json
-{
-  "status": "healthy",
-  "timestamp": "2024-01-01T00:00:00.000Z",
-  "app": "DanaVision"
-}
+```
+healthy
 ```
 
 ## Troubleshooting
@@ -336,14 +404,39 @@ If behind a reverse proxy (nginx, traefik), ensure:
 
 ## Backup & Restore
 
-### Backup Database
+### Using the Backup Script
 
+The recommended way to backup is using the included script:
+
+```bash
+./scripts/db-backup.sh backup    # Create a backup
+./scripts/db-backup.sh restore   # Restore from latest backup
+./scripts/db-backup.sh list      # List available backups
+```
+
+The script automatically detects the correct database path from the container environment.
+
+### Manual Backup
+
+**Development:**
+```bash
+docker cp danavision:/var/www/html/data/database.sqlite ./backup.sqlite
+```
+
+**Production:**
 ```bash
 docker cp danavision:/var/www/html/database/database.sqlite ./backup.sqlite
 ```
 
-### Restore Database
+### Manual Restore
 
+**Development:**
+```bash
+docker cp ./backup.sqlite danavision:/var/www/html/data/database.sqlite
+docker exec danavision chown www-data:www-data /var/www/html/data/database.sqlite
+```
+
+**Production:**
 ```bash
 docker cp ./backup.sqlite danavision:/var/www/html/database/database.sqlite
 docker exec danavision chown www-data:www-data /var/www/html/database/database.sqlite

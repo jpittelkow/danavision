@@ -10,8 +10,10 @@ set -e
 
 BACKUP_DIR="./backups"
 CONTAINER_NAME="danavision"
-DB_PATH="/var/www/html/database/database.sqlite"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# Get database path from container environment (supports both dev and prod configurations)
+DB_PATH=$(docker exec "$CONTAINER_NAME" printenv DB_DATABASE 2>/dev/null || echo "/var/www/html/data/database.sqlite")
 
 mkdir -p "$BACKUP_DIR"
 

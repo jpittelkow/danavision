@@ -16,15 +16,18 @@ EOF
 echo "=== Starting DanaVision ==="
 echo "Environment: ${APP_ENV:-local}"
 
+# Derive database path from environment variable (with fallback for backwards compatibility)
+DB_FILE="${DB_DATABASE:-/var/www/html/data/database.sqlite}"
+DB_DIR=$(dirname "$DB_FILE")
+VOLUME_MARKER="$DB_DIR/.volume_marker"
+
 # Ensure data directory exists with permissive permissions
 # Using 777/666 to work with any bind mount (Unraid, Portainer, etc.)
-echo "Setting up data directory..."
-mkdir -p /var/www/html/data
-chmod 777 /var/www/html/data
-
-# Check if database volume is properly mounted (look for .volume_marker file)
-VOLUME_MARKER="/var/www/html/data/.volume_marker"
-DB_FILE="/var/www/html/data/database.sqlite"
+echo "Setting up database directory..."
+echo "   Database path: $DB_FILE"
+echo "   Database directory: $DB_DIR"
+mkdir -p "$DB_DIR"
+chmod 777 "$DB_DIR"
 
 # Production safety check - only block if there's risk of DATA LOSS
 # (i.e., volume marker exists indicating previous data, but database is missing/empty)
@@ -97,11 +100,11 @@ else
     fi
 fi
 
-# Make everything in data directory writable (running as root makes this work on bind mounts)
-echo "Setting permissions on data directory..."
-chmod -R 777 /var/www/html/data
-echo "Data directory contents:"
-ls -la /var/www/html/data/
+# Make everything in database directory writable (running as root makes this work on bind mounts)
+echo "Setting permissions on database directory..."
+chmod -R 777 "$DB_DIR"
+echo "Database directory contents:"
+ls -la "$DB_DIR/"
 
 # Ensure storage directories exist and have correct permissions
 echo "Setting up storage directories..."

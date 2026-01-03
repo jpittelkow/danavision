@@ -96,9 +96,12 @@ ports:
 | `APP_ENV` | No | `local` | Environment: `local`, `production` |
 | `APP_DEBUG` | No | `true` | Enable debug mode (set `false` in production) |
 | `DB_CONNECTION` | No | `sqlite` | Database driver |
-| `DB_DATABASE` | No | `/var/www/html/database/database.sqlite` | Database path |
+| `DB_DATABASE` | No | Dev: `/var/www/html/data/database.sqlite` | Database path (see note below) |
 | `TZ` | No | `America/Chicago` | Timezone for app and scheduler |
 | `SCHEDULE_TIMEZONE` | No | `America/Chicago` | Timezone for scheduled tasks |
+| `ALLOW_DB_INIT` | No | `false` | Safety flag: set `true` for first-time prod setup |
+
+> **Database Path Note:** Development uses `/var/www/html/data/`, production uses `/var/www/html/database/`. The entrypoint script reads `DB_DATABASE` to determine the correct path automatically.
 
 **Generate APP_KEY:**
 ```bash
@@ -135,6 +138,8 @@ volumes:
 
 ### Example docker-compose.yml for Production
 
+> **Note:** Production uses `/var/www/html/database/` for the database path, while development uses `/var/www/html/data/`. Use `docker-compose.prod.yml` from the repo for production deployments.
+
 ```yaml
 services:
   danavision:
@@ -143,14 +148,19 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - danavision_data:/var/www/html/data
+      # Production uses /database path
+      - danavision_data:/var/www/html/database
       - danavision_storage:/var/www/html/storage/app
     environment:
       - APP_KEY=base64:YOUR_GENERATED_KEY_HERE
       - APP_URL=https://your-domain.com
       - APP_ENV=production
       - APP_DEBUG=false
+      - DB_DATABASE=/var/www/html/database/database.sqlite
       - TZ=America/Chicago
+      - SCHEDULE_TIMEZONE=America/Chicago
+      # Set to true only for first-time setup
+      - ALLOW_DB_INIT=${ALLOW_DB_INIT:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
@@ -162,6 +172,11 @@ services:
 volumes:
   danavision_data:
   danavision_storage:
+```
+
+**First-time production setup:**
+```bash
+ALLOW_DB_INIT=true docker compose up -d
 ```
 
 ### Deployment Steps

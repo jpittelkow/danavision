@@ -49,9 +49,11 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage 2>/dev/null || true \
     && chmod -R 755 /var/www/html/bootstrap/cache 2>/dev/null || true
 
-# Create data directory for SQLite database (separate from migrations in /database)
-RUN mkdir -p /var/www/html/data \
-    && chown -R www-data:www-data /var/www/html/data
+# Create database directories for SQLite (supports both dev and prod paths)
+# - /data is used in development (docker-compose.yml)
+# - /database is used in production (docker-compose.prod.yml)
+RUN mkdir -p /var/www/html/data /var/www/html/database \
+    && chown -R www-data:www-data /var/www/html/data /var/www/html/database
 
 # Create storage directories
 RUN mkdir -p /var/www/html/storage/app/public \

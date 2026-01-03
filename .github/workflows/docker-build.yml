@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+﻿name: Build and Push Docker Image
 
 on:
   push:
@@ -16,8 +16,38 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image for testing
+        run: docker compose build
+
+      - name: Start container
+        run: |
+          APP_KEY=$(docker run --rm php:8.3-cli php -r "echo 'base64:' . base64_encode(random_bytes(32));")
+          export APP_KEY
+          ALLOW_DB_INIT=true docker compose up -d
+          echo "Waiting for container to be healthy..."
+          timeout 120 bash -c 'until docker compose exec -T danavision curl -sf http://localhost/health; do sleep 5; done'
+
+      - name: Run tests
+        run: docker compose exec -T danavision ./vendor/bin/pest
+
+      - name: Verify container health after restart
+        run: |
+          docker compose restart
+          timeout 60 bash -c 'until docker compose exec -T danavision curl -sf http://localhost/health; do sleep 5; done'
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v
+
   build:
     runs-on: ubuntu-latest
+    needs: test
     permissions:
       contents: read
       packages: write
