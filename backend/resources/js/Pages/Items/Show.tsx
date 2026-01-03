@@ -154,10 +154,24 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
         },
       });
 
+      // Check for HTTP errors first
+      if (!response.ok) {
+        let errorMessage = `Server error (${response.status})`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch {
+          // Response wasn't JSON, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        setSmartFillMessage(errorMessage);
+        return;
+      }
+
       const result: SmartFillResult = await response.json();
 
       if (!result.success) {
-        setSmartFillMessage(result.error || 'Smart fill failed');
+        setSmartFillMessage(result.error || 'Smart fill failed - no data returned');
         return;
       }
 
@@ -189,13 +203,25 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
         }
       }
 
-      // Show success message with providers used
+      // Build a descriptive success message
+      const foundItems: string[] = [];
+      if (result.product_image_url) foundItems.push('image');
+      if (result.sku) foundItems.push('SKU');
+      if (result.upc) foundItems.push('UPC');
+      if (result.description) foundItems.push('description');
+      if (result.suggested_target_price) foundItems.push('price');
+
       const providers = result.providers_used.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ');
-      setSmartFillMessage(`Found product info using ${providers || 'AI'}!`);
+      
+      if (foundItems.length > 0) {
+        setSmartFillMessage(`Found ${foundItems.join(', ')} using ${providers || 'AI'}!`);
+      } else {
+        setSmartFillMessage(`AI search completed but no additional info found for this product.`);
+      }
 
     } catch (error) {
       console.error('Smart fill error:', error);
-      setSmartFillMessage('Failed to connect to AI service');
+      setSmartFillMessage('Failed to connect to AI service. Check console for details.');
     } finally {
       setIsSmartFilling(false);
     }
