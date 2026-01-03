@@ -15,7 +15,9 @@ Before writing ANY code, understand these requirements. Changes will be rejected
 - [ ] Tests pass - Run full test suite before completion
 - [ ] E2E tests pass - Frontend features require Playwright tests
 - [ ] ADR created - If this is a significant architectural change
-- [ ] Documentation updated - TypeScript types, API docs if needed
+- [ ] Documentation created - ALWAYS create/update documentation for all changes
+- [ ] Code review performed - Review recently created code for quality
+- [ ] Documentation validated - Verify code matches documentation
 
 ---
 
@@ -175,6 +177,145 @@ ADRs MUST be written for:
 
 Location: `docs/adr/`
 
+### 6. Code Review of Recently Created Code
+
+After writing ANY code, you MUST perform a thorough code review. This is mandatory, not optional.
+
+**Code Review Checklist:**
+
+1. **Security Review**
+   - Check for SQL injection vulnerabilities
+   - Verify user authorization on all endpoints
+   - Ensure no sensitive data is exposed
+   - Validate all user inputs
+
+2. **Code Quality Review**
+   - Check for proper error handling
+   - Verify naming conventions are followed
+   - Look for code duplication
+   - Ensure functions are single-purpose
+   - Check for proper typing (TypeScript/PHP)
+
+3. **Performance Review**
+   - Check for N+1 query issues
+   - Verify efficient database queries
+   - Look for unnecessary computations
+   - Check for memory leaks in frontend
+
+4. **Consistency Review**
+   - Ensure code matches existing patterns in codebase
+   - Verify coding style consistency
+   - Check that similar problems are solved similarly
+
+**How to Perform Code Review:**
+
+```bash
+# Review recent changes
+git diff HEAD~1
+
+# Review specific files
+git diff <file_path>
+```
+
+### 7. Documentation Validation
+
+All code MUST be validated against existing documentation. Code and documentation must stay in sync.
+
+**Validation Requirements:**
+
+1. **Before Implementation**
+   - Read existing documentation for the feature area
+   - Understand documented patterns and conventions
+   - Check ADRs for relevant architectural decisions
+
+2. **During Implementation**
+   - Follow documented patterns exactly
+   - If deviating from documentation, update documentation first
+   - Cross-reference TypeScript types with API documentation
+
+3. **After Implementation**
+   - Verify code behavior matches documentation
+   - Run examples from documentation to confirm they work
+   - Update any outdated documentation discovered
+
+**Documentation Locations to Check:**
+- `docs/` - General documentation
+- `docs/adr/` - Architectural Decision Records
+- `README.md` - Project overview
+- Code comments and docblocks
+- TypeScript interfaces in `backend/resources/js/types/`
+
+### 8. Mandatory Documentation Creation
+
+Documentation MUST be created for EVERY change. This is non-negotiable.
+
+**What Requires Documentation:**
+
+| Change Type | Documentation Required |
+|-------------|------------------------|
+| New feature | Feature docs, usage examples, TypeScript types |
+| New API endpoint | API docs with request/response examples |
+| Bug fix | Update existing docs if behavior changed |
+| New component | Component docs with props and usage |
+| Database change | Migration docs, model relationship docs |
+| Configuration change | Environment/config documentation |
+
+**Documentation Standards:**
+
+1. **Inline Documentation**
+   ```php
+   /**
+    * Calculate the total price for all items in the shopping list.
+    *
+    * @param ShoppingList $list The shopping list to calculate
+    * @return float The total price including tax
+    * @throws InvalidListException If list contains invalid items
+    */
+   public function calculateTotal(ShoppingList $list): float
+   ```
+
+2. **TypeScript JSDoc**
+   ```typescript
+   /**
+    * Fetches shopping list data from the API.
+    * @param listId - The unique identifier of the shopping list
+    * @returns Promise resolving to the shopping list data
+    * @throws {ApiError} When the list is not found or user is unauthorized
+    */
+   async function fetchList(listId: string): Promise<ShoppingList>
+   ```
+
+3. **README Updates**
+   - Update feature list when adding features
+   - Add setup instructions for new dependencies
+   - Document new environment variables
+
+4. **ADR Creation**
+   - Create ADR for any architectural decision
+   - Include context, decision, and consequences
+   - Link to related ADRs
+
+**Documentation Template for New Features:**
+
+```markdown
+# Feature Name
+
+## Overview
+Brief description of what this feature does.
+
+## Usage
+How to use this feature with code examples.
+
+## API Reference
+Endpoints, parameters, and responses.
+
+## Examples
+Real-world usage examples.
+
+## Related
+Links to related features or documentation.
+```
+
 ---
 
 ## Code Patterns
@@ -266,6 +407,11 @@ Before marking ANY feature as complete:
 6. [ ] No console.log/debug statements left
 7. [ ] Error handling uses proper messages
 8. [ ] Loading states handled in UI
+9. [ ] **Code review completed** - Review all new code for quality, security, and consistency
+10. [ ] **Documentation created** - All new code has proper documentation
+11. [ ] **Documentation validated** - Code behavior matches existing documentation
+12. [ ] **Inline docs added** - PHPDoc/JSDoc comments on all public methods
+13. [ ] **README updated** - If feature affects project setup or usage
 
 ---
 
@@ -274,13 +420,17 @@ Before marking ANY feature as complete:
 When implementing a new feature:
 
 1. Verify containers are running: `docker compose ps`
-2. Write the backend code
-3. Write Pest PHP tests for the controller/service
-4. Write the frontend React component
-5. Write Playwright E2E tests
-6. Run all tests (inside container): `docker compose exec app ./vendor/bin/pest`
-7. Fix any failures
-8. Feature is complete only when ALL tests pass
+2. **Read existing documentation** for the feature area
+3. Write the backend code with inline documentation (PHPDoc)
+4. Write Pest PHP tests for the controller/service
+5. Write the frontend React component with JSDoc comments
+6. Write Playwright E2E tests
+7. Run all tests (inside container): `docker compose exec app ./vendor/bin/pest`
+8. Fix any failures
+9. **Perform code review** of all newly written code
+10. **Create/update documentation** for the feature
+11. **Validate code against documentation** - ensure they match
+12. Feature is complete only when ALL tests pass AND documentation is complete
 
 ---
 
@@ -291,3 +441,53 @@ When implementing a new feature:
 3. Look for user_id filtering pattern
 4. Verify Policy authorization is in place
 5. Run tests - they catch many issues
+
+---
+
+## ⚠️ MANDATORY: Code Review & Documentation Workflow
+
+This workflow is REQUIRED after writing any code. Do not skip these steps.
+
+### Step 1: Code Review (After Every Code Change)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CODE REVIEW CHECKLIST                    │
+├─────────────────────────────────────────────────────────────┤
+│ □ Security: No vulnerabilities, proper auth, input validated│
+│ □ Quality: Clean code, proper naming, no duplication        │
+│ □ Performance: No N+1 queries, efficient operations         │
+│ □ Consistency: Matches existing codebase patterns           │
+│ □ Types: Proper TypeScript/PHP typing throughout            │
+│ □ Error Handling: All errors caught and handled properly    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Step 2: Documentation Validation (Before Completion)
+
+1. **Read relevant documentation** in `docs/` and `docs/adr/`
+2. **Compare implementation** against documented behavior
+3. **Update outdated docs** if any discrepancies found
+4. **Verify examples** still work with new code
+
+### Step 3: Documentation Creation (Always Required)
+
+For EVERY change, create documentation:
+
+1. **Inline docs** - PHPDoc for PHP, JSDoc for TypeScript
+2. **Feature docs** - In `docs/` folder for user-facing features
+3. **ADR** - In `docs/adr/` for architectural decisions
+4. **Type definitions** - Update TypeScript interfaces
+5. **README** - Update if setup or usage changes
+
+### Workflow Summary
+
+```
+Write Code → Code Review → Validate Against Docs → Create Docs → Tests Pass → Complete
+     ↓            ↓                  ↓                  ↓              ↓
+  [Code]    [Security,        [Check docs/,      [PHPDoc/JSDoc,  [Pest/Playwright]
+            Quality,          ADRs, README]      docs/, ADR,
+            Performance]                         README]
+```
+
+**Remember: A feature is NOT complete until documentation exists and has been validated.**

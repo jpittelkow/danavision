@@ -8,7 +8,8 @@ services:
     ports:
       - "8080:80"
     volumes:
-      # Persistent data
+      # Persistent data - CRITICAL: These volumes store all user data!
+      # WARNING: Never use 'docker compose down -v' as it deletes these volumes!
       - danavision_data:/var/www/html/database
       - danavision_storage:/var/www/html/storage/app
       # Source code for development - needs npm run build after container starts
@@ -30,6 +31,10 @@ services:
       - DB_DATABASE=/var/www/html/database/database.sqlite
       - TZ=America/Chicago
       - SCHEDULE_TIMEZONE=America/Chicago
+      # Database safety: Set to 'true' only when intentionally creating a new database
+      # In production (APP_ENV=production), the container will refuse to start
+      # if the database volume is empty unless this is explicitly set to 'true'
+      - ALLOW_DB_INIT=${ALLOW_DB_INIT:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
@@ -39,5 +44,7 @@ services:
       start_period: 40s
 
 volumes:
+  # IMPORTANT: These volumes contain critical user data
+  # To backup: docker run --rm -v danavision_data:/data -v $(pwd):/backup alpine tar czf /backup/db-backup.tar.gz /data
   danavision_data:
   danavision_storage:

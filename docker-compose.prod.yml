@@ -1,0 +1,46 @@
+# Production Docker Compose Configuration
+# 
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# First-time setup (creates new database):
+#   ALLOW_DB_INIT=true docker compose -f docker-compose.prod.yml up -d
+#
+# CRITICAL: This file has safety checks enabled to prevent accidental data loss
+
+services:
+  danavision:
+    image: ghcr.io/jpittelkow/danavision:latest
+    container_name: danavision
+    ports:
+      - "8080:80"
+    volumes:
+      # Persistent data volumes - NEVER delete these!
+      - danavision_data:/var/www/html/database
+      - danavision_storage:/var/www/html/storage/app
+    environment:
+      - APP_NAME=${APP_NAME:-DanaVision}
+      - APP_KEY=${APP_KEY}
+      - APP_URL=${APP_URL:-http://localhost:8080}
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - TZ=America/Chicago
+      - SCHEDULE_TIMEZONE=America/Chicago
+      # Safety: Container will refuse to start if database is missing
+      # Set ALLOW_DB_INIT=true only for intentional first-time setup
+      - ALLOW_DB_INIT=${ALLOW_DB_INIT:-false}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  danavision_data:
+    # Use external: true if you want to prevent accidental deletion
+    # external: true
+  danavision_storage:

@@ -32,6 +32,10 @@ frontend/
 # Docker
 docker/data/
 
+# Backups (sqlite files only, keep .gitkeep)
+backups/*.sqlite
+!backups/.gitkeep
+
 # Logs
 *.log
 npm-debug.log*
