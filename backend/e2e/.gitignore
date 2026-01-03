@@ -1,0 +1,6 @@
+# Auth state files (generated during tests)
+.auth/
+
+# Test artifacts (screenshots, videos, traces)
+../test-results/
+../playwright-report/

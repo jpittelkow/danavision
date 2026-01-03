@@ -1,0 +1,159 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]:
+      - img "DanaVision" [ref=e7]
+      - generic [ref=e8]: DanaVision
+    - navigation [ref=e9]:
+      - link "Smart Add" [ref=e10] [cursor=pointer]:
+        - /url: /smart-add
+        - img [ref=e11]
+        - generic [ref=e14]: Smart Add
+      - link "Dashboard" [ref=e15] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e16]
+        - generic [ref=e21]: Dashboard
+      - link "Lists" [ref=e22] [cursor=pointer]:
+        - /url: /lists
+        - img [ref=e23]
+        - generic [ref=e26]: Lists
+      - link "Search" [ref=e27] [cursor=pointer]:
+        - /url: /search
+        - img [ref=e28]
+        - generic [ref=e31]: Search
+      - link "Settings" [ref=e32] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e33]
+        - generic [ref=e36]: Settings
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]: T
+        - generic [ref=e40]:
+          - paragraph [ref=e41]: Test User
+          - paragraph [ref=e42]: test@example.com
+      - button "Sign Out" [ref=e43] [cursor=pointer]:
+        - img [ref=e44]
+        - generic [ref=e47]: Sign Out
+  - generic [ref=e48]:
+    - banner [ref=e49]:
+      - button "Toggle theme" [ref=e52] [cursor=pointer]:
+        - img [ref=e53]
+        - generic [ref=e55]: Toggle theme
+    - main [ref=e56]:
+      - generic [ref=e57]:
+        - heading "Settings" [level=1] [ref=e58]
+        - paragraph [ref=e59]: Manage your account, configurations, and AI providers
+        - generic [ref=e60]:
+          - tablist [ref=e61]:
+            - tab "General" [ref=e62] [cursor=pointer]:
+              - img [ref=e63]
+              - text: General
+            - tab "Configurations" [active] [selected] [ref=e66] [cursor=pointer]:
+              - img [ref=e67]
+              - text: Configurations
+            - tab "AI Providers" [ref=e70] [cursor=pointer]:
+              - img [ref=e71]
+              - text: AI Providers
+          - tabpanel "Configurations" [ref=e79]:
+            - generic [ref=e80]:
+              - generic [ref=e81]:
+                - generic [ref=e82]:
+                  - heading "Email Configuration" [level=3] [ref=e83]:
+                    - img [ref=e84]
+                    - text: Email Configuration
+                  - paragraph [ref=e87]: Configure SMTP settings for sending notification emails
+                - generic [ref=e88]:
+                  - generic [ref=e89]:
+                    - generic [ref=e90]:
+                      - text: Mail Driver
+                      - combobox "Mail Driver" [ref=e91]:
+                        - option "SMTP" [selected]
+                        - option "Sendmail"
+                        - option "Mailgun"
+                        - option "Amazon SES"
+                        - option "Postmark"
+                    - generic [ref=e92]:
+                      - text: Encryption
+                      - combobox "Encryption" [ref=e93]:
+                        - option "TLS" [selected]
+                        - option "SSL"
+                        - option "None"
+                  - generic [ref=e94]:
+                    - generic [ref=e95]:
+                      - text: SMTP Host
+                      - textbox "SMTP Host" [ref=e96]:
+                        - /placeholder: smtp.example.com
+                    - generic [ref=e97]:
+                      - text: Port
+                      - textbox "Port" [ref=e98]:
+                        - /placeholder: "587"
+                        - text: "587"
+                  - generic [ref=e99]:
+                    - generic [ref=e100]:
+                      - text: Username
+                      - textbox "Username" [ref=e101]:
+                        - /placeholder: your@email.com
+                    - generic [ref=e102]:
+                      - text: Password
+                      - generic [ref=e103]:
+                        - textbox "Password" [ref=e104]:
+                          - /placeholder: ••••••••
+                        - button [ref=e105] [cursor=pointer]:
+                          - img [ref=e106]
+                  - generic [ref=e109]:
+                    - generic [ref=e110]:
+                      - text: From Address
+                      - textbox "From Address" [ref=e111]:
+                        - /placeholder: noreply@example.com
+                    - generic [ref=e112]:
+                      - text: From Name
+                      - textbox "From Name" [ref=e113]:
+                        - /placeholder: DanaVision
+                  - generic [ref=e114]:
+                    - button "Send Test Email" [disabled]:
+                      - img
+                      - text: Send Test Email
+                    - paragraph [ref=e115]: Save your settings first, then send a test email to verify configuration
+              - generic [ref=e116]:
+                - generic [ref=e117]:
+                  - heading "Price Provider" [level=3] [ref=e118]:
+                    - img [ref=e119]
+                    - text: Price Provider
+                  - paragraph [ref=e121]: Configure your price tracking API
+                - generic [ref=e122]:
+                  - generic [ref=e123]:
+                    - text: Provider
+                    - combobox "Provider" [ref=e124]:
+                      - option "SerpApi (Google Shopping)" [selected]
+                      - option "Rainforest (Amazon)"
+                  - generic [ref=e125]:
+                    - text: API Key
+                    - textbox "API Key" [ref=e126]:
+                      - /placeholder: Enter your API key
+              - generic [ref=e127]:
+                - generic [ref=e128]:
+                  - heading "Suppressed Vendors" [level=3] [ref=e129]:
+                    - img [ref=e130]
+                    - text: Suppressed Vendors
+                  - paragraph [ref=e133]: Hide specific vendors from price results and comparisons
+                - generic [ref=e134]:
+                  - generic [ref=e135]:
+                    - textbox "Enter vendor name (e.g., Amazon, eBay)" [ref=e136]
+                    - button [ref=e137] [cursor=pointer]:
+                      - img [ref=e138]
+                  - paragraph [ref=e139]: No vendors suppressed. Add vendor names above to hide them from results.
+                  - paragraph [ref=e140]: Suppressed vendors will be hidden from all price comparisons, search results, and price history. This is useful for excluding vendors you don't want to purchase from.
+              - generic [ref=e141]:
+                - generic [ref=e142]:
+                  - heading "Daily Price Check" [level=3] [ref=e143]:
+                    - img [ref=e144]
+                    - text: Daily Price Check
+                  - paragraph [ref=e147]: Configure when to automatically check prices for all your tracked items
+                - generic [ref=e149]:
+                  - text: Check Time
+                  - textbox "Check Time" [ref=e150]: 03:00
+                  - paragraph [ref=e151]: Prices will be checked daily at this time (24-hour format)
+              - button "Save Configuration Settings" [ref=e152] [cursor=pointer]
+```

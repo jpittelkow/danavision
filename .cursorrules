@@ -1,0 +1,226 @@
+# DanaVision Development Guidelines
+
+This file defines critical rules that MUST be followed when making changes to DanaVision.
+
+---
+
+## STOP: Read This First
+
+Before writing ANY code, understand these requirements. Changes will be rejected if not met.
+
+### Quick Checklist
+
+- [ ] Tests are written - Every feature/bugfix requires tests
+- [ ] Tests pass - Run full test suite before completion
+- [ ] E2E tests pass - Frontend features require Playwright tests
+- [ ] ADR created - If this is a significant architectural change
+- [ ] Documentation updated - TypeScript types, API docs if needed
+
+---
+
+## Mandatory Requirements
+
+### 1. Tests Are Required
+
+EVERY new feature, bug fix, or change MUST include tests. No exceptions.
+
+| Change Type | Backend Test | E2E Test | Required |
+|-------------|-------------|----------|----------|
+| New page | Pest PHP feature test | Playwright spec | Always |
+| New API endpoint | Pest PHP feature test | If UI uses it | Always |
+| Bug fix | Regression test | If UI affected | Always |
+| New component | - | Playwright if interactive | Always |
+| AI/Service change | Pest PHP unit test | - | Always |
+
+### Running Tests
+
+```bash
+# Backend tests (Pest PHP)
+cd backend && ./vendor/bin/pest
+
+# E2E tests (Playwright) - requires app running
+cd backend && npm run test:e2e
+
+# E2E with UI mode (debugging)
+cd backend && npm run test:e2e:ui
+```
+
+### 2. Frontend Testing with Playwright
+
+ALL new frontend features MUST have E2E tests before being considered complete.
+
+- Tests live in `backend/e2e/`
+- Use `auth.setup.ts` for authenticated tests
+- Test both desktop and mobile viewports
+- Cover happy path and error states
+
+### 3. User-Based Data Isolation
+
+All data is scoped to the authenticated user. Users can ONLY access their own data.
+
+**Required Patterns:**
+
+```php
+// CORRECT - Filter by authenticated user
+$lists = ShoppingList::where('user_id', $request->user()->id)->get();
+
+// WRONG - Never return all records
+$lists = ShoppingList::all(); // SECURITY VULNERABILITY!
+```
+
+**Policy Authorization:**
+
+```php
+// CORRECT - Always authorize with policy
+public function show(ShoppingList $list)
+{
+    $this->authorize('view', $list);
+    // ...
+}
+
+// WRONG - Never skip authorization
+public function show(ShoppingList $list)
+{
+    return $list; // Any user can view any list!
+}
+```
+
+### 4. API Contract Synchronization
+
+These files MUST stay synchronized:
+
+1. `backend/resources/js/types/index.ts` - TypeScript interfaces
+2. `backend/app/Http/Resources/*.php` - API Resources (if used)
+3. `backend/app/Http/Controllers/*Controller.php` - Controller responses
+
+When adding a new field:
+1. Add column to migration
+2. Add to model's `$fillable`
+3. Add to controller response
+4. Add to TypeScript interface
+
+### 5. ADRs for Significant Changes
+
+ADRs MUST be written for:
+- New features with new patterns
+- Database schema changes
+- Authentication/authorization changes
+- New external integrations
+- AI system changes
+- Infrastructure changes
+
+Location: `docs/adr/`
+
+---
+
+## Code Patterns
+
+### Controller Actions
+
+```php
+// Index - filter by user
+public function index(Request $request)
+{
+    $items = ShoppingList::where('user_id', $request->user()->id)->get();
+    return Inertia::render('Lists/Index', ['lists' => $items]);
+}
+
+// Store - set user_id from auth
+public function store(Request $request)
+{
+    $validated = $request->validate([...]);
+    $list = ShoppingList::create([
+        'user_id' => $request->user()->id,
+        ...$validated,
+    ]);
+    return redirect()->route('lists.show', $list);
+}
+
+// Show/Update/Delete - authorize with policy
+public function show(ShoppingList $list)
+{
+    $this->authorize('view', $list);
+    return Inertia::render('Lists/Show', ['list' => $list]);
+}
+```
+
+### Policy Pattern
+
+```php
+class ShoppingListPolicy
+{
+    public function view(User $user, ShoppingList $list): bool
+    {
+        return $user->id === $list->user_id;
+    }
+
+    public function update(User $user, ShoppingList $list): bool
+    {
+        return $user->id === $list->user_id;
+    }
+}
+```
+
+### Inertia.js Patterns
+
+```tsx
+// Page component with typed props
+interface Props extends PageProps {
+  list: ShoppingList;
+  can_edit: boolean;
+}
+
+export default function ListShow({ auth, list, can_edit, flash }: Props) {
+  const { data, setData, post, processing } = useForm({
+    product_name: '',
+  });
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    post(`/lists/${list.id}/items`);
+  };
+
+  return (
+    <AppLayout auth={auth} flash={flash}>
+      {/* ... */}
+    </AppLayout>
+  );
+}
+```
+
+---
+
+## Pre-Completion Checklist
+
+Before marking ANY feature as complete:
+
+1. [ ] Backend tests pass: `cd backend && ./vendor/bin/pest`
+2. [ ] E2E tests pass: `cd backend && npm run test:e2e`
+3. [ ] New features have E2E tests in `backend/e2e/`
+4. [ ] TypeScript types updated if API changed
+5. [ ] No console.log/debug statements left
+6. [ ] Error handling uses proper messages
+7. [ ] Loading states handled in UI
+
+---
+
+## Testing New Features
+
+When implementing a new feature:
+
+1. Write the backend code
+2. Write Pest PHP tests for the controller/service
+3. Write the frontend React component
+4. Write Playwright E2E tests
+5. Run all tests
+6. Fix any failures
+7. Feature is complete only when ALL tests pass
+
+---
+
+## Questions?
+
+1. Check if the pattern exists elsewhere in the codebase
+2. Look for user_id filtering pattern
+3. Verify Policy authorization is in place
+4. Run tests - they catch many issues

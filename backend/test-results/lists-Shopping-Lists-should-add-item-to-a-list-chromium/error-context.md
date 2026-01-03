@@ -1,0 +1,69 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]:
+      - img "DanaVision" [ref=e7]
+      - generic [ref=e8]: DanaVision
+    - navigation [ref=e9]:
+      - link "Smart Add" [ref=e10] [cursor=pointer]:
+        - /url: /smart-add
+        - img [ref=e11]
+        - generic [ref=e14]: Smart Add
+      - link "Dashboard" [ref=e15] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e16]
+        - generic [ref=e21]: Dashboard
+      - link "Lists" [ref=e22] [cursor=pointer]:
+        - /url: /lists
+        - img [ref=e23]
+        - generic [ref=e26]: Lists
+      - link "Search" [ref=e27] [cursor=pointer]:
+        - /url: /search
+        - img [ref=e28]
+        - generic [ref=e31]: Search
+      - link "Settings" [ref=e32] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e33]
+        - generic [ref=e36]: Settings
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]: T
+        - generic [ref=e40]:
+          - paragraph [ref=e41]: Test User
+          - paragraph [ref=e42]: test@example.com
+      - button "Sign Out" [ref=e43] [cursor=pointer]:
+        - img [ref=e44]
+        - generic [ref=e47]: Sign Out
+  - generic [ref=e48]:
+    - banner [ref=e49]:
+      - button "Toggle theme" [ref=e52] [cursor=pointer]:
+        - img [ref=e53]
+        - generic [ref=e55]: Toggle theme
+    - main [ref=e56]:
+      - generic [ref=e57]:
+        - link "← Back to Lists" [ref=e59] [cursor=pointer]:
+          - /url: /lists
+        - generic [ref=e60]:
+          - heading "Create New List" [level=1] [ref=e61]
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - generic [ref=e64]: List Name *
+              - textbox "e.g., Electronics Wishlist" [ref=e65]
+            - generic [ref=e66]:
+              - generic [ref=e67]: Description
+              - textbox "What's this list for?" [ref=e68]
+            - generic [ref=e69]:
+              - heading "Price Notifications" [level=3] [ref=e70]
+              - generic [ref=e71]:
+                - checkbox "Notify me on any price drop" [checked] [ref=e72]
+                - generic [ref=e73]: Notify me on any price drop
+              - generic [ref=e74]:
+                - checkbox "Only notify when drop exceeds threshold" [ref=e75]
+                - generic [ref=e76]: Only notify when drop exceeds threshold
+            - generic [ref=e77]:
+              - link "Cancel" [ref=e78] [cursor=pointer]:
+                - /url: /lists
+              - button "Create List" [ref=e79] [cursor=pointer]
+```

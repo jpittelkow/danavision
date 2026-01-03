@@ -1,0 +1,59 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e6]:
+      - img "DanaVision" [ref=e7]
+      - generic [ref=e8]: DanaVision
+    - navigation [ref=e9]:
+      - link "Smart Add" [ref=e10] [cursor=pointer]:
+        - /url: /smart-add
+        - img [ref=e11]
+        - generic [ref=e14]: Smart Add
+      - link "Dashboard" [ref=e15] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e16]
+        - generic [ref=e21]: Dashboard
+      - link "Lists" [ref=e22] [cursor=pointer]:
+        - /url: /lists
+        - img [ref=e23]
+        - generic [ref=e26]: Lists
+      - link "Search" [ref=e27] [cursor=pointer]:
+        - /url: /search
+        - img [ref=e28]
+        - generic [ref=e31]: Search
+      - link "Settings" [ref=e32] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e33]
+        - generic [ref=e36]: Settings
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]: T
+        - generic [ref=e40]:
+          - paragraph [ref=e41]: Test User
+          - paragraph [ref=e42]: test@example.com
+      - button "Sign Out" [ref=e43] [cursor=pointer]:
+        - img [ref=e44]
+        - generic [ref=e47]: Sign Out
+  - generic [ref=e48]:
+    - banner [ref=e49]:
+      - button "Toggle theme" [ref=e52] [cursor=pointer]:
+        - img [ref=e53]
+        - generic [ref=e55]: Toggle theme
+    - main [ref=e56]:
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - heading "My Lists" [level=1] [ref=e60]
+            - paragraph [ref=e61]: Manage your shopping lists
+          - link "+ New List" [ref=e62] [cursor=pointer]:
+            - /url: /lists/create
+        - generic [ref=e63]:
+          - heading "Your Lists" [level=2] [ref=e64]
+          - generic [ref=e65]:
+            - generic [ref=e66]: 📝
+            - paragraph [ref=e67]: No lists yet. Create your first list!
+            - link "Create a list" [ref=e68] [cursor=pointer]:
+              - /url: /lists/create
+```

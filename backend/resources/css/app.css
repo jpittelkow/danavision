@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 30 33% 98%;
+    --foreground: 262 33% 25%;
+    --card: 0 0% 100%;
+    --card-foreground: 262 33% 25%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 262 33% 25%;
+    --primary: 262 38% 49%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 262 30% 92%;
+    --secondary-foreground: 262 33% 25%;
+    --muted: 262 20% 95%;
+    --muted-foreground: 262 20% 45%;
+    --accent: 39 91% 55%;
+    --accent-foreground: 262 33% 15%;
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 262 20% 88%;
+    --input: 262 20% 88%;
+    --ring: 262 38% 49%;
+    --radius: 0.75rem;
+    
+    /* Dana brand colors as CSS variables */
+    --dana-purple: 262 38% 49%;
+    --dana-purple-light: 262 38% 64%;
+    --dana-purple-dark: 262 33% 27%;
+    --dana-coral: 0 65% 67%;
+    --dana-gold: 39 91% 55%;
+    --dana-cream: 30 33% 97%;
+  }
+
+  .dark {
+    --background: 262 33% 8%;
+    --foreground: 30 33% 97%;
+    --card: 262 33% 12%;
+    --card-foreground: 30 33% 97%;
+    --popover: 262 33% 10%;
+    --popover-foreground: 30 33% 97%;
+    --primary: 262 38% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 262 30% 20%;
+    --secondary-foreground: 30 33% 97%;
+    --muted: 262 20% 15%;
+    --muted-foreground: 262 20% 65%;
+    --accent: 39 91% 55%;
+    --accent-foreground: 262 33% 10%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 262 20% 20%;
+    --input: 262 20% 20%;
+    --ring: 262 38% 60%;
+    
+    /* Dana brand colors in dark mode */
+    --dana-purple: 262 38% 60%;
+    --dana-purple-light: 262 38% 70%;
+    --dana-purple-dark: 262 33% 45%;
+    --dana-coral: 0 65% 60%;
+    --dana-gold: 39 91% 60%;
+    --dana-cream: 262 33% 12%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    @apply scroll-smooth;
+  }
+  
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Smooth theme transitions */
+html.transitioning,
+html.transitioning * {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease !important;
+}
