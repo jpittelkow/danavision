@@ -65,8 +65,31 @@ if [ ! -f "$DB_FILE" ]; then
     echo "   Created volume marker at: $VOLUME_MARKER"
 else
     echo "✅ Existing database found at: $DB_FILE"
-    DB_SIZE=$(ls -lh "$DB_FILE" | awk '{print $5}')
-    echo "   Database size: $DB_SIZE"
+    DB_SIZE_BYTES=$(stat -c%s "$DB_FILE" 2>/dev/null || stat -f%z "$DB_FILE" 2>/dev/null || echo "0")
+    DB_SIZE_HUMAN=$(ls -lh "$DB_FILE" | awk '{print $5}')
+    echo "   Database size: $DB_SIZE_HUMAN ($DB_SIZE_BYTES bytes)"
+    
+    # CRITICAL: Check if database is empty (0 bytes) in production
+    if [ "$APP_ENV" = "production" ] && [ "$DB_SIZE_BYTES" = "0" ]; then
+        echo ""
+        echo "❌ ERROR: Database file exists but is EMPTY (0 bytes)!"
+        echo "   This usually means the volume mount created an empty file."
+        echo ""
+        echo "   Your data may be at a different location. Check:"
+        echo "   - /mnt/user/appdata/danavision/database/database.sqlite (old path)"
+        echo "   - Ensure the host file exists BEFORE starting the container"
+        echo ""
+        echo "   To initialize a new database anyway, set ALLOW_DB_INIT=true"
+        echo ""
+        
+        if [ "$ALLOW_DB_INIT" != "true" ]; then
+            echo "❌ Refusing to run migrations on empty database in production"
+            echo "   Exiting to prevent data loss."
+            exit 1
+        else
+            echo "⚠️  ALLOW_DB_INIT=true is set - proceeding with empty database"
+        fi
+    fi
     
     # Ensure volume marker exists for existing databases
     if [ ! -f "$VOLUME_MARKER" ]; then
