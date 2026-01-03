@@ -16,14 +16,15 @@ EOF
 echo "=== Starting DanaVision ==="
 echo "Environment: ${APP_ENV:-local}"
 
-# Ensure database directory exists and has correct permissions
-echo "Setting up database directory..."
-mkdir -p /var/www/html/database
-chown -R www-data:www-data /var/www/html/database
+# Ensure data directory exists and has correct permissions
+# NOTE: Database is in /data (separate from /database which contains migrations)
+echo "Setting up data directory..."
+mkdir -p /var/www/html/data
+chown -R www-data:www-data /var/www/html/data
 
 # Check if database volume is properly mounted (look for .volume_marker file)
-VOLUME_MARKER="/var/www/html/database/.volume_marker"
-DB_FILE="/var/www/html/database/database.sqlite"
+VOLUME_MARKER="/var/www/html/data/.volume_marker"
+DB_FILE="/var/www/html/data/database.sqlite"
 
 # Production safety check
 if [ "$APP_ENV" = "production" ]; then

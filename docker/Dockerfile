@@ -46,10 +46,9 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage 2>/dev/null || true \
     && chmod -R 755 /var/www/html/bootstrap/cache 2>/dev/null || true
 
-# Create SQLite database directory
-RUN mkdir -p /var/www/html/database \
-    && touch /var/www/html/database/database.sqlite \
-    && chown -R www-data:www-data /var/www/html/database
+# Create data directory for SQLite database (separate from migrations in /database)
+RUN mkdir -p /var/www/html/data \
+    && chown -R www-data:www-data /var/www/html/data
 
 # Create storage directories
 RUN mkdir -p /var/www/html/storage/app/public \

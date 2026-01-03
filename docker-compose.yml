@@ -10,7 +10,8 @@ services:
     volumes:
       # Persistent data - CRITICAL: These volumes store all user data!
       # WARNING: Never use 'docker compose down -v' as it deletes these volumes!
-      - danavision_data:/var/www/html/database
+      # NOTE: Database is in /data (separate from /database which contains migrations)
+      - danavision_data:/var/www/html/data
       - danavision_storage:/var/www/html/storage/app
       # Source code for development - needs npm run build after container starts
       - ./backend/app:/var/www/html/app
@@ -28,7 +29,7 @@ services:
       - APP_ENV=${APP_ENV:-local}
       - APP_DEBUG=${APP_DEBUG:-true}
       - DB_CONNECTION=sqlite
-      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - DB_DATABASE=/var/www/html/data/database.sqlite
       - TZ=America/Chicago
       - SCHEDULE_TIMEZONE=America/Chicago
       # Database safety: Set to 'true' only when intentionally creating a new database
