@@ -109,8 +109,24 @@ docker run --rm php:8.3-cli php -r "echo 'base64:' . base64_encode(random_bytes(
 
 | Volume | Container Path | Description |
 |--------|----------------|-------------|
-| `danavision_data` | `/var/www/html/database` | SQLite database (persistent) |
-| `danavision_storage` | `/var/www/html/storage/app` | Uploaded files (persistent) |
+| Database | `/var/www/html/database/database.sqlite` | SQLite database file (persistent) |
+| Storage | `/var/www/html/storage/app` | Uploaded files (persistent) |
+| Logs | `/var/www/html/storage/logs` | Laravel logs (optional, for debugging) |
+
+> ⚠️ **Important for Unraid/Portainer/bind mounts:** Mount only the SQLite **file** (`database.sqlite`), NOT the entire `/var/www/html/database` directory. The database directory contains migrations and seeders that must remain intact from the Docker image.
+
+#### For Unraid / Portainer (bind mounts)
+
+```
+Host Path                                    → Container Path
+/mnt/user/appdata/danavision/database.sqlite → /var/www/html/database/database.sqlite
+/mnt/user/appdata/danavision/storage         → /var/www/html/storage/app
+/mnt/user/appdata/danavision/logs            → /var/www/html/storage/logs
+```
+
+#### For docker-compose (named volumes)
+
+Named volumes work correctly with the database directory because Docker initializes them from the container on first run.
 
 ### Example docker-compose.yml for Production
 
@@ -122,6 +138,7 @@ services:
     ports:
       - "8080:80"
     volumes:
+      # Named volumes (docker-compose) - directory mount is OK
       - danavision_data:/var/www/html/database
       - danavision_storage:/var/www/html/storage/app
     environment:
