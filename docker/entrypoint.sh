@@ -38,7 +38,26 @@ chown -R www-data:www-data /var/www/html/storage
 
 # Run migrations
 echo "Running database migrations..."
-php /var/www/html/artisan migrate --force --verbose
+
+DB_FILE="/var/www/html/database/database.sqlite"
+
+# Check if database is in a corrupt state (migrations table exists but users table doesn't)
+if [ -f "$DB_FILE" ]; then
+    HAS_MIGRATIONS=$(sqlite3 "$DB_FILE" "SELECT name FROM sqlite_master WHERE type='table' AND name='migrations';" 2>/dev/null || echo "")
+    HAS_USERS=$(sqlite3 "$DB_FILE" "SELECT name FROM sqlite_master WHERE type='table' AND name='users';" 2>/dev/null || echo "")
+    
+    if [ -n "$HAS_MIGRATIONS" ] && [ -z "$HAS_USERS" ]; then
+        echo "WARNING: Detected corrupt migration state (migrations table exists but users table missing)"
+        echo "Running fresh migrations to fix..."
+        php /var/www/html/artisan migrate:fresh --force --verbose
+    else
+        php /var/www/html/artisan migrate --force --verbose
+    fi
+else
+    # Fresh database, just run migrations
+    php /var/www/html/artisan migrate --force --verbose
+fi
+
 echo "Migrations complete."
 
 # Clear and cache config for production
