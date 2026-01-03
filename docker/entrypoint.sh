@@ -18,40 +18,44 @@ echo "Environment: ${APP_ENV:-local}"
 
 # Ensure data directory exists and has correct permissions
 # NOTE: Database is in /data (separate from /database which contains migrations)
+# SQLite needs write access to the directory for journal/WAL files
 echo "Setting up data directory..."
 mkdir -p /var/www/html/data
+chmod 775 /var/www/html/data
 chown -R www-data:www-data /var/www/html/data
 
 # Check if database volume is properly mounted (look for .volume_marker file)
 VOLUME_MARKER="/var/www/html/data/.volume_marker"
 DB_FILE="/var/www/html/data/database.sqlite"
 
-# Production safety check
+# Production safety check - only block if there's risk of DATA LOSS
+# (i.e., volume marker exists indicating previous data, but database is missing/empty)
 if [ "$APP_ENV" = "production" ]; then
     echo "⚠️  PRODUCTION MODE - Database safety checks enabled"
     
-    # Check if this looks like a fresh/unmounted volume
-    if [ ! -f "$VOLUME_MARKER" ] && [ ! -f "$DB_FILE" ]; then
-        echo "❌ ERROR: Database volume appears to be empty or not mounted!"
-        echo "   - No volume marker found at: $VOLUME_MARKER"
+    if [ -f "$VOLUME_MARKER" ] && [ ! -f "$DB_FILE" ]; then
+        # Volume marker exists but no database = DATA LOSS RISK
+        echo ""
+        echo "❌ ERROR: Volume marker exists but database is missing!"
+        echo "   - Volume marker found at: $VOLUME_MARKER"
         echo "   - No database found at: $DB_FILE"
         echo ""
-        echo "   This usually means:"
-        echo "   1. The Docker volume was deleted (docker compose down -v)"
-        echo "   2. The volume is not properly mounted"
-        echo "   3. This is a fresh deployment that needs manual database setup"
+        echo "   This indicates a previously initialized database that is now missing."
+        echo "   Your data may have been lost due to volume misconfiguration."
         echo ""
-        echo "   To initialize a new production database, set ALLOW_DB_INIT=true"
-        echo "   Example: docker run -e ALLOW_DB_INIT=true ..."
+        echo "   To create a fresh database, set ALLOW_DB_INIT=true"
         echo ""
         
         if [ "$ALLOW_DB_INIT" != "true" ]; then
-            echo "❌ Refusing to create new database in production without ALLOW_DB_INIT=true"
+            echo "❌ Refusing to create new database - previous data may be recoverable"
             echo "   Exiting to prevent data loss."
             exit 1
         else
             echo "⚠️  ALLOW_DB_INIT=true is set - proceeding with new database creation"
         fi
+    elif [ ! -f "$VOLUME_MARKER" ] && [ ! -f "$DB_FILE" ]; then
+        # Fresh install - no marker, no database = safe to initialize
+        echo "📦 Fresh installation detected - initializing new database"
     fi
 fi
 
@@ -59,10 +63,12 @@ fi
 if [ ! -f "$DB_FILE" ]; then
     echo "📦 Creating new SQLite database..."
     touch "$DB_FILE"
+    chmod 664 "$DB_FILE"
     chown www-data:www-data "$DB_FILE"
     
     # Create volume marker to track that this volume has been initialized
     echo "Initialized: $(date -Iseconds)" > "$VOLUME_MARKER"
+    chown www-data:www-data "$VOLUME_MARKER"
     echo "   Created volume marker at: $VOLUME_MARKER"
 else
     echo "✅ Existing database found at: $DB_FILE"
@@ -95,9 +101,20 @@ else
     # Ensure volume marker exists for existing databases
     if [ ! -f "$VOLUME_MARKER" ]; then
         echo "Migrated: $(date -Iseconds)" > "$VOLUME_MARKER"
+        chown www-data:www-data "$VOLUME_MARKER"
         echo "   Created volume marker for existing database"
     fi
+    
+    # Ensure database has correct permissions (fix any permission issues)
+    chmod 664 "$DB_FILE"
+    chown www-data:www-data "$DB_FILE"
 fi
+
+# Final permissions check - ensure www-data can write to data directory
+echo "Verifying data directory permissions..."
+chown -R www-data:www-data /var/www/html/data
+chmod 775 /var/www/html/data
+ls -la /var/www/html/data/
 
 # Ensure storage directories exist and have correct permissions
 echo "Setting up storage directories..."
