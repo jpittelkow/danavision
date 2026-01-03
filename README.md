@@ -101,7 +101,7 @@ ports:
 | `SCHEDULE_TIMEZONE` | No | `America/Chicago` | Timezone for scheduled tasks |
 | `ALLOW_DB_INIT` | No | `false` | Safety flag: set `true` for first-time prod setup |
 
-> **Database Path Note:** Development uses `/var/www/html/data/`, production uses `/var/www/html/database/`. The entrypoint script reads `DB_DATABASE` to determine the correct path automatically.
+> **Database Path Note:** Both development and production use `/var/www/html/data/` for the SQLite database. This avoids conflicts with Laravel's `database/migrations` folder.
 
 **Generate APP_KEY:**
 ```bash
@@ -116,7 +116,7 @@ docker run --rm php:8.3-cli php -r "echo 'base64:' . base64_encode(random_bytes(
 | Storage | `/var/www/html/storage/app` | Uploaded files (persistent) |
 | Logs | `/var/www/html/storage/logs` | Laravel logs (optional, for debugging) |
 
-> ℹ️ **Note:** The database is stored in `/var/www/html/data/` (separate from `/var/www/html/database/` which contains migrations). This allows you to safely mount the entire data directory without affecting migrations.
+> ℹ️ **Important:** The database is stored in `/var/www/html/data/`, NOT `/var/www/html/database/`. This is intentional — mounting a volume to `/database` would overwrite Laravel's `database/migrations` folder and prevent migrations from running.
 
 #### For Unraid / Portainer (bind mounts)
 
@@ -138,8 +138,6 @@ volumes:
 
 ### Example docker-compose.yml for Production
 
-> **Note:** Production uses `/var/www/html/database/` for the database path, while development uses `/var/www/html/data/`. Use `docker-compose.prod.yml` from the repo for production deployments.
-
 ```yaml
 services:
   danavision:
@@ -148,15 +146,15 @@ services:
     ports:
       - "8080:80"
     volumes:
-      # Production uses /database path
-      - danavision_data:/var/www/html/database
+      # Use /data (NOT /database) to preserve migrations folder
+      - danavision_data:/var/www/html/data
       - danavision_storage:/var/www/html/storage/app
     environment:
       - APP_KEY=base64:YOUR_GENERATED_KEY_HERE
       - APP_URL=https://your-domain.com
       - APP_ENV=production
       - APP_DEBUG=false
-      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - DB_DATABASE=/var/www/html/data/database.sqlite
       - TZ=America/Chicago
       - SCHEDULE_TIMEZONE=America/Chicago
       # Set to true only for first-time setup

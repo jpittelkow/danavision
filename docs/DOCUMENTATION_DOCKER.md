@@ -35,7 +35,9 @@ docker compose up -d
 DanaVision has two Docker Compose configurations:
 
 - **`docker-compose.yml`** - Development (database at `/var/www/html/data/`)
-- **`docker-compose.prod.yml`** - Production (database at `/var/www/html/database/`)
+- **`docker-compose.prod.yml`** - Production (database at `/var/www/html/data/`)
+
+> **Important:** Both use `/var/www/html/data/` for the SQLite database. We intentionally avoid `/var/www/html/database/` because mounting a volume there would overwrite Laravel's `database/migrations` folder, preventing migrations from running.
 
 ### Development (docker-compose.yml)
 
@@ -93,8 +95,8 @@ services:
     ports:
       - "8080:80"
     volumes:
-      # Persistent data (prod uses /database directory)
-      - danavision_data:/var/www/html/database
+      # Persistent data - uses /data to avoid overwriting database/migrations
+      - danavision_data:/var/www/html/data
       - danavision_storage:/var/www/html/storage/app
     environment:
       - APP_NAME=${APP_NAME:-DanaVision}
@@ -103,7 +105,7 @@ services:
       - APP_ENV=production
       - APP_DEBUG=false
       - DB_CONNECTION=sqlite
-      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - DB_DATABASE=/var/www/html/data/database.sqlite
       - TZ=America/Chicago
       - SCHEDULE_TIMEZONE=America/Chicago
       - ALLOW_DB_INIT=${ALLOW_DB_INIT:-false}
@@ -171,7 +173,7 @@ CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 | APP_ENV | Environment (`local` or `production`) | local |
 | APP_DEBUG | Debug mode | true |
 | DB_CONNECTION | Database driver | sqlite |
-| DB_DATABASE | Database path | Dev: `/var/www/html/data/database.sqlite`<br>Prod: `/var/www/html/database/database.sqlite` |
+| DB_DATABASE | Database path | `/var/www/html/data/database.sqlite` |
 | TZ | Timezone | America/Chicago |
 | SCHEDULE_TIMEZONE | Timezone for scheduled tasks | America/Chicago |
 | ALLOW_DB_INIT | Allow creating new database in production (safety flag) | false |
@@ -193,17 +195,13 @@ Set `ALLOW_DB_INIT=true` only when:
 
 Stores the SQLite database file. Mount to persist data across container restarts.
 
-**Development:**
+**Both Development and Production:**
 ```yaml
 volumes:
   - danavision_data:/var/www/html/data
 ```
 
-**Production:**
-```yaml
-volumes:
-  - danavision_data:/var/www/html/database
-```
+> **Note:** We use `/var/www/html/data` (not `/database`) to avoid overwriting Laravel's `database/migrations` folder when the volume mounts.
 
 ### danavision_storage
 
@@ -418,28 +416,15 @@ The script automatically detects the correct database path from the container en
 
 ### Manual Backup
 
-**Development:**
 ```bash
 docker cp danavision:/var/www/html/data/database.sqlite ./backup.sqlite
 ```
 
-**Production:**
-```bash
-docker cp danavision:/var/www/html/database/database.sqlite ./backup.sqlite
-```
-
 ### Manual Restore
 
-**Development:**
 ```bash
 docker cp ./backup.sqlite danavision:/var/www/html/data/database.sqlite
 docker exec danavision chown www-data:www-data /var/www/html/data/database.sqlite
-```
-
-**Production:**
-```bash
-docker cp ./backup.sqlite danavision:/var/www/html/database/database.sqlite
-docker exec danavision chown www-data:www-data /var/www/html/database/database.sqlite
 ```
 
 ### Full Backup (with storage)
