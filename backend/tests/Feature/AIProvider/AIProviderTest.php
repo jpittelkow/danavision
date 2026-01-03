@@ -16,9 +16,9 @@ test('users can view AI providers in settings page', function () {
     $response->assertStatus(200);
     $response->assertInertia(fn (Assert $page) => $page
         ->component('Settings')
-        ->has('aiProviders')
-        ->has('availableAiProviders')
-        ->has('aiProviderInfo')
+        ->has('providers')
+        ->has('availableProviders')
+        ->has('providerInfo')
     );
 });
 
@@ -156,7 +156,7 @@ test('available providers are filtered correctly', function () {
     $response = $this->actingAs($user)->get('/settings');
 
     $response->assertInertia(fn (Assert $page) => $page
-        ->where('availableAiProviders', fn ($providers) => 
+        ->where('availableProviders', fn ($providers) => 
             collect($providers)->pluck('provider')->doesntContain('claude') &&
             collect($providers)->pluck('provider')->doesntContain('openai') &&
             collect($providers)->pluck('provider')->contains('gemini') &&
