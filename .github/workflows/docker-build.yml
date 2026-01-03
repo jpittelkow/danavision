@@ -18,6 +18,9 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,7 +32,6 @@ jobs:
           extensions: pdo_sqlite, sqlite3, zip, bcmath
 
       - name: Install Composer dependencies
-        working-directory: ./backend
         run: composer install --prefer-dist --no-progress
 
       - name: Setup Node.js
@@ -40,23 +42,20 @@ jobs:
           cache-dependency-path: ./backend/package-lock.json
 
       - name: Install NPM dependencies
-        working-directory: ./backend
         run: npm ci
 
       - name: Build frontend assets
-        working-directory: ./backend
         run: npm run build
 
       - name: Prepare Laravel
-        working-directory: ./backend
         run: |
           cp .env.example .env
           php artisan key:generate
           touch database/database.sqlite
+          sed -i 's|DB_DATABASE=.*|DB_DATABASE=database/database.sqlite|' .env
           php artisan migrate --force
 
       - name: Run tests
-        working-directory: ./backend
         run: ./vendor/bin/pest
 
   build:
