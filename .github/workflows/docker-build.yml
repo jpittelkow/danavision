@@ -53,6 +53,7 @@ jobs:
           php artisan key:generate
           touch database/database.sqlite
           sed -i 's|DB_DATABASE=.*|DB_DATABASE=database/database.sqlite|' .env
+          mkdir -p tests/Unit
           php artisan migrate --force
 
       - name: Run tests
