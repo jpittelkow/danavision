@@ -243,7 +243,7 @@ class SmartAddController extends Controller
             'priority' => $validated['priority'] ?? 'medium',
             'is_generic' => $validated['is_generic'] ?? false,
             'unit_of_measure' => $validated['unit_of_measure'] ?? null,
-            'last_checked_at' => $validated['current_price'] ? now() : null,
+            'last_checked_at' => ($validated['current_price'] ?? null) ? now() : null,
         ]);
 
         return redirect()->route('lists.show', $list)
