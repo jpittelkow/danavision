@@ -1,5 +1,6 @@
 import { FormEvent, useState, useRef } from 'react';
 import { Head, useForm, router } from '@inertiajs/react';
+import axios from 'axios';
 import { PageProps, ShoppingList } from '@/types';
 import AppLayout from '@/Layouts/AppLayout';
 import { Button } from '@/Components/ui/button';
@@ -200,19 +201,10 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
     setErrorMessage(null);
 
     try {
-      const response = await fetch('/smart-add/identify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        },
-        body: JSON.stringify({
-          image: uploadedImage,
-          query: userPrompt || null,
-        }),
+      const { data } = await axios.post('/smart-add/identify', {
+        image: uploadedImage,
+        query: userPrompt || null,
       });
-
-      const data = await response.json();
 
       if (data.error && (!data.results || data.results.length === 0)) {
         setErrorMessage(data.error);
@@ -225,8 +217,14 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
         setErrorMessage('Could not identify the product. Try a different image or add more context.');
         setAnalysisState('error');
       }
-    } catch (error) {
-      setErrorMessage('Failed to analyze image. Please try again.');
+    } catch (error: unknown) {
+      console.error('Smart Add identify error:', error);
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.message || error.response?.data?.error || error.message;
+        setErrorMessage(`Failed to analyze image: ${message}`);
+      } else {
+        setErrorMessage(`Failed to analyze image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
       setAnalysisState('error');
     }
   };
@@ -244,18 +242,9 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
     setErrorMessage(null);
 
     try {
-      const response = await fetch('/smart-add/identify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        },
-        body: JSON.stringify({
-          query: searchQuery,
-        }),
+      const { data } = await axios.post('/smart-add/identify', {
+        query: searchQuery,
       });
-
-      const data = await response.json();
 
       if (data.error && (!data.results || data.results.length === 0)) {
         setErrorMessage(data.error);
@@ -268,8 +257,14 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
         setErrorMessage('Could not find any products matching your search.');
         setAnalysisState('error');
       }
-    } catch (error) {
-      setErrorMessage('Failed to search for products. Please try again.');
+    } catch (error: unknown) {
+      console.error('Smart Add identify error:', error);
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.message || error.response?.data?.error || error.message;
+        setErrorMessage(`Failed to search: ${message}`);
+      } else {
+        setErrorMessage(`Failed to search: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
       setAnalysisState('error');
     }
   };

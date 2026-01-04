@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Head, Link, useForm, router } from '@inertiajs/react';
+import axios from 'axios';
 import { PageProps, ListItem, VendorPrice, SmartFillResult } from '@/types';
 import AppLayout from '@/Layouts/AppLayout';
 import { Button } from '@/Components/ui/button';
@@ -145,30 +146,7 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
     setSmartFillMessage(null);
 
     try {
-      const response = await fetch(`/items/${item.id}/smart-fill`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-          'Accept': 'application/json',
-        },
-      });
-
-      // Check for HTTP errors first
-      if (!response.ok) {
-        let errorMessage = `Server error (${response.status})`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch {
-          // Response wasn't JSON, use status text
-          errorMessage = response.statusText || errorMessage;
-        }
-        setSmartFillMessage(errorMessage);
-        return;
-      }
-
-      const result: SmartFillResult = await response.json();
+      const { data: result } = await axios.post<SmartFillResult>(`/items/${item.id}/smart-fill`);
 
       if (!result.success) {
         setSmartFillMessage(result.error || 'Smart fill failed - no data returned');
@@ -219,9 +197,14 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
         setSmartFillMessage(`AI search completed but no additional info found for this product.`);
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Smart fill error:', error);
-      setSmartFillMessage('Failed to connect to AI service. Check console for details.');
+      if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error || error.response?.data?.message || error.message;
+        setSmartFillMessage(`Smart fill failed: ${message}`);
+      } else {
+        setSmartFillMessage('Failed to connect to AI service. Check console for details.');
+      }
     } finally {
       setIsSmartFilling(false);
     }
@@ -234,20 +217,9 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
     setSuppressingVendor(vendorName);
 
     try {
-      const response = await fetch('/api/settings/suppress-vendor', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({ vendor: vendorName }),
-      });
-
-      if (response.ok) {
-        // Hide the vendor row immediately
-        setHiddenVendors((prev) => [...prev, vendorName]);
-      }
+      await axios.post('/api/settings/suppress-vendor', { vendor: vendorName });
+      // Hide the vendor row immediately
+      setHiddenVendors((prev) => [...prev, vendorName]);
     } catch (error) {
       console.error('Failed to suppress vendor:', error);
     } finally {

@@ -71,6 +71,35 @@ createInertiaApp({
 });
 ```
 
+### API Calls with Axios
+
+**Important**: When making API calls that return JSON (not Inertia responses), always use `axios` instead of `fetch()`. Axios is pre-configured by Laravel to automatically handle CSRF tokens.
+
+```tsx
+// ✅ CORRECT - Use axios for API calls
+import axios from 'axios';
+
+const submitData = async () => {
+  try {
+    const { data } = await axios.post('/api/endpoint', { payload });
+    // Handle response
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const message = error.response?.data?.message || error.message;
+      // Handle error
+    }
+  }
+};
+
+// ❌ WRONG - fetch() doesn't automatically include CSRF token
+const submitData = async () => {
+  // This will get 419 CSRF token mismatch error
+  const response = await fetch('/api/endpoint', { method: 'POST', ... });
+};
+```
+
+For Inertia form submissions (page navigation), use `useForm` from `@inertiajs/react`.
+
 ### Page Component Pattern
 
 ```tsx
@@ -398,6 +427,8 @@ The Smart Add page allows AI-powered product identification with a two-phase flo
 
 ```tsx
 // Pages/SmartAdd.tsx
+import axios from 'axios';
+
 interface ProductSuggestion {
   product_name: string;
   brand: string | null;
@@ -416,8 +447,9 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
   // Phase 1: Submit search/image for AI identification
+  // Uses axios for automatic CSRF token handling
   const submitIdentification = async () => {
-    const response = await fetch('/smart-add/identify', { ... });
+    const { data } = await axios.post('/smart-add/identify', { query, image });
     setSuggestions(data.results);  // Up to 5 suggestions
   };
   
