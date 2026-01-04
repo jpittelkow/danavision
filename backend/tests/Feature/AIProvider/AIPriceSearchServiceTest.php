@@ -38,7 +38,8 @@ test('ai price search returns error when no providers or web search configured',
 
     expect($result)->toBeInstanceOf(AIPriceSearchResult::class);
     expect($result->hasError())->toBeTrue();
-    expect($result->error)->toContain('No AI providers');
+    // SERP API is required for price searches - AI alone cannot fabricate prices
+    expect($result->error)->toContain('SERP API is not configured');
     expect($result->results)->toBeEmpty();
 });
 

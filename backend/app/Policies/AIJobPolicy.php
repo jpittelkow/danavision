@@ -54,9 +54,10 @@ class AIJobPolicy
 
     /**
      * Determine whether the user can cancel the AI job.
+     * Note: This only checks ownership. The controller should check if the job can be cancelled.
      */
     public function cancel(User $user, AIJob $aiJob): bool
     {
-        return $user->id === $aiJob->user_id && $aiJob->canBeCancelled();
+        return $user->id === $aiJob->user_id;
     }
 }
