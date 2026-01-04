@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\AIJobController;
 use App\Http\Controllers\AIProviderController;
+use App\Http\Controllers\AIRequestLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImageProxyController;
@@ -92,4 +94,25 @@ Route::middleware('auth')->group(function () {
     // AI Prompts
     Route::patch('settings/ai/prompts', [AIProviderController::class, 'updatePrompt'])->name('ai-prompts.update');
     Route::post('settings/ai/prompts/reset', [AIProviderController::class, 'resetPrompt'])->name('ai-prompts.reset');
+
+    // AI Jobs API
+    Route::prefix('api/ai-jobs')->group(function () {
+        Route::get('/', [AIJobController::class, 'index'])->name('ai-jobs.index');
+        Route::get('/active', [AIJobController::class, 'active'])->name('ai-jobs.active');
+        Route::get('/stats', [AIJobController::class, 'stats'])->name('ai-jobs.stats');
+        Route::post('/', [AIJobController::class, 'store'])->name('ai-jobs.store');
+        Route::delete('/history', [AIJobController::class, 'clearHistory'])->name('ai-jobs.clear-history');
+        Route::get('/{aiJob}', [AIJobController::class, 'show'])->name('ai-jobs.show');
+        Route::post('/{aiJob}/cancel', [AIJobController::class, 'cancel'])->name('ai-jobs.cancel');
+        Route::delete('/{aiJob}', [AIJobController::class, 'destroy'])->name('ai-jobs.destroy');
+    });
+
+    // AI Request Logs API
+    Route::prefix('api/ai-logs')->group(function () {
+        Route::get('/', [AIRequestLogController::class, 'index'])->name('ai-logs.index');
+        Route::get('/stats', [AIRequestLogController::class, 'stats'])->name('ai-logs.stats');
+        Route::delete('/all', [AIRequestLogController::class, 'clearAll'])->name('ai-logs.clear-all');
+        Route::get('/{log}', [AIRequestLogController::class, 'show'])->name('ai-logs.show');
+        Route::delete('/{log}', [AIRequestLogController::class, 'destroy'])->name('ai-logs.destroy');
+    });
 });

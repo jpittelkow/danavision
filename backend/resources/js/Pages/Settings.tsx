@@ -3,6 +3,8 @@ import { Head, router, useForm } from '@inertiajs/react';
 import { PageProps, Settings as SettingsType } from '@/types';
 import AppLayout from '@/Layouts/AppLayout';
 import AddressTypeahead from '@/Components/AddressTypeahead';
+import { JobsTab } from '@/Components/JobsTab';
+import { AILogsTab } from '@/Components/AILogsTab';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
@@ -49,6 +51,8 @@ import {
   Store,
   Ban,
   X,
+  Activity,
+  ScrollText,
 } from 'lucide-react';
 
 interface AIProviderData {
@@ -724,18 +728,26 @@ export default function Settings({ auth, settings, providers, availableProviders
         )}
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="general" className="gap-2">
               <User className="h-4 w-4" />
-              General
+              <span className="hidden sm:inline">General</span>
             </TabsTrigger>
             <TabsTrigger value="configurations" className="gap-2">
               <SettingsIcon className="h-4 w-4" />
-              Configurations
+              <span className="hidden sm:inline">Config</span>
             </TabsTrigger>
             <TabsTrigger value="ai" className="gap-2">
               <Brain className="h-4 w-4" />
-              AI Providers
+              <span className="hidden sm:inline">AI</span>
+            </TabsTrigger>
+            <TabsTrigger value="jobs" className="gap-2">
+              <Activity className="h-4 w-4" />
+              <span className="hidden sm:inline">Jobs</span>
+            </TabsTrigger>
+            <TabsTrigger value="logs" className="gap-2">
+              <ScrollText className="h-4 w-4" />
+              <span className="hidden sm:inline">Logs</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1285,6 +1297,16 @@ export default function Settings({ auth, settings, providers, availableProviders
                 )}
               </TabsContent>
             </Tabs>
+          </TabsContent>
+
+          {/* Jobs Tab */}
+          <TabsContent value="jobs">
+            <JobsTab />
+          </TabsContent>
+
+          {/* AI Logs Tab */}
+          <TabsContent value="logs">
+            <AILogsTab />
           </TabsContent>
         </Tabs>
       </div>

@@ -216,6 +216,121 @@ export interface SmartFillResult {
   providers_used: string[];
 }
 
+/**
+ * AI Job types
+ */
+export type AIJobType = 'product_identification' | 'image_analysis' | 'price_search' | 'smart_fill' | 'price_refresh';
+export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
+/**
+ * AI background job model.
+ * Represents an AI task running asynchronously.
+ */
+export interface AIJob {
+  id: number;
+  type: AIJobType;
+  type_label: string;
+  status: AIJobStatus;
+  status_label: string;
+  progress: number;
+  input_summary: string;
+  input_data?: Record<string, unknown>;
+  output_data?: Record<string, unknown>;
+  error_message?: string;
+  related_item_id?: number;
+  related_list_id?: number;
+  started_at?: string;
+  completed_at?: string;
+  created_at: string;
+  duration_ms?: number;
+  formatted_duration: string;
+  can_cancel: boolean;
+  logs_count: number;
+  logs?: AIRequestLogSummary[];
+}
+
+/**
+ * AI request log types
+ */
+export type AIRequestLogStatus = 'pending' | 'success' | 'failed' | 'timeout';
+export type AIRequestType = 'completion' | 'image_analysis' | 'test_connection' | 'price_aggregation';
+
+/**
+ * Summary version of AI request log (for job details).
+ */
+export interface AIRequestLogSummary {
+  id: number;
+  provider: string;
+  model?: string;
+  request_type: AIRequestType;
+  status: AIRequestLogStatus;
+  duration_ms: number;
+  formatted_duration: string;
+  tokens_input?: number;
+  tokens_output?: number;
+  created_at: string;
+}
+
+/**
+ * Full AI request log model.
+ * Contains complete request/response data for debugging.
+ */
+export interface AIRequestLog {
+  id: number;
+  ai_job_id?: number;
+  provider: string;
+  provider_display_name: string;
+  model?: string;
+  request_type: AIRequestType;
+  type_label: string;
+  status: AIRequestLogStatus;
+  duration_ms: number;
+  formatted_duration: string;
+  tokens_input?: number;
+  tokens_output?: number;
+  total_tokens: number;
+  error_message?: string;
+  truncated_prompt: string;
+  request_data?: {
+    prompt?: string;
+    options?: Record<string, unknown>;
+  };
+  response_data?: Record<string, unknown>;
+  serp_data?: Record<string, unknown>;
+  serp_data_summary?: {
+    results_count: number;
+    search_query?: string;
+    engine?: string;
+  };
+  created_at: string;
+}
+
+/**
+ * AI job statistics response.
+ */
+export interface AIJobStats {
+  total: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  active: number;
+  success_rate: number;
+  by_type: Record<AIJobType, number>;
+}
+
+/**
+ * AI log statistics response.
+ */
+export interface AILogStats {
+  total_requests: number;
+  successful_requests: number;
+  failed_requests: number;
+  success_rate: number;
+  total_tokens: number;
+  by_provider: Record<string, number>;
+  by_type: Record<AIRequestType, number>;
+}
+
 export type PageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {
   auth: {
     user: User | null;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, router } from '@inertiajs/react';
 import { PageProps } from '@/types';
 import { ThemeToggle } from '@/Components/ThemeToggle';
+import { JobNotifications } from '@/Components/JobNotifications';
 import {
   LayoutDashboard,
   ListTodo,
@@ -173,6 +174,9 @@ export default function AppLayout({ children, auth, flash }: LayoutProps) {
         {/* Page content */}
         <main>{children}</main>
       </div>
+
+      {/* Job notifications */}
+      <JobNotifications />
     </div>
   );
 }

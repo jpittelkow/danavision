@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AI\ProductIdentificationJob;
+use App\Jobs\AI\PriceSearchJob;
+use App\Models\AIJob;
 use App\Models\ShoppingList;
 use App\Services\AI\AIService;
 use App\Services\AI\AIPriceSearchService;
@@ -198,6 +201,10 @@ class SmartAddController extends Controller
      * 
      * This is Phase 1 of the Smart Add flow - product identification.
      * Price search happens after the item is added to a list.
+     * 
+     * Supports two modes:
+     * - async=false (default): Synchronous processing, returns results immediately
+     * - async=true: Dispatches a background job, returns job ID for polling
      *
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -207,6 +214,7 @@ class SmartAddController extends Controller
         $validated = $request->validate([
             'image' => ['nullable', 'string'], // Base64 encoded image (data URL)
             'query' => ['nullable', 'string', 'max:500'],
+            'async' => ['nullable', 'boolean'], // Use async job processing
         ]);
 
         // Must have either image or query
@@ -219,7 +227,47 @@ class SmartAddController extends Controller
         }
 
         $userId = $request->user()->id;
+        $useAsync = $validated['async'] ?? false;
 
+        // Async mode: dispatch job and return job ID
+        if ($useAsync) {
+            return $this->identifyAsync($validated, $userId);
+        }
+
+        // Sync mode: process immediately and return results
+        return $this->identifySync($validated, $userId);
+    }
+
+    /**
+     * Process identification asynchronously using a background job.
+     */
+    protected function identifyAsync(array $validated, int $userId): \Illuminate\Http\JsonResponse
+    {
+        // Create the AIJob record
+        $aiJob = AIJob::createJob(
+            userId: $userId,
+            type: AIJob::TYPE_PRODUCT_IDENTIFICATION,
+            inputData: [
+                'image' => $validated['image'] ?? null,
+                'query' => $validated['query'] ?? null,
+            ]
+        );
+
+        // Dispatch the background job
+        ProductIdentificationJob::dispatch($aiJob->id, $userId);
+
+        return response()->json([
+            'job_id' => $aiJob->id,
+            'status' => 'pending',
+            'message' => 'Product identification job started. Poll /api/ai-jobs/' . $aiJob->id . ' for status.',
+        ], 202);
+    }
+
+    /**
+     * Process identification synchronously (legacy behavior).
+     */
+    protected function identifySync(array $validated, int $userId): \Illuminate\Http\JsonResponse
+    {
         try {
             $results = [];
             $providersUsed = [];
@@ -602,10 +650,26 @@ PROMPT;
             'last_checked_at' => ($validated['current_price'] ?? null) ? now() : null,
         ]);
 
-        // Dispatch background job to search for prices (Phase 2 of Smart Add)
+        // Dispatch background job to search for prices using the new AI Job system
         // This runs asynchronously after the item is added
         if (!($validated['skip_price_search'] ?? false)) {
-            \App\Jobs\SearchItemPrices::dispatch($item->id, $request->user()->id)
+            // Create AIJob record for tracking
+            $aiJob = AIJob::createJob(
+                userId: $request->user()->id,
+                type: AIJob::TYPE_PRICE_SEARCH,
+                inputData: [
+                    'query' => $item->product_query ?? $item->product_name,
+                    'product_name' => $item->product_name,
+                    'is_generic' => $item->is_generic ?? false,
+                    'unit_of_measure' => $item->unit_of_measure ?? null,
+                    'shop_local' => $list->shop_local ?? false,
+                ],
+                relatedItemId: $item->id,
+                relatedListId: $list->id,
+            );
+
+            // Dispatch the price search job
+            PriceSearchJob::dispatch($aiJob->id, $request->user()->id)
                 ->delay(now()->addSeconds(2)); // Small delay to let the redirect complete
         }
 

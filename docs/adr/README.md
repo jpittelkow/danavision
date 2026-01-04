@@ -18,6 +18,8 @@ An ADR is a document that captures an important architectural decision made alon
 | [006](006-email-notifications.md) | Email Notification System | Accepted | 2024-12-31 |
 | [007](007-smart-add-feature.md) | Smart Add Feature with AI Aggregation | Accepted | 2026-01-02 |
 | [008](008-e2e-testing-strategy.md) | E2E Testing Strategy with Playwright | Accepted | 2026-01-02 |
+| [009](009-ai-job-system.md) | AI Background Job System | Accepted | 2026-01-04 |
+| [010](010-serp-ai-aggregation.md) | SERP API + AI Aggregation Architecture | Accepted | 2026-01-04 |
 
 ## When to Write an ADR
 

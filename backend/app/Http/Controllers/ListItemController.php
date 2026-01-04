@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AI\PriceRefreshJob;
+use App\Jobs\AI\SmartFillJob;
+use App\Models\AIJob;
 use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
@@ -195,18 +198,52 @@ class ListItemController extends Controller
 
     /**
      * Refresh price for a single item using AI search.
+     * 
+     * Supports two modes via query param:
+     * - async=false (default): Returns redirect response after sync processing
+     * - async=true: Dispatches background job and returns JSON with job ID
      */
-    public function refresh(Request $request, ListItem $item): RedirectResponse
+    public function refresh(Request $request, ListItem $item): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $this->authorize('update', $item);
 
+        $useAsync = $request->boolean('async', false);
+
+        // Check if web search is available
         $priceService = AIPriceSearchService::forUser($request->user()->id);
-        
-        // Check if either AI or web search is available
-        if (!$priceService->isAvailable() && !$priceService->isWebSearchAvailable()) {
-            return back()->with('error', 'No AI providers or web search configured. Please set up an AI provider or SerpAPI key in Settings.');
+        if (!$priceService->isWebSearchAvailable()) {
+            $error = 'SERP API is not configured. Please set up a SerpAPI key in Settings.';
+            return $useAsync
+                ? response()->json(['error' => $error], 422)
+                : back()->with('error', $error);
         }
 
+        // Async mode: dispatch job and return JSON
+        if ($useAsync) {
+            $aiJob = AIJob::createJob(
+                userId: $request->user()->id,
+                type: AIJob::TYPE_PRICE_REFRESH,
+                inputData: [
+                    'product_name' => $item->product_name,
+                    'product_query' => $item->product_query,
+                    'is_generic' => $item->is_generic ?? false,
+                    'unit_of_measure' => $item->unit_of_measure,
+                    'shop_local' => $item->shouldShopLocal(),
+                ],
+                relatedItemId: $item->id,
+                relatedListId: $item->shopping_list_id,
+            );
+
+            PriceRefreshJob::dispatch($aiJob->id, $request->user()->id);
+
+            return response()->json([
+                'job_id' => $aiJob->id,
+                'status' => 'pending',
+                'message' => 'Price refresh job started.',
+            ], 202);
+        }
+
+        // Sync mode: process immediately (legacy behavior)
         // Get user's home zip code for local searches
         $homeZipCode = Setting::get(Setting::HOME_ZIP_CODE, $request->user()->id);
 
@@ -222,7 +259,7 @@ class ListItemController extends Controller
         ]);
 
         if ($searchResult->hasError()) {
-            return back()->with('error', 'AI price search failed: ' . $searchResult->error);
+            return back()->with('error', 'Price search failed: ' . $searchResult->error);
         }
 
         if (!$searchResult->hasResults()) {
@@ -310,6 +347,10 @@ class ListItemController extends Controller
      *
      * Uses AI to analyze the product name and find additional information
      * including images, SKU/UPC, description, and suggested pricing.
+     * 
+     * Supports two modes:
+     * - async=false (default): Synchronous processing
+     * - async=true: Dispatches background job, returns job ID
      *
      * @param Request $request
      * @param ListItem $item
@@ -320,10 +361,10 @@ class ListItemController extends Controller
         $this->authorize('update', $item);
 
         $userId = $request->user()->id;
-        $multiAI = \App\Services\AI\MultiAIService::forUser($userId);
-        $priceService = AIPriceSearchService::forUser($userId);
+        $useAsync = $request->boolean('async', false);
 
         // Check if AI is available
+        $multiAI = \App\Services\AI\MultiAIService::forUser($userId);
         if (!$multiAI->isAvailable()) {
             return response()->json([
                 'success' => false,
@@ -331,8 +372,33 @@ class ListItemController extends Controller
             ], 422);
         }
 
+        // Async mode: dispatch job and return JSON
+        if ($useAsync) {
+            $aiJob = AIJob::createJob(
+                userId: $userId,
+                type: AIJob::TYPE_SMART_FILL,
+                inputData: [
+                    'product_name' => $item->product_name,
+                    'is_generic' => $item->is_generic ?? false,
+                    'unit_of_measure' => $item->unit_of_measure,
+                ],
+                relatedItemId: $item->id,
+                relatedListId: $item->shopping_list_id,
+            );
+
+            SmartFillJob::dispatch($aiJob->id, $userId);
+
+            return response()->json([
+                'job_id' => $aiJob->id,
+                'status' => 'pending',
+                'message' => 'Smart fill job started.',
+            ], 202);
+        }
+
+        // Sync mode: process immediately (legacy behavior)
         $productName = $item->product_name;
         $providersUsed = [];
+        $priceService = AIPriceSearchService::forUser($userId);
 
         // Build prompt for AI to analyze the product
         $prompt = $this->buildSmartFillPrompt($productName, $item);

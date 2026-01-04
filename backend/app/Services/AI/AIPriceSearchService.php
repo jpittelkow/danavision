@@ -2,17 +2,29 @@
 
 namespace App\Services\AI;
 
+use App\Models\AIRequestLog;
 use App\Services\Search\LocalStoreService;
 use App\Services\Search\WebSearchService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * AIPriceSearchService
+ * 
+ * Searches for product prices using SERP API as the primary data source,
+ * with AI used purely for intelligent aggregation and analysis.
+ * 
+ * IMPORTANT: This service does NOT fabricate prices. If SERP API returns
+ * no results, no results are returned. AI is only used to process and
+ * structure real data from SERP API.
+ */
 class AIPriceSearchService
 {
     protected int $userId;
     protected MultiAIService $multiAI;
     protected WebSearchService $webSearch;
     protected LocalStoreService $localStore;
+    protected ?int $aiJobId = null;
 
     public function __construct(int $userId)
     {
@@ -28,6 +40,15 @@ class AIPriceSearchService
     public static function forUser(int $userId): self
     {
         return new self($userId);
+    }
+
+    /**
+     * Set the AI job ID for logging purposes.
+     */
+    public function setAIJobId(?int $aiJobId): self
+    {
+        $this->aiJobId = $aiJobId;
+        return $this;
     }
 
     /**
@@ -55,7 +76,10 @@ class AIPriceSearchService
     }
 
     /**
-     * Search for product prices using web search + AI analysis.
+     * Search for product prices using SERP API + AI aggregation.
+     * 
+     * IMPORTANT: SERP API is the ONLY source of pricing data.
+     * AI is used only to structure and analyze results, NOT to generate prices.
      *
      * @param string $query The search query
      * @param array $options Options including:
@@ -71,93 +95,136 @@ class AIPriceSearchService
         $shopLocal = $options['shop_local'] ?? false;
         $zipCode = $options['zip_code'] ?? $this->localStore->getHomeZipCode();
 
-        // Get local stores if shop_local is enabled
-        $localStores = [];
-        if ($shopLocal && $zipCode) {
-            $localStores = $this->localStore->getLocalStores($zipCode);
-        }
-
-        // Try web search first for real-time pricing
-        $webResults = [];
-        if ($this->webSearch->isAvailable()) {
-            $webResults = $this->webSearch->searchPrices($query, [
-                'shop_local' => $shopLocal,
-                'zip_code' => $zipCode,
-                'local_stores' => $localStores,
-            ]);
-        }
-
-        // If web search returned results, use AI to analyze and enhance them
-        if (!empty($webResults)) {
-            return $this->processWebSearchResults($query, $webResults, $options, $localStores);
-        }
-
-        // Fallback: If no web search available or no results, use AI-only approach
-        if (!$this->isAvailable()) {
+        // Check if SERP API is available - this is REQUIRED for price search
+        if (!$this->webSearch->isAvailable()) {
             return new AIPriceSearchResult(
                 query: $query,
                 results: [],
                 lowestPrice: null,
                 highestPrice: null,
                 searchedAt: now(),
-                error: 'No AI providers configured and web search unavailable. Please set up an AI provider or SerpAPI key in Settings.',
+                error: 'SERP API is not configured. Please set up a SerpAPI key in Settings to enable price search.',
                 providersUsed: [],
             );
         }
 
-        return $this->searchWithAIOnly($query, $options, $localStores);
+        // Get local stores if shop_local is enabled
+        $localStores = [];
+        if ($shopLocal && $zipCode) {
+            $localStores = $this->localStore->getLocalStores($zipCode);
+        }
+
+        // Get real-time pricing data from SERP API
+        $webResults = $this->webSearch->searchPrices($query, [
+            'shop_local' => $shopLocal,
+            'zip_code' => $zipCode,
+            'local_stores' => $localStores,
+        ]);
+
+        // Store raw SERP data for logging
+        $rawSerpData = [
+            'query' => $query,
+            'results_count' => count($webResults),
+            'results' => $webResults,
+            'options' => $options,
+        ];
+
+        // If SERP API returned no results, return empty results (do NOT fabricate)
+        if (empty($webResults)) {
+            Log::info('AIPriceSearchService: SERP API returned no results', [
+                'query' => $query,
+                'options' => $options,
+            ]);
+
+            return new AIPriceSearchResult(
+                query: $query,
+                results: [],
+                lowestPrice: null,
+                highestPrice: null,
+                searchedAt: now(),
+                error: 'No products found matching your search. Try a different search term.',
+                providersUsed: ['web_search'],
+                serpData: $rawSerpData,
+            );
+        }
+
+        // Process SERP results with AI aggregation
+        return $this->processWebSearchResults($query, $webResults, $options, $localStores, $rawSerpData);
     }
 
     /**
      * Process web search results with AI analysis.
+     * 
+     * AI is used to structure, validate, and enhance the SERP results.
+     * It will NOT add any prices not present in the original results.
      */
-    protected function processWebSearchResults(string $query, array $webResults, array $options, array $localStores): AIPriceSearchResult
-    {
+    protected function processWebSearchResults(
+        string $query,
+        array $webResults,
+        array $options,
+        array $localStores,
+        array $rawSerpData
+    ): AIPriceSearchResult {
         $isGeneric = $options['is_generic'] ?? false;
         $unitOfMeasure = $options['unit_of_measure'] ?? null;
         $shopLocal = $options['shop_local'] ?? false;
 
-        // If AI is available, use it to enhance/validate the results
+        // If AI is available, use it to structure and validate the results
         if ($this->isAvailable()) {
             $prompt = $this->buildAnalysisPrompt($query, $webResults, $isGeneric, $unitOfMeasure, $shopLocal, $localStores);
             
             try {
-                $result = $this->multiAI->processWithAllProviders($prompt);
-                
-                if (!$result['error'] && $result['aggregated_response']) {
-                    $parsed = $this->parseSearchResponse($result['aggregated_response']);
+                // Use AILoggingService if a job ID is set
+                $loggingService = $this->aiJobId 
+                    ? AILoggingService::forUser($this->userId, $this->aiJobId)
+                    : null;
+
+                if ($loggingService) {
+                    $response = $loggingService->complete($prompt, [], $rawSerpData);
+                    $parsed = $this->parseSearchResponse($response);
+                } else {
+                    $result = $this->multiAI->processWithAllProviders($prompt);
                     
-                    if (!empty($parsed['results'])) {
-                        $prices = array_filter(array_column($parsed['results'], 'price'));
-                        
-                        $providersUsed = collect($result['individual_responses'] ?? [])
-                            ->filter(fn($r) => $r['error'] === null)
-                            ->keys()
-                            ->toArray();
-                        $providersUsed[] = 'web_search';
-                        
-                        return new AIPriceSearchResult(
-                            query: $query,
-                            results: $parsed['results'],
-                            lowestPrice: !empty($prices) ? min($prices) : null,
-                            highestPrice: !empty($prices) ? max($prices) : null,
-                            searchedAt: now(),
-                            error: null,
-                            providersUsed: $providersUsed,
-                            isGeneric: $parsed['is_generic'] ?? $isGeneric,
-                            unitOfMeasure: $parsed['unit_of_measure'] ?? $unitOfMeasure,
-                        );
+                    if ($result['error'] && !$result['aggregated_response']) {
+                        throw new \RuntimeException($result['error']);
                     }
+                    
+                    $parsed = $this->parseSearchResponse($result['aggregated_response']);
+                }
+
+                // Validate AI output against original SERP data
+                $validatedResults = $this->validateAgainstSerpData($parsed['results'], $webResults);
+                
+                if (!empty($validatedResults)) {
+                    $prices = array_filter(array_column($validatedResults, 'price'));
+                    
+                    $providersUsed = ['web_search'];
+                    if ($loggingService) {
+                        $providersUsed[] = $loggingService->getProviderType();
+                    }
+                    
+                    return new AIPriceSearchResult(
+                        query: $query,
+                        results: $validatedResults,
+                        lowestPrice: !empty($prices) ? min($prices) : null,
+                        highestPrice: !empty($prices) ? max($prices) : null,
+                        searchedAt: now(),
+                        error: null,
+                        providersUsed: $providersUsed,
+                        isGeneric: $parsed['is_generic'] ?? $isGeneric,
+                        unitOfMeasure: $parsed['unit_of_measure'] ?? $unitOfMeasure,
+                        serpData: $rawSerpData,
+                    );
                 }
             } catch (\Exception $e) {
-                Log::warning('AI analysis of web results failed, using raw results', [
+                Log::warning('AI analysis of SERP results failed, using raw results', [
                     'query' => $query,
                     'error' => $e->getMessage(),
                 ]);
             }
         }
 
-        // Return web search results directly if AI processing fails or is unavailable
+        // Return SERP results directly if AI processing fails or is unavailable
         $prices = array_filter(array_column($webResults, 'price'));
         
         return new AIPriceSearchResult(
@@ -170,59 +237,62 @@ class AIPriceSearchService
             providersUsed: ['web_search'],
             isGeneric: $isGeneric,
             unitOfMeasure: $unitOfMeasure,
+            serpData: $rawSerpData,
         );
     }
 
     /**
-     * Search using AI only (fallback when web search unavailable).
+     * Validate AI-processed results against original SERP data.
+     * 
+     * This ensures AI hasn't fabricated any prices - all prices must exist
+     * in the original SERP API results.
+     *
+     * @param array $aiResults Results from AI processing
+     * @param array $serpResults Original SERP API results
+     * @return array Validated results
      */
-    protected function searchWithAIOnly(string $query, array $options, array $localStores): AIPriceSearchResult
+    protected function validateAgainstSerpData(array $aiResults, array $serpResults): array
     {
-        $isGeneric = $options['is_generic'] ?? false;
-        $unitOfMeasure = $options['unit_of_measure'] ?? null;
-        $shopLocal = $options['shop_local'] ?? false;
-        $zipCode = $options['zip_code'] ?? null;
+        // Build a set of valid prices from SERP data
+        $validPrices = [];
+        foreach ($serpResults as $result) {
+            if (isset($result['price']) && $result['price'] > 0) {
+                // Allow small float variations
+                $validPrices[] = round((float) $result['price'], 2);
+            }
+        }
 
-        $prompt = $this->buildSearchPrompt($query, $isGeneric, $unitOfMeasure, $shopLocal, $zipCode, $localStores);
-
-        try {
-            $result = $this->multiAI->processWithAllProviders($prompt);
-
-            if ($result['error'] && !$result['aggregated_response']) {
-                return new AIPriceSearchResult(
-                    query: $query,
-                    results: [],
-                    lowestPrice: null,
-                    highestPrice: null,
-                    searchedAt: now(),
-                    error: $result['error'],
-                    providersUsed: array_keys($result['individual_responses'] ?? []),
-                );
+        $validated = [];
+        foreach ($aiResults as $result) {
+            if (!isset($result['price']) || $result['price'] === null) {
+                // Allow results without prices (informational)
+                $validated[] = $result;
+                continue;
             }
 
-            // Parse the aggregated response
-            $parsed = $this->parseSearchResponse($result['aggregated_response']);
+            $price = round((float) $result['price'], 2);
+            
+            // Check if this price exists in SERP data (with 1% tolerance)
+            $priceFound = false;
+            foreach ($validPrices as $validPrice) {
+                if (abs($price - $validPrice) / max($validPrice, 0.01) < 0.01) {
+                    $priceFound = true;
+                    break;
+                }
+            }
 
-            // Extract providers that responded successfully
-            $providersUsed = collect($result['individual_responses'] ?? [])
-                ->filter(fn($r) => $r['error'] === null)
-                ->keys()
-                ->toArray();
+            if ($priceFound) {
+                $validated[] = $result;
+            } else {
+                Log::warning('AI returned price not in SERP data, excluding', [
+                    'ai_price' => $price,
+                    'valid_prices' => array_slice($validPrices, 0, 10),
+                    'title' => $result['title'] ?? 'unknown',
+                ]);
+            }
+        }
 
-            // Calculate price stats
-            $prices = array_filter(array_column($parsed['results'], 'price'));
-
-            return new AIPriceSearchResult(
-                query: $query,
-                results: $parsed['results'],
-                lowestPrice: !empty($prices) ? min($prices) : null,
-                highestPrice: !empty($prices) ? max($prices) : null,
-                searchedAt: now(),
-                error: null,
-                providersUsed: $providersUsed,
-                isGeneric: $parsed['is_generic'] ?? $isGeneric,
-                unitOfMeasure: $parsed['unit_of_measure'] ?? $unitOfMeasure,
-            );
+        return $validated;
         } catch (\Exception $e) {
             Log::error('AI Price Search failed', [
                 'query' => $query,
@@ -469,7 +539,10 @@ PROMPT;
     }
 
     /**
-     * Build prompt for AI to analyze web search results.
+     * Build prompt for AI to analyze and structure SERP API results.
+     * 
+     * IMPORTANT: AI must ONLY use prices from the search results provided.
+     * It must NOT invent, estimate, or hallucinate any prices.
      */
     protected function buildAnalysisPrompt(
         string $query,
@@ -479,19 +552,8 @@ PROMPT;
         bool $shopLocal = false,
         array $localStores = []
     ): string {
-        // Format web results for the prompt
-        $formattedResults = array_map(function ($r, $i) {
-            return sprintf(
-                "%d. %s - $%.2f at %s%s",
-                $i + 1,
-                $r['title'] ?? 'Unknown',
-                $r['price'] ?? 0,
-                $r['retailer'] ?? 'Unknown',
-                ($r['in_stock'] ?? true) ? '' : ' (Out of Stock)'
-            );
-        }, $webResults, array_keys($webResults));
-
-        $resultsText = implode("\n", array_slice($formattedResults, 0, 15));
+        // Format web results as JSON for the prompt (more precise than text)
+        $resultsJson = json_encode(array_slice($webResults, 0, 20), JSON_PRETTY_PRINT);
 
         $contextParts = [];
 
@@ -520,48 +582,51 @@ PROMPT;
         $contextSection = !empty($contextParts) ? "\n\nContext:\n" . implode("\n", $contextParts) : '';
 
         return <<<PROMPT
-Analyze and organize these real-time price search results for: "{$query}"
+You are analyzing REAL search results from Google Shopping API (SERP API).
 
-Search Results:
-{$resultsText}
+*** CRITICAL INSTRUCTIONS ***
+1. You MUST only use prices that appear in the search results below.
+2. Do NOT invent, estimate, guess, or hallucinate ANY prices.
+3. Every price in your output MUST match a price from the input data.
+4. If you cannot find a price in the data, use null for that result.
+
+Search Query: "{$query}"
 {$contextSection}
 
-Your task:
-1. Review the search results above (these are REAL current prices from web search)
-2. Validate that prices seem reasonable for the user's location
-3. Identify the best LOCAL deals first, then other deals
-4. PRIORITIZE results from local brick-and-mortar stores
-5. Structure the results in the required JSON format
+=== SERP API SEARCH RESULTS (REAL DATA) ===
+{$resultsJson}
+=== END OF SEARCH RESULTS ===
 
-Return a JSON object with the best 10 results in this format:
+Your task:
+1. Parse and structure the search results above
+2. Select the best 10 matches for the query
+3. Prioritize LOCAL stores (Walmart, Target, Kroger, etc.) over online-only retailers
+4. Sort by: local stores first, then by price (lowest first)
+5. Preserve ALL original price values exactly as they appear
+
+Return a JSON object in this exact format:
 {
     "results": [
         {
-            "title": "Product name",
+            "title": "Exact product title from results",
             "price": 29.99,
-            "retailer": "Store Name",
-            "url": "product url",
-            "image_url": "image url or null",
-            "upc": "123456789012 or null",
+            "retailer": "Store Name from results",
+            "url": "URL from results",
+            "image_url": "image URL from results or null",
+            "upc": "UPC if known or null",
             "in_stock": true
         }
     ],
     "is_generic": false,
     "unit_of_measure": null,
-    "search_summary": "Brief analysis - mention which local stores have the best prices"
+    "search_summary": "Brief summary of prices found"
 }
 
-Guidelines:
-- Use the ACTUAL prices from the search results above
-- SORT ORDER: Local stores first, then by price
-- Put results from verified local stores (Walmart, Target, Kroger, Aldi, etc.) at the TOP
-- Online-only retailers (Amazon, eBay) should appear AFTER local options
-- Prices should be numeric (no $ symbol)
-- Keep all valid results, remove obviously wrong or duplicate entries
-
-UPC/Barcode Guidelines:
-- Include the UPC (12-digit barcode) for packaged products when known
-- Generic items (produce, bulk goods, deli) do NOT have UPCs - use null
+VALIDATION RULES:
+- Every "price" value MUST exist in the input search results
+- Do NOT round prices differently than they appear in the input
+- If a result doesn't have a price, either exclude it or set price to null
+- Do NOT add results that weren't in the input data
 
 Return ONLY the JSON object, no other text.
 PROMPT;
@@ -720,6 +785,9 @@ PROMPT;
 
 /**
  * Result object for AI price searches.
+ * 
+ * Contains both the processed results and the original SERP data
+ * for transparency and debugging purposes.
  */
 class AIPriceSearchResult implements \JsonSerializable
 {
@@ -733,6 +801,7 @@ class AIPriceSearchResult implements \JsonSerializable
         public array $providersUsed = [],
         public bool $isGeneric = false,
         public ?string $unitOfMeasure = null,
+        public ?array $serpData = null,
     ) {}
 
     public function toArray(): array
@@ -747,6 +816,7 @@ class AIPriceSearchResult implements \JsonSerializable
             'providers_used' => $this->providersUsed,
             'is_generic' => $this->isGeneric,
             'unit_of_measure' => $this->unitOfMeasure,
+            'serp_data' => $this->serpData,
         ];
     }
 
@@ -763,5 +833,20 @@ class AIPriceSearchResult implements \JsonSerializable
     public function hasError(): bool
     {
         return $this->error !== null;
+    }
+
+    /**
+     * Get a summary of the SERP data for display.
+     */
+    public function getSerpDataSummary(): ?array
+    {
+        if (empty($this->serpData)) {
+            return null;
+        }
+
+        return [
+            'query' => $this->serpData['query'] ?? $this->query,
+            'results_count' => $this->serpData['results_count'] ?? count($this->serpData['results'] ?? []),
+        ];
     }
 }

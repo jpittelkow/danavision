@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Models\AIJob;
+use App\Models\AIRequestLog;
 use App\Models\ListItem;
 use App\Models\ListShare;
 use App\Models\ShoppingList;
+use App\Policies\AIJobPolicy;
+use App\Policies\AIRequestLogPolicy;
 use App\Policies\ListItemPolicy;
 use App\Policies\ListSharePolicy;
 use App\Policies\ShoppingListPolicy;
@@ -22,6 +26,8 @@ class AuthServiceProvider extends ServiceProvider
         ShoppingList::class => ShoppingListPolicy::class,
         ListItem::class => ListItemPolicy::class,
         ListShare::class => ListSharePolicy::class,
+        AIJob::class => AIJobPolicy::class,
+        AIRequestLog::class => AIRequestLogPolicy::class,
     ];
 
     /**
