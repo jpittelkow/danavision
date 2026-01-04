@@ -80,8 +80,9 @@ class SearchItemPrices implements ShouldQueue
     {
         $priceService = AIPriceSearchService::forUser($this->userId);
 
-        if (!$priceService->isAvailable()) {
-            Log::warning("SearchItemPrices: No AI provider available for user {$this->userId}");
+        // Check if we have at least one way to search (AI or web search)
+        if (!$priceService->isAvailable() && !$priceService->isWebSearchAvailable()) {
+            Log::warning("SearchItemPrices: No AI provider or web search available for user {$this->userId}");
             return;
         }
 
@@ -91,10 +92,11 @@ class SearchItemPrices implements ShouldQueue
             $searchQuery = $item->upc . ' ' . $searchQuery;
         }
 
-        // Perform the price search
+        // Perform the price search with local shopping enabled
         $searchResult = $priceService->search($searchQuery, [
             'is_generic' => $item->is_generic ?? false,
             'unit_of_measure' => $item->unit_of_measure ?? null,
+            'shop_local' => true, // Always prioritize local stores
         ]);
 
         if ($searchResult->error) {

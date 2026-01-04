@@ -394,27 +394,41 @@ class AIPriceSearchService
             $contextParts[] = "This is a generic item sold by {$unitOfMeasure}. Include prices per {$unitOfMeasure} where applicable.";
         }
 
-        if ($shopLocal && $zipCode) {
-            $contextParts[] = "IMPORTANT: The user wants to shop LOCAL. Their location is zip code {$zipCode}.";
-            $contextParts[] = "Prioritize local stores and retailers in or near this area.";
+        // Get full address from local store service if available
+        $address = $this->localStore->getHomeAddress();
+        $locationInfo = $address ?? $zipCode;
+
+        if ($shopLocal && $locationInfo) {
+            $contextParts[] = "*** CRITICAL: LOCAL SHOPPING ONLY ***";
+            $contextParts[] = "The user is located at: {$locationInfo}";
+            $contextParts[] = "ONLY return prices from stores that physically exist NEAR this location.";
+            $contextParts[] = "Do NOT include online-only retailers like Amazon unless they have a nearby Whole Foods/Fresh store.";
             
             if (!empty($localStores)) {
-                $storeNames = array_column(array_slice($localStores, 0, 8), 'store_name');
-                $contextParts[] = "Local stores near the user include: " . implode(', ', $storeNames) . ".";
-                $contextParts[] = "Focus on finding prices from these local stores when possible.";
+                $storeDetails = [];
+                foreach (array_slice($localStores, 0, 10) as $store) {
+                    $storeName = $store['store_name'] ?? 'Unknown';
+                    $storeAddr = $store['address'] ?? '';
+                    $storeDetails[] = $storeAddr ? "{$storeName} ({$storeAddr})" : $storeName;
+                }
+                $contextParts[] = "";
+                $contextParts[] = "VERIFIED local stores near the user:";
+                $contextParts[] = implode("\n", array_map(fn($s) => "  - {$s}", $storeDetails));
+                $contextParts[] = "";
+                $contextParts[] = "PRIORITIZE prices from these stores. Only include other stores if you are confident they have a location near {$locationInfo}.";
             }
         }
 
         $contextSection = !empty($contextParts) ? "\n\n" . implode("\n", $contextParts) : '';
 
         return <<<PROMPT
-Find current prices for: "{$query}"{$contextSection}
+Find current LOCAL prices for: "{$query}"{$contextSection}
 
-Based on your knowledge of typical retail prices, provide realistic current prices from up to 10 different retailers/sellers. For each result, provide:
+Based on your knowledge of typical retail prices at LOCAL brick-and-mortar stores, provide realistic current prices. For each result, provide:
 - The exact product title/name
 - Current price (numeric, in USD)
-- Retailer/store name
-- Product URL (if known)
+- Store name (the actual store, not just the chain)
+- Product URL (if known, or empty string)
 - Product image URL (if known)
 - UPC/barcode (if this is a packaged retail product)
 - Stock availability
@@ -434,26 +448,21 @@ Return your findings as a JSON object in this exact format:
     ],
     "is_generic": false,
     "unit_of_measure": null,
-    "search_summary": "Brief summary of what was found"
+    "search_summary": "Brief summary of local prices found"
 }
 
 Important guidelines:
-- Provide realistic CURRENT prices based on market knowledge
-- Include major retailers like Amazon, Walmart, Best Buy, Target, etc.
-- For generic items (produce, groceries), include grocery store prices
+- FOCUS ON LOCAL STORES - the user wants to shop in person, not online
+- Include grocery stores like Walmart, Target, Kroger, Aldi, Publix, Safeway, etc.
+- For produce/groceries, prioritize local grocery store prices
 - Prices should be numeric (no $ symbol in the price field)
 - If you don't know a URL, use an empty string
 - If this is a generic item (like produce), set is_generic to true and unit_of_measure to the appropriate unit
-- Note: This is a best-effort estimate. For accurate real-time prices, configure a SerpAPI key.
+- Prices may vary by location - use typical prices for the user's geographic area
 
-UPC/Barcode Guidelines (IMPORTANT - prioritize finding UPCs):
-- ALWAYS try to include the UPC (12-digit barcode) for packaged retail products
-- UPCs are critical for accurate price tracking across retailers
-- Look up the UPC from your knowledge of common products
-- Common UPC databases: If you know the product, you likely know its UPC
-- Example: Sony WH-1000XM5 headphones UPC is 027242917576
-- Generic items (produce, bulk goods, deli items) do NOT have UPCs - use null for these
-- When in doubt about the exact UPC, use null rather than guessing
+UPC/Barcode Guidelines:
+- Include the UPC (12-digit barcode) for packaged retail products when known
+- Generic items (produce, bulk goods, deli items) do NOT have UPCs - use null
 
 Return ONLY the JSON object, no other text.
 PROMPT;
@@ -490,11 +499,21 @@ PROMPT;
             $contextParts[] = "This is a generic item sold by {$unitOfMeasure}.";
         }
 
-        if ($shopLocal) {
-            $contextParts[] = "The user prefers LOCAL shopping.";
+        // Get full address from local store service
+        $address = $this->localStore->getHomeAddress();
+        $zipCode = $this->localStore->getHomeZipCode();
+        $locationInfo = $address ?? $zipCode;
+
+        if ($shopLocal && $locationInfo) {
+            $contextParts[] = "*** LOCAL SHOPPING PRIORITY ***";
+            $contextParts[] = "User location: {$locationInfo}";
+            $contextParts[] = "Prioritize brick-and-mortar stores near this location.";
+            $contextParts[] = "De-prioritize online-only retailers.";
+            
             if (!empty($localStores)) {
-                $storeNames = array_column(array_slice($localStores, 0, 5), 'store_name');
-                $contextParts[] = "Their local stores include: " . implode(', ', $storeNames);
+                $storeNames = array_column(array_slice($localStores, 0, 8), 'store_name');
+                $contextParts[] = "Verified local stores: " . implode(', ', $storeNames);
+                $contextParts[] = "Results from these stores should appear FIRST.";
             }
         }
 
@@ -509,9 +528,9 @@ Search Results:
 
 Your task:
 1. Review the search results above (these are REAL current prices from web search)
-2. Validate that prices seem reasonable
-3. Identify the best deals
-4. If shop local is requested, prioritize local store results
+2. Validate that prices seem reasonable for the user's location
+3. Identify the best LOCAL deals first, then other deals
+4. PRIORITIZE results from local brick-and-mortar stores
 5. Structure the results in the required JSON format
 
 Return a JSON object with the best 10 results in this format:
@@ -529,21 +548,19 @@ Return a JSON object with the best 10 results in this format:
     ],
     "is_generic": false,
     "unit_of_measure": null,
-    "search_summary": "Brief analysis of the prices found"
+    "search_summary": "Brief analysis - mention which local stores have the best prices"
 }
 
 Guidelines:
 - Use the ACTUAL prices from the search results above
-- Sort by best value (price + availability)
-- If shop local is requested, put local store results first
+- SORT ORDER: Local stores first, then by price
+- Put results from verified local stores (Walmart, Target, Kroger, Aldi, etc.) at the TOP
+- Online-only retailers (Amazon, eBay) should appear AFTER local options
 - Prices should be numeric (no $ symbol)
 - Keep all valid results, remove obviously wrong or duplicate entries
 
-UPC/Barcode Guidelines (IMPORTANT - prioritize finding UPCs):
-- ALWAYS try to include the UPC (12-digit barcode) for packaged retail products
-- Extract UPC from search results if available in product listings
-- Look up the UPC from your knowledge if the product is identifiable
-- UPCs help users track prices accurately across different retailers
+UPC/Barcode Guidelines:
+- Include the UPC (12-digit barcode) for packaged products when known
 - Generic items (produce, bulk goods, deli) do NOT have UPCs - use null
 
 Return ONLY the JSON object, no other text.
