@@ -86,12 +86,15 @@ Route::middleware('auth')->group(function () {
     Route::post('api/stores/{store}/local', [SettingController::class, 'toggleStoreLocal'])->name('stores.local');
     Route::patch('api/stores/priorities', [SettingController::class, 'updateStorePriorities'])->name('stores.priorities');
     Route::post('api/stores', [SettingController::class, 'addCustomStore'])->name('stores.store');
+    Route::put('api/stores/{store}', [SettingController::class, 'updateStore'])->name('stores.update');
+    Route::delete('api/stores/{store}', [SettingController::class, 'deleteStore'])->name('stores.destroy');
     Route::post('api/stores/reset', [SettingController::class, 'resetStorePreferences'])->name('stores.reset');
 
     // Nearby Store Discovery
     Route::get('api/stores/nearby/availability', [NearbyStoreController::class, 'checkAvailability'])->name('stores.nearby.availability');
     Route::get('api/stores/nearby/categories', [NearbyStoreController::class, 'getCategories'])->name('stores.nearby.categories');
     Route::post('api/stores/nearby/preview', [NearbyStoreController::class, 'previewNearby'])->name('stores.nearby.preview');
+    Route::post('api/stores/nearby/add-selected', [NearbyStoreController::class, 'addSelectedStores'])->name('stores.nearby.add-selected');
     Route::post('api/stores/nearby/discover', [NearbyStoreController::class, 'discoverNearby'])->name('stores.nearby.discover');
     Route::get('api/stores/nearby/{aiJob}', [NearbyStoreController::class, 'getDiscoveryStatus'])->name('stores.nearby.status');
     Route::post('api/stores/nearby/{aiJob}/cancel', [NearbyStoreController::class, 'cancelDiscovery'])->name('stores.nearby.cancel');

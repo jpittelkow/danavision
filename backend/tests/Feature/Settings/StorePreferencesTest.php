@@ -306,3 +306,172 @@ test('unauthenticated user cannot access store endpoints', function () {
     $this->patch("/api/stores/{$store->id}/preference", [])->assertStatus(302);
     $this->post('/api/stores', [])->assertStatus(302);
 });
+
+// ============================================
+// Update Store Tests
+// ============================================
+
+test('user can update store details', function () {
+    $user = User::factory()->create();
+    
+    // Create a non-default store
+    $store = Store::create([
+        'name' => 'Test Store',
+        'slug' => 'test-store',
+        'domain' => 'teststore.com',
+        'is_default' => false,
+        'is_active' => true,
+        'category' => 'specialty',
+    ]);
+
+    $response = $this->actingAs($user)->putJson("/api/stores/{$store->id}", [
+        'name' => 'Updated Store Name',
+        'domain' => 'updated-store.com',
+        'category' => 'electronics',
+        'is_local' => true,
+    ]);
+
+    $response->assertStatus(200);
+    $response->assertJson([
+        'success' => true,
+        'store' => [
+            'name' => 'Updated Store Name',
+            'domain' => 'updated-store.com',
+            'category' => 'electronics',
+            'is_local' => true,
+        ],
+    ]);
+
+    // Verify database was updated
+    $store->refresh();
+    expect($store->name)->toBe('Updated Store Name');
+    expect($store->domain)->toBe('updated-store.com');
+    expect($store->category)->toBe('electronics');
+    expect($store->is_local)->toBeTrue();
+});
+
+test('updating store name updates slug', function () {
+    $user = User::factory()->create();
+    
+    $store = Store::create([
+        'name' => 'Original Name',
+        'slug' => 'original-name',
+        'domain' => 'original.com',
+        'is_default' => false,
+        'is_active' => true,
+    ]);
+
+    $response = $this->actingAs($user)->putJson("/api/stores/{$store->id}", [
+        'name' => 'New Store Name',
+    ]);
+
+    $response->assertStatus(200);
+    
+    $store->refresh();
+    expect($store->slug)->toBe('new-store-name');
+});
+
+test('update store cleans up domain', function () {
+    $user = User::factory()->create();
+    
+    $store = Store::create([
+        'name' => 'Test Store',
+        'slug' => 'test-store',
+        'domain' => 'test.com',
+        'is_default' => false,
+        'is_active' => true,
+    ]);
+
+    $response = $this->actingAs($user)->putJson("/api/stores/{$store->id}", [
+        'domain' => 'https://www.newdomain.com/',
+    ]);
+
+    $response->assertStatus(200);
+    
+    $store->refresh();
+    expect($store->domain)->toBe('newdomain.com');
+});
+
+test('update store returns 404 for non-existent store', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->putJson('/api/stores/99999', [
+        'name' => 'Test',
+    ]);
+
+    $response->assertStatus(404);
+    $response->assertJson([
+        'success' => false,
+        'message' => 'Store not found',
+    ]);
+});
+
+// ============================================
+// Delete Store Tests
+// ============================================
+
+test('user can delete non-default store', function () {
+    $user = User::factory()->create();
+    
+    // Create a non-default store
+    $store = Store::create([
+        'name' => 'Deletable Store',
+        'slug' => 'deletable-store',
+        'domain' => 'deletable.com',
+        'is_default' => false,
+        'is_active' => true,
+    ]);
+
+    // Add a user preference for this store
+    UserStorePreference::create([
+        'user_id' => $user->id,
+        'store_id' => $store->id,
+        'enabled' => true,
+        'is_favorite' => true,
+        'priority' => 50,
+    ]);
+
+    $storeId = $store->id;
+
+    $response = $this->actingAs($user)->deleteJson("/api/stores/{$storeId}");
+
+    $response->assertStatus(200);
+    $response->assertJson([
+        'success' => true,
+        'message' => "'Deletable Store' has been deleted.",
+    ]);
+
+    // Verify store was deleted
+    $this->assertDatabaseMissing('stores', ['id' => $storeId]);
+    
+    // Verify user preferences were deleted
+    $this->assertDatabaseMissing('user_store_preferences', ['store_id' => $storeId]);
+});
+
+test('cannot delete default store', function () {
+    $user = User::factory()->create();
+    $amazon = Store::where('slug', 'amazon')->first();
+
+    $response = $this->actingAs($user)->deleteJson("/api/stores/{$amazon->id}");
+
+    $response->assertStatus(403);
+    $response->assertJson([
+        'success' => false,
+        'message' => 'Default stores cannot be deleted',
+    ]);
+
+    // Verify store still exists
+    $this->assertDatabaseHas('stores', ['id' => $amazon->id]);
+});
+
+test('delete store returns 404 for non-existent store', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->deleteJson('/api/stores/99999');
+
+    $response->assertStatus(404);
+    $response->assertJson([
+        'success' => false,
+        'message' => 'Store not found',
+    ]);
+});

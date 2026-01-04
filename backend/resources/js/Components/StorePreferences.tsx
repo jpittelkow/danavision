@@ -35,6 +35,8 @@ import {
   Search,
   MapPin,
   Dog,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { NearbyStoreDiscovery } from '@/Components/NearbyStoreDiscovery';
 
@@ -80,6 +82,19 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
     is_local: false,
   });
   const [addingStore, setAddingStore] = useState(false);
+
+  // Edit store state
+  const [editingStore, setEditingStore] = useState<Store | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    domain: '',
+    search_url_template: '',
+    category: 'specialty' as StoreCategory,
+    is_local: false,
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingStoreId, setDeletingStoreId] = useState<number | null>(null);
 
   // Filter and sort stores
   const filteredStores = stores
@@ -225,6 +240,81 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
       setIsResetting(false);
     }
   };
+
+  // Open edit dialog
+  const handleOpenEditDialog = useCallback((store: Store) => {
+    setEditingStore(store);
+    setEditForm({
+      name: store.name,
+      domain: store.domain,
+      search_url_template: '', // Will be fetched or empty
+      category: (store.category || 'specialty') as StoreCategory,
+      is_local: store.is_local,
+    });
+    setShowEditDialog(true);
+  }, []);
+
+  // Save edited store
+  const handleSaveEdit = async () => {
+    if (!editingStore || !editForm.name || !editForm.domain) {
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const response = await axios.put(`/api/stores/${editingStore.id}`, editForm);
+      const updatedStore = response.data.store;
+
+      // Update local state
+      setStores((prev) =>
+        prev.map((s) =>
+          s.id === editingStore.id
+            ? {
+                ...s,
+                name: updatedStore.name,
+                domain: updatedStore.domain,
+                category: updatedStore.category,
+                is_local: updatedStore.is_local,
+                has_search_template: updatedStore.has_search_template,
+              }
+            : s
+        )
+      );
+
+      setShowEditDialog(false);
+      setEditingStore(null);
+      onUpdate?.();
+    } catch (err) {
+      console.error('Failed to update store:', err);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Delete store
+  const handleDeleteStore = useCallback(async (storeId: number, storeName: string, isDefault: boolean) => {
+    if (isDefault) {
+      alert('Default stores cannot be deleted.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete "${storeName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingStoreId(storeId);
+    try {
+      await axios.delete(`/api/stores/${storeId}`);
+      // Remove from local state
+      setStores((prev) => prev.filter((s) => s.id !== storeId));
+      onUpdate?.();
+    } catch (err) {
+      console.error('Failed to delete store:', err);
+      alert('Failed to delete store. It may be a default store that cannot be deleted.');
+    } finally {
+      setDeletingStoreId(null);
+    }
+  }, [onUpdate]);
 
   return (
     <div className="space-y-6">
@@ -418,6 +508,105 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+
+              {/* Edit Store Dialog */}
+              <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Edit Store</DialogTitle>
+                    <DialogDescription>
+                      Update the store details. Changes will be saved for all users.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-store-name">Store Name</Label>
+                      <Input
+                        id="edit-store-name"
+                        placeholder="e.g., My Local Shop"
+                        value={editForm.name}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-store-domain">Website Domain</Label>
+                      <Input
+                        id="edit-store-domain"
+                        placeholder="e.g., mylocalshop.com"
+                        value={editForm.domain}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, domain: e.target.value }))}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Just the domain name, no https:// needed
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-store-category">Category</Label>
+                      <Select
+                        value={editForm.category}
+                        onValueChange={(v) => setEditForm((prev) => ({ ...prev, category: v as StoreCategory }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(storeCategories).map(([key, label]) => (
+                            <SelectItem key={key} value={key}>
+                              <span className="flex items-center gap-2">
+                                {categoryIcons[key]}
+                                {label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Local Store</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Is this a local or regional store?
+                        </p>
+                      </div>
+                      <Switch
+                        checked={editForm.is_local}
+                        onCheckedChange={(checked) =>
+                          setEditForm((prev) => ({ ...prev, is_local: checked }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-store-template">Search URL Template (Optional)</Label>
+                      <Input
+                        id="edit-store-template"
+                        placeholder="e.g., https://shop.com/search?q={query}"
+                        value={editForm.search_url_template}
+                        onChange={(e) =>
+                          setEditForm((prev) => ({ ...prev, search_url_template: e.target.value }))
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Use {'{query}'} where the search term should go. Leave blank to keep current.
+                      </p>
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSaveEdit} disabled={savingEdit || !editForm.name || !editForm.domain}>
+                      {savingEdit && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Save Changes
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </CardContent>
@@ -450,10 +639,13 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
                   key={store.id}
                   store={store}
                   loading={loading[store.id] || false}
+                  deleting={deletingStoreId === store.id}
                   categoryLabel={storeCategories[store.category as StoreCategory]}
                   onToggleEnabled={handleToggleEnabled}
                   onToggleFavorite={handleToggleFavorite}
                   onToggleLocal={handleToggleLocal}
+                  onEdit={handleOpenEditDialog}
+                  onDelete={handleDeleteStore}
                 />
               ))
             )}
@@ -497,13 +689,28 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
 interface StoreRowProps {
   store: Store;
   loading: boolean;
+  deleting: boolean;
   categoryLabel?: string;
   onToggleEnabled: (storeId: number, enabled: boolean) => void;
   onToggleFavorite: (storeId: number) => void;
   onToggleLocal: (storeId: number) => void;
+  onEdit: (store: Store) => void;
+  onDelete: (storeId: number, storeName: string, isDefault: boolean) => void;
 }
 
-function StoreRow({ store, loading, categoryLabel, onToggleEnabled, onToggleFavorite, onToggleLocal }: StoreRowProps) {
+function StoreRow({ 
+  store, 
+  loading, 
+  deleting,
+  categoryLabel, 
+  onToggleEnabled, 
+  onToggleFavorite, 
+  onToggleLocal,
+  onEdit,
+  onDelete,
+}: StoreRowProps) {
+  const isDisabled = loading || deleting;
+
   return (
     <div
       className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
@@ -535,6 +742,11 @@ function StoreRow({ store, loading, categoryLabel, onToggleEnabled, onToggleFavo
               Fast
             </Badge>
           )}
+          {store.is_default && (
+            <Badge variant="outline" className="text-xs flex-shrink-0 text-muted-foreground">
+              Default
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <span className="truncate">{store.domain}</span>
@@ -551,14 +763,14 @@ function StoreRow({ store, loading, categoryLabel, onToggleEnabled, onToggleFavo
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {/* Local button */}
         <Button
           variant="ghost"
           size="sm"
           onClick={() => onToggleLocal(store.id)}
-          disabled={loading}
-          className={store.is_local ? 'text-green-600 hover:text-green-700' : 'text-muted-foreground'}
+          disabled={isDisabled}
+          className={`h-8 w-8 p-0 ${store.is_local ? 'text-green-600 hover:text-green-700' : 'text-muted-foreground'}`}
           title={store.is_local ? 'Mark as non-local' : 'Mark as local'}
         >
           <MapPin className={`h-4 w-4 ${store.is_local ? 'fill-current' : ''}`} />
@@ -569,21 +781,52 @@ function StoreRow({ store, loading, categoryLabel, onToggleEnabled, onToggleFavo
           variant="ghost"
           size="sm"
           onClick={() => onToggleFavorite(store.id)}
-          disabled={loading}
-          className={store.is_favorite ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground'}
+          disabled={isDisabled}
+          className={`h-8 w-8 p-0 ${store.is_favorite ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground'}`}
           title={store.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Star className={`h-4 w-4 ${store.is_favorite ? 'fill-current' : ''}`} />
         </Button>
 
+        {/* Edit button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onEdit(store)}
+          disabled={isDisabled}
+          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+          title="Edit store"
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
+
+        {/* Delete button - only for non-default stores */}
+        {!store.is_default && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(store.id, store.name, store.is_default)}
+            disabled={isDisabled}
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600"
+            title="Delete store"
+          >
+            {deleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+          </Button>
+        )}
+
         {/* Enable/disable switch */}
         <Switch
           checked={store.enabled}
           onCheckedChange={(checked) => onToggleEnabled(store.id, checked)}
-          disabled={loading}
+          disabled={isDisabled}
+          className="ml-1"
         />
 
-        {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-1" />}
       </div>
     </div>
   );

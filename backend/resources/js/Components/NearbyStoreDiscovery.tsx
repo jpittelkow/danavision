@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import type {
   StoreCategory,
   NearbyStoreDiscoveryRequest,
   NearbyStoreResult,
   NearbyStoreAvailability,
-  AIJobStatus,
 } from '@/types';
 import { Button } from '@/Components/ui/button';
 import { Label } from '@/Components/ui/label';
 import { Badge } from '@/Components/ui/badge';
 import { Switch } from '@/Components/ui/switch';
+import { Checkbox } from '@/Components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ import {
   Sparkles,
   Dog,
   X,
+  Plus,
 } from 'lucide-react';
 
 interface NearbyStoreDiscoveryProps {
@@ -92,19 +93,22 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewComplete, setPreviewComplete] = useState(false);
 
-  // Discovery state
-  const [discovering, setDiscovering] = useState(false);
-  const [discoveryJobId, setDiscoveryJobId] = useState<number | null>(null);
-  const [discoveryProgress, setDiscoveryProgress] = useState(0);
-  const [discoveryStatus, setDiscoveryStatus] = useState<AIJobStatus | null>(null);
-  const [discoveryLogs, setDiscoveryLogs] = useState<string[]>([]);
+  // Store selection state
+  const [selectedStoreIds, setSelectedStoreIds] = useState<Set<string>>(new Set());
+  const [addingStores, setAddingStores] = useState(false);
+  const [addResult, setAddResult] = useState<{
+    added: number;
+    skipped: number;
+    errors: number;
+  } | null>(null);
+
+  // Result state
   const [discoveryResult, setDiscoveryResult] = useState<{
     stores_found: number;
     stores_added: number;
     stores_configured: number;
   } | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-  const pollingCleanupRef = useRef<(() => void) | null>(null);
 
   // Check availability when dialog opens
   useEffect(() => {
@@ -112,15 +116,6 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
       checkAvailability();
     }
   }, [open]);
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingCleanupRef.current) {
-        pollingCleanupRef.current();
-      }
-    };
-  }, []);
 
   const checkAvailability = async () => {
     setCheckingAvailability(true);
@@ -198,6 +193,8 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
     setPreviewError(null);
     setPreviewStores([]);
     setPreviewComplete(false);
+    setSelectedStoreIds(new Set());
+    setAddResult(null);
 
     try {
       const payload: NearbyStoreDiscoveryRequest = {
@@ -213,8 +210,11 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
       const response = await axios.post('/api/stores/nearby/preview', payload);
 
       if (response.data.success) {
-        setPreviewStores(response.data.stores || []);
+        const stores = response.data.stores || [];
+        setPreviewStores(stores);
         setPreviewComplete(true);
+        // Select all stores by default
+        setSelectedStoreIds(new Set(stores.map((s: NearbyStoreResult) => s.place_id)));
       } else {
         setPreviewError(response.data.error || 'Preview failed');
       }
@@ -226,127 +226,88 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
     }
   };
 
-  const handleDiscover = async () => {
-    setDiscovering(true);
+  const toggleStoreSelection = (placeId: string) => {
+    setSelectedStoreIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(placeId)) {
+        newSet.delete(placeId);
+      } else {
+        newSet.add(placeId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllStores = () => {
+    setSelectedStoreIds(new Set(previewStores.map((s) => s.place_id)));
+  };
+
+  const deselectAllStores = () => {
+    setSelectedStoreIds(new Set());
+  };
+
+  const handleAddSelected = async () => {
+    if (selectedStoreIds.size === 0) return;
+
+    setAddingStores(true);
     setDiscoveryError(null);
-    setDiscoveryResult(null);
-    setDiscoveryLogs([]);
-    setDiscoveryProgress(0);
+    setAddResult(null);
 
     try {
-      const payload: NearbyStoreDiscoveryRequest = {
-        radius_miles: radiusMiles,
-        categories: selectedCategories.length > 0 ? selectedCategories : undefined,
-      };
+      // Get the selected stores' full data
+      const storesToAdd = previewStores
+        .filter((store) => selectedStoreIds.has(store.place_id))
+        .map((store) => ({
+          place_id: store.place_id,
+          name: store.name,
+          address: store.address,
+          category: store.category,
+          latitude: store.latitude,
+          longitude: store.longitude,
+          website: store.website,
+          phone: store.phone,
+        }));
 
-      if (useCurrentLocation && currentLocation) {
-        payload.latitude = currentLocation.lat;
-        payload.longitude = currentLocation.lng;
-      }
-
-      const response = await axios.post('/api/stores/nearby/discover', payload);
+      const response = await axios.post('/api/stores/nearby/add-selected', {
+        stores: storesToAdd,
+      });
 
       if (response.data.success) {
-        setDiscoveryJobId(response.data.job_id);
-        // Start polling for status and store cleanup function
-        pollingCleanupRef.current = pollDiscoveryStatus(response.data.job_id);
+        const summary = response.data.summary;
+        setAddResult({
+          added: summary.added,
+          skipped: summary.skipped,
+          errors: summary.errors,
+        });
+        // Show result and trigger refresh if stores were added
+        setDiscoveryResult({
+          stores_found: summary.total_requested,
+          stores_added: summary.added,
+          stores_configured: 0,
+        });
+        if (summary.added > 0) {
+          onStoresAdded?.();
+        }
       } else {
-        setDiscoveryError(response.data.error || 'Discovery failed');
-        setDiscovering(false);
+        setDiscoveryError(response.data.error || 'Failed to add stores');
       }
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
-      setDiscoveryError(error.response?.data?.error || 'Failed to start discovery');
-      setDiscovering(false);
+      setDiscoveryError(error.response?.data?.error || 'Failed to add selected stores');
+    } finally {
+      setAddingStores(false);
     }
-  };
-
-  const pollDiscoveryStatus = useCallback((jobId: number) => {
-    let cancelled = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const poll = async () => {
-      if (cancelled) return;
-      
-      try {
-        const response = await axios.get(`/api/stores/nearby/${jobId}`);
-        if (cancelled) return;
-        
-        const data = response.data;
-
-        setDiscoveryStatus(data.status);
-        setDiscoveryProgress(data.progress || 0);
-
-        if (data.progress_logs) {
-          setDiscoveryLogs(data.progress_logs);
-        }
-
-        if (data.status === 'completed') {
-          const storesAdded = data.result?.stores_added || 0;
-          setDiscoveryResult({
-            stores_found: data.result?.stores_found || 0,
-            stores_added: storesAdded,
-            stores_configured: data.result?.stores_configured || 0,
-          });
-          setDiscovering(false);
-          // Only trigger refresh callback if stores were actually added
-          if (storesAdded > 0) {
-            onStoresAdded?.();
-          }
-        } else if (data.status === 'failed') {
-          setDiscoveryError(data.error || 'Discovery job failed');
-          setDiscovering(false);
-        } else if (data.status === 'cancelled') {
-          setDiscoveryError('Discovery was cancelled');
-          setDiscovering(false);
-        } else if (!cancelled) {
-          // Still processing, poll again
-          timeoutId = setTimeout(poll, 2000);
-        }
-      } catch {
-        if (!cancelled) {
-          setDiscoveryError('Failed to get discovery status');
-          setDiscovering(false);
-        }
-      }
-    };
-
-    poll();
-
-    // Return cleanup function
-    return () => {
-      cancelled = true;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [onStoresAdded]);
-
-  const handleCancel = async () => {
-    // Stop polling
-    if (pollingCleanupRef.current) {
-      pollingCleanupRef.current();
-      pollingCleanupRef.current = null;
-    }
-    
-    if (discoveryJobId) {
-      try {
-        await axios.post(`/api/stores/nearby/${discoveryJobId}/cancel`);
-      } catch {
-        // Ignore cancel errors
-      }
-    }
-    setDiscovering(false);
   };
 
   const resetDialog = () => {
     setPreviewStores([]);
     setPreviewError(null);
     setPreviewComplete(false);
+    setSelectedStoreIds(new Set());
+    setAddingStores(false);
+    setAddResult(null);
     setDiscoveryResult(null);
     setDiscoveryError(null);
-    setDiscoveryLogs([]);
-    setDiscoveryProgress(0);
-    setDiscoveryJobId(null);
-    setDiscoveryStatus(null);
     setLocationError(null);
   };
 
@@ -401,28 +362,27 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
             </div>
           </div>
         ) : discoveryResult ? (
-          // Discovery complete state
+          // Add complete state
           <div className="space-y-4 py-4">
-            {discoveryResult.stores_found === 0 ? (
-              // No stores found in the area
+            {discoveryResult.stores_added === 0 && addResult?.skipped === 0 ? (
+              // No stores were added (shouldn't happen with current flow but kept for safety)
               <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
                 <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-medium text-amber-900 dark:text-amber-100">No Stores Found</p>
+                  <p className="font-medium text-amber-900 dark:text-amber-100">No Stores Added</p>
                   <p className="text-sm text-amber-800 dark:text-amber-200">
-                    No stores matching your criteria were found within {radiusMiles} miles.
-                    Try increasing the search radius or selecting different categories.
+                    No stores were added to your registry.
                   </p>
                 </div>
               </div>
             ) : discoveryResult.stores_added === 0 ? (
-              // Stores found but all already exist
+              // All selected stores already exist
               <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
                 <CheckCircle2 className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-medium text-blue-900 dark:text-blue-100">All Stores Already Added</p>
+                  <p className="font-medium text-blue-900 dark:text-blue-100">Stores Already in Registry</p>
                   <p className="text-sm text-blue-800 dark:text-blue-200">
-                    Found {discoveryResult.stores_found} stores nearby, but they are all already in your registry.
+                    All {addResult?.skipped || discoveryResult.stores_found} selected stores are already in your registry.
                   </p>
                 </div>
               </div>
@@ -431,11 +391,11 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
               <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-900">
                 <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-medium text-green-900 dark:text-green-100">Discovery Complete!</p>
+                  <p className="font-medium text-green-900 dark:text-green-100">Stores Added!</p>
                   <p className="text-sm text-green-800 dark:text-green-200">
                     Added {discoveryResult.stores_added} new stores to your registry.
-                    {discoveryResult.stores_configured > 0 && (
-                      <> {discoveryResult.stores_configured} were auto-configured for price search.</>
+                    {addResult && addResult.skipped > 0 && (
+                      <> {addResult.skipped} were already in your registry.</>
                     )}
                   </p>
                 </div>
@@ -446,41 +406,15 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
               <Button onClick={() => handleOpenChange(false)}>Done</Button>
             </DialogFooter>
           </div>
-        ) : discovering ? (
-          // Discovery in progress
+        ) : addingStores ? (
+          // Adding stores in progress
           <div className="space-y-4 py-4">
             <div className="flex items-center gap-3">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
               <div className="flex-1">
-                <p className="font-medium">
-                  {discoveryStatus === 'pending' ? 'Starting discovery...' : 'Discovering stores...'}
-                </p>
-                <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${discoveryProgress}%` }}
-                  />
-                </div>
+                <p className="font-medium">Adding {selectedStoreIds.size} stores to your registry...</p>
               </div>
             </div>
-
-            {discoveryLogs.length > 0 && (
-              <div className="bg-muted rounded-lg p-3 max-h-40 overflow-y-auto">
-                <div className="space-y-1 font-mono text-xs">
-                  {discoveryLogs.slice(-10).map((log, idx) => (
-                    <p key={idx} className="text-muted-foreground">
-                      {log}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button variant="outline" onClick={handleCancel}>
-                Cancel
-              </Button>
-            </DialogFooter>
           </div>
         ) : (
           // Configuration form
@@ -585,26 +519,67 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
             {previewComplete && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Preview ({previewStores.length} stores found)</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setPreviewStores([]);
-                      setPreviewComplete(false);
-                    }}
-                    className="h-6 px-2"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+                  <Label>
+                    {previewStores.length} stores found
+                    {selectedStoreIds.size > 0 && (
+                      <span className="ml-1 text-primary">
+                        ({selectedStoreIds.size} selected)
+                      </span>
+                    )}
+                  </Label>
+                  <div className="flex items-center gap-1">
+                    {previewStores.length > 0 && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={selectAllStores}
+                          className="h-6 px-2 text-xs"
+                          disabled={selectedStoreIds.size === previewStores.length}
+                        >
+                          Select All
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={deselectAllStores}
+                          className="h-6 px-2 text-xs"
+                          disabled={selectedStoreIds.size === 0}
+                        >
+                          Clear
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPreviewStores([]);
+                        setPreviewComplete(false);
+                        setSelectedStoreIds(new Set());
+                      }}
+                      className="h-6 px-2"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
                 {previewStores.length > 0 ? (
-                  <div className="max-h-48 overflow-y-auto space-y-2 border rounded-lg p-2">
-                    {previewStores.slice(0, 20).map((store) => (
-                      <div
+                  <div className="max-h-64 overflow-y-auto space-y-1 border rounded-lg p-2">
+                    {previewStores.map((store) => (
+                      <label
                         key={store.place_id}
-                        className="flex items-center justify-between p-2 bg-muted/50 rounded"
+                        className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                          selectedStoreIds.has(store.place_id)
+                            ? 'bg-primary/10 border border-primary/30'
+                            : 'bg-muted/50 hover:bg-muted'
+                        }`}
                       >
+                        <Checkbox
+                          checked={selectedStoreIds.has(store.place_id)}
+                          onCheckedChange={() => toggleStoreSelection(store.place_id)}
+                          className="flex-shrink-0"
+                        />
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm truncate">{store.name}</p>
                           <p className="text-xs text-muted-foreground truncate">{store.address}</p>
@@ -617,13 +592,8 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
                             <CheckCircle2 className="h-3 w-3 text-green-500" title="Has website" />
                           )}
                         </div>
-                      </div>
+                      </label>
                     ))}
-                    {previewStores.length > 20 && (
-                      <p className="text-xs text-center text-muted-foreground py-2">
-                        +{previewStores.length - 20} more stores
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
@@ -659,18 +629,27 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
               <Button
                 variant="outline"
                 onClick={handlePreview}
-                disabled={previewing}
+                disabled={previewing || addingStores}
               >
                 {previewing ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
                   <Search className="h-4 w-4 mr-2" />
                 )}
-                Preview
+                {previewComplete ? 'Refresh' : 'Preview'}
               </Button>
-              <Button onClick={handleDiscover} disabled={discovering || (useCurrentLocation && !currentLocation)}>
-                <Store className="h-4 w-4 mr-2" />
-                Discover & Add Stores
+              <Button 
+                onClick={handleAddSelected} 
+                disabled={addingStores || selectedStoreIds.size === 0 || (useCurrentLocation && !currentLocation)}
+              >
+                {addingStores ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-2" />
+                )}
+                {previewComplete && selectedStoreIds.size > 0
+                  ? `Add Selected (${selectedStoreIds.size})`
+                  : 'Add Selected'}
               </Button>
             </DialogFooter>
           </div>

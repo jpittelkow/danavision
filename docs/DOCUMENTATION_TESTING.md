@@ -395,45 +395,52 @@ npx playwright show-report
 
 ## CI/CD Integration
 
-Tests run automatically on push/PR via GitHub Actions:
+Tests run automatically on push/PR via GitHub Actions in `.github/workflows/docker-build.yml`:
 
-```yaml
-# .github/workflows/test.yml
-name: Tests
+### Test Pipeline Overview
 
-on: [push, pull_request]
+The CI workflow runs both PHP and E2E tests before building Docker images:
 
-jobs:
-  backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-      - name: Install dependencies
-        run: cd backend && composer install
-      - name: Run tests
-        run: cd backend && ./vendor/bin/pest
+1. **PHP Tests** - Pest tests run with in-memory SQLite
+2. **E2E Tests** - Playwright tests against local Laravel server
+3. **Build** - Docker image built only if all tests pass
 
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install dependencies
-        run: cd backend && npm ci
-      - name: Install Playwright
-        run: cd backend && npx playwright install chromium
-      - name: Start application
-        run: docker compose up -d
-      - name: Run E2E tests
-        run: cd backend && npm run test:e2e
+### Test Artifacts
+
+Test results are uploaded as GitHub Actions artifacts:
+
+- **playwright-report** - Always uploaded, retained for 30 days
+- **test-results** - Uploaded on failure only, retained for 7 days
+
+### Viewing Test Results
+
+After a CI run, download artifacts from the GitHub Actions run page:
+
+1. Navigate to Actions → Select workflow run
+2. Scroll to "Artifacts" section
+3. Download `playwright-report` to view HTML report locally
+4. On failure, download `test-results` for screenshots/traces
+
+### Running Tests Locally (Docker)
+
+```bash
+# Run PHP tests in Docker
+docker exec danavision php artisan test
+
+# For E2E tests, you need:
+# 1. Vite dev server running (npm run dev)
+# 2. App accessible at localhost:8080
+cd backend && npm run test:e2e
 ```
+
+### Test Environment Setup
+
+The CI workflow automatically:
+- Creates `.env` and `.env.testing` files
+- Runs migrations
+- Seeds test user (`test@example.com` / `password`)
+- Builds frontend assets
+- Starts Laravel server for E2E tests
 
 ---
 

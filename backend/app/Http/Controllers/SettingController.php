@@ -632,6 +632,103 @@ class SettingController extends Controller
     }
 
     /**
+     * Update an existing store.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateStore(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'domain' => ['sometimes', 'required', 'string', 'max:255'],
+            'search_url_template' => ['nullable', 'string', 'max:1000'],
+            'category' => ['nullable', 'string', 'max:50'],
+            'is_local' => ['nullable', 'boolean'],
+        ]);
+
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Store not found',
+            ], 404);
+        }
+
+        // Clean up domain if provided
+        if (isset($validated['domain'])) {
+            $domain = preg_replace('/^(https?:\/\/)?(www\.)?/', '', $validated['domain']);
+            $domain = rtrim($domain, '/');
+            $validated['domain'] = $domain;
+        }
+
+        // Update slug if name changed
+        if (isset($validated['name']) && $validated['name'] !== $store->name) {
+            $validated['slug'] = Str::slug($validated['name']);
+        }
+
+        $store->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => "'{$store->name}' has been updated.",
+            'store' => [
+                'id' => $store->id,
+                'name' => $store->name,
+                'slug' => $store->slug,
+                'domain' => $store->domain,
+                'category' => $store->category,
+                'is_local' => $store->is_local,
+                'has_search_template' => !empty($store->search_url_template),
+                'search_url_template' => $store->search_url_template,
+            ],
+        ]);
+    }
+
+    /**
+     * Delete a store.
+     *
+     * Note: This permanently deletes the store and all associated user preferences.
+     * Default stores cannot be deleted.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteStore(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Store not found',
+            ], 404);
+        }
+
+        // Prevent deletion of default stores
+        if ($store->is_default) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Default stores cannot be deleted',
+            ], 403);
+        }
+
+        $storeName = $store->name;
+
+        // Delete all user preferences for this store first
+        UserStorePreference::where('store_id', $storeId)->delete();
+
+        // Delete the store
+        $store->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => "'{$storeName}' has been deleted.",
+        ]);
+    }
+
+    /**
      * Reset store preferences to defaults.
      *
      * @param Request $request

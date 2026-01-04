@@ -335,3 +335,177 @@ describe('AIJob with nearby store discovery type', function () {
         expect($job->input_summary)->toContain('10 mile radius');
     });
 });
+
+describe('Add Selected Stores API', function () {
+    test('user can add selected stores from preview', function () {
+        $response = $this->postJson('/api/stores/nearby/add-selected', [
+            'stores' => [
+                [
+                    'place_id' => 'place_abc123',
+                    'name' => 'New Grocery Store',
+                    'address' => '123 Main St, City, State 12345',
+                    'category' => 'grocery',
+                    'latitude' => 40.7128,
+                    'longitude' => -74.0060,
+                    'website' => 'https://newgrocery.com',
+                    'phone' => '555-123-4567',
+                ],
+                [
+                    'place_id' => 'place_def456',
+                    'name' => 'Pet Supply Store',
+                    'address' => '456 Oak Ave, City, State 12345',
+                    'category' => 'pet',
+                    'latitude' => 40.7130,
+                    'longitude' => -74.0055,
+                ],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'success' => true,
+                'summary' => [
+                    'total_requested' => 2,
+                    'added' => 2,
+                    'skipped' => 0,
+                    'errors' => 0,
+                ],
+            ]);
+
+        // Verify stores were created
+        $this->assertDatabaseHas('stores', [
+            'google_place_id' => 'place_abc123',
+            'name' => 'New Grocery Store',
+            'is_local' => true,
+        ]);
+
+        $this->assertDatabaseHas('stores', [
+            'google_place_id' => 'place_def456',
+            'name' => 'Pet Supply Store',
+            'is_local' => true,
+        ]);
+
+        // Verify user preferences were created
+        $store = Store::where('google_place_id', 'place_abc123')->first();
+        $this->assertDatabaseHas('user_store_preferences', [
+            'user_id' => $this->user->id,
+            'store_id' => $store->id,
+            'enabled' => true,
+            'is_favorite' => true,
+        ]);
+    });
+
+    test('adding store with existing place id skips and creates preference', function () {
+        // Create a store with a place ID
+        $existingStore = Store::create([
+            'name' => 'Existing Store',
+            'slug' => 'existing-store',
+            'domain' => 'existing.com',
+            'google_place_id' => 'place_existing',
+            'is_active' => true,
+        ]);
+
+        $response = $this->postJson('/api/stores/nearby/add-selected', [
+            'stores' => [
+                [
+                    'place_id' => 'place_existing',
+                    'name' => 'Existing Store',
+                    'address' => '789 Elm St',
+                ],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'success' => true,
+                'summary' => [
+                    'added' => 0,
+                    'skipped' => 1,
+                ],
+            ]);
+
+        // Verify preference was created for existing store
+        $this->assertDatabaseHas('user_store_preferences', [
+            'user_id' => $this->user->id,
+            'store_id' => $existingStore->id,
+        ]);
+    });
+
+    test('adding store with existing domain updates it with place data', function () {
+        // Create a store with just a domain
+        $existingStore = Store::create([
+            'name' => 'Domain Store',
+            'slug' => 'domain-store',
+            'domain' => 'domainstore.com',
+            'is_active' => true,
+            'is_local' => false,
+        ]);
+
+        $response = $this->postJson('/api/stores/nearby/add-selected', [
+            'stores' => [
+                [
+                    'place_id' => 'place_new123',
+                    'name' => 'Domain Store Location',
+                    'address' => '999 Pine St',
+                    'website' => 'https://www.domainstore.com/location',
+                    'latitude' => 40.7128,
+                    'longitude' => -74.0060,
+                ],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertJson([
+                'success' => true,
+                'summary' => [
+                    'skipped' => 1, // Skipped because domain exists
+                ],
+            ]);
+
+        // Verify store was updated with place data
+        $existingStore->refresh();
+        expect($existingStore->google_place_id)->toBe('place_new123');
+        expect($existingStore->latitude)->not->toBeNull();
+        expect($existingStore->is_local)->toBeTrue();
+    });
+
+    test('add selected stores validates required fields', function () {
+        $response = $this->postJson('/api/stores/nearby/add-selected', [
+            'stores' => [
+                [
+                    // Missing place_id and name
+                    'address' => '123 Main St',
+                ],
+            ],
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['stores.0.place_id', 'stores.0.name']);
+    });
+
+    test('add selected stores requires at least one store', function () {
+        $response = $this->postJson('/api/stores/nearby/add-selected', [
+            'stores' => [],
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['stores']);
+    });
+
+    test('add selected stores limits to 50 stores', function () {
+        $stores = [];
+        for ($i = 0; $i < 51; $i++) {
+            $stores[] = [
+                'place_id' => "place_{$i}",
+                'name' => "Store {$i}",
+            ];
+        }
+
+        $response = $this->postJson('/api/stores/nearby/add-selected', [
+            'stores' => $stores,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['stores']);
+    });
+});

@@ -26,6 +26,11 @@ backend/database/*.sqlite
 backend/public/build/
 backend/public/hot
 
+# Playwright test artifacts
+backend/playwright-report/
+backend/test-results/
+backend/e2e/.auth/
+
 # Old React Native frontend (to be removed)
 frontend/
 

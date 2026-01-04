@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Jobs\AI\NearbyStoreDiscoveryJob;
 use App\Models\AIJob;
 use App\Models\Setting;
+use App\Models\Store;
+use App\Models\UserStorePreference;
 use App\Services\Search\GooglePlacesService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
  * NearbyStoreController
@@ -282,6 +285,152 @@ class NearbyStoreController extends Controller
             'stores' => $result['stores'],
             'store_count' => $storeCount,
             'estimated_firecrawl_credits' => $estimatedFirecrawlCredits,
+        ]);
+    }
+
+    /**
+     * Add selected stores from preview results.
+     *
+     * This endpoint allows users to select specific stores from the preview
+     * and add only those to their registry.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function addSelectedStores(Request $request): JsonResponse
+    {
+        $request->validate([
+            'stores' => ['required', 'array', 'min:1', 'max:50'],
+            'stores.*.place_id' => ['required', 'string'],
+            'stores.*.name' => ['required', 'string', 'max:255'],
+            'stores.*.address' => ['nullable', 'string', 'max:500'],
+            'stores.*.category' => ['nullable', 'string', 'in:grocery,electronics,pet,pharmacy,home,clothing,warehouse,general,specialty'],
+            'stores.*.latitude' => ['nullable', 'numeric', 'min:-90', 'max:90'],
+            'stores.*.longitude' => ['nullable', 'numeric', 'min:-180', 'max:180'],
+            'stores.*.website' => ['nullable', 'string', 'max:500'],
+            'stores.*.phone' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $user = $request->user();
+        $userId = $user->id;
+        $storesToAdd = $request->input('stores');
+
+        $added = [];
+        $skipped = [];
+        $errors = [];
+
+        foreach ($storesToAdd as $storeData) {
+            $placeId = $storeData['place_id'];
+            $storeName = $storeData['name'];
+
+            try {
+                // Check if store already exists by Google Place ID
+                $existingStore = Store::findByGooglePlaceId($placeId);
+                if ($existingStore) {
+                    // Store exists, just add/update user preference
+                    UserStorePreference::setPreference($userId, $existingStore->id, [
+                        'enabled' => true,
+                        'is_favorite' => false,
+                        'priority' => 70,
+                    ]);
+                    $skipped[] = [
+                        'place_id' => $placeId,
+                        'name' => $storeName,
+                        'reason' => 'Already exists in registry',
+                        'store_id' => $existingStore->id,
+                    ];
+                    continue;
+                }
+
+                // Extract domain from website if available
+                $domain = null;
+                if (!empty($storeData['website'])) {
+                    $parsedUrl = parse_url($storeData['website']);
+                    if (isset($parsedUrl['host'])) {
+                        $domain = preg_replace('/^www\./', '', strtolower($parsedUrl['host']));
+                    }
+                }
+
+                // Check if store exists by domain
+                if ($domain) {
+                    $existingByDomain = Store::findByDomain($domain);
+                    if ($existingByDomain) {
+                        // Update the existing store with Google Place ID
+                        $existingByDomain->update([
+                            'google_place_id' => $placeId,
+                            'latitude' => $storeData['latitude'] ?? $existingByDomain->latitude,
+                            'longitude' => $storeData['longitude'] ?? $existingByDomain->longitude,
+                            'address' => $storeData['address'] ?? $existingByDomain->address,
+                            'phone' => $storeData['phone'] ?? $existingByDomain->phone,
+                            'is_local' => true,
+                        ]);
+                        UserStorePreference::setPreference($userId, $existingByDomain->id, [
+                            'enabled' => true,
+                            'is_favorite' => false,
+                            'priority' => 70,
+                        ]);
+                        $skipped[] = [
+                            'place_id' => $placeId,
+                            'name' => $storeName,
+                            'reason' => 'Domain already exists, updated with location data',
+                            'store_id' => $existingByDomain->id,
+                        ];
+                        continue;
+                    }
+                }
+
+                // Create new store
+                $category = $storeData['category'] ?? Store::CATEGORY_GENERAL;
+                $store = Store::create([
+                    'name' => $storeName,
+                    'slug' => Str::slug($storeName) . '-' . Str::random(4),
+                    'domain' => $domain ?? '',
+                    'google_place_id' => $placeId,
+                    'latitude' => $storeData['latitude'] ?? null,
+                    'longitude' => $storeData['longitude'] ?? null,
+                    'address' => $storeData['address'] ?? null,
+                    'phone' => $storeData['phone'] ?? null,
+                    'is_default' => false,
+                    'is_local' => true,
+                    'is_active' => true,
+                    'auto_configured' => false,
+                    'category' => $category,
+                    'default_priority' => 40,
+                ]);
+
+                // Create user preference
+                UserStorePreference::setPreference($userId, $store->id, [
+                    'enabled' => true,
+                    'is_favorite' => true, // Favorite newly added local stores
+                    'priority' => 70,
+                ]);
+
+                $added[] = [
+                    'place_id' => $placeId,
+                    'name' => $storeName,
+                    'store_id' => $store->id,
+                    'domain' => $domain,
+                ];
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'place_id' => $placeId,
+                    'name' => $storeName,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'added' => $added,
+            'skipped' => $skipped,
+            'errors' => $errors,
+            'summary' => [
+                'total_requested' => count($storesToAdd),
+                'added' => count($added),
+                'skipped' => count($skipped),
+                'errors' => count($errors),
+            ],
         ]);
     }
 
