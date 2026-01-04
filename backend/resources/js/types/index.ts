@@ -145,6 +145,9 @@ export interface Settings {
   price_provider: 'serpapi' | 'rainforest';
   price_api_key?: string;
   has_price_api_key?: boolean;
+  // Firecrawl Web Crawler
+  firecrawl_api_key?: string;
+  has_firecrawl_api_key?: boolean;
   // Email configuration
   mail_driver: string;
   mail_host: string;
@@ -219,7 +222,14 @@ export interface SmartFillResult {
 /**
  * AI Job types
  */
-export type AIJobType = 'product_identification' | 'image_analysis' | 'price_search' | 'smart_fill' | 'price_refresh';
+export type AIJobType = 
+  | 'product_identification' 
+  | 'image_analysis' 
+  | 'price_search' 
+  | 'smart_fill' 
+  | 'price_refresh'
+  | 'firecrawl_discovery'
+  | 'firecrawl_refresh';
 export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 /**

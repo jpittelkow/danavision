@@ -44,6 +44,8 @@ class AIJob extends Model
     public const TYPE_PRICE_SEARCH = 'price_search';
     public const TYPE_SMART_FILL = 'smart_fill';
     public const TYPE_PRICE_REFRESH = 'price_refresh';
+    public const TYPE_FIRECRAWL_DISCOVERY = 'firecrawl_discovery';
+    public const TYPE_FIRECRAWL_REFRESH = 'firecrawl_refresh';
 
     // Job statuses
     public const STATUS_PENDING = 'pending';
@@ -61,6 +63,8 @@ class AIJob extends Model
         self::TYPE_PRICE_SEARCH => 'Price Search',
         self::TYPE_SMART_FILL => 'Smart Fill',
         self::TYPE_PRICE_REFRESH => 'Price Refresh',
+        self::TYPE_FIRECRAWL_DISCOVERY => 'Firecrawl Price Discovery',
+        self::TYPE_FIRECRAWL_REFRESH => 'Firecrawl Price Refresh',
     ];
 
     /**
@@ -333,6 +337,8 @@ class AIJob extends Model
             self::TYPE_PRICE_SEARCH => $this->input_data['query'] ?? $this->input_data['product_name'] ?? 'Price search',
             self::TYPE_SMART_FILL => $this->input_data['product_name'] ?? 'Smart fill',
             self::TYPE_PRICE_REFRESH => $this->input_data['product_name'] ?? 'Price refresh',
+            self::TYPE_FIRECRAWL_DISCOVERY => $this->input_data['product_name'] ?? 'Firecrawl discovery',
+            self::TYPE_FIRECRAWL_REFRESH => $this->input_data['product_name'] ?? 'Firecrawl refresh',
             default => json_encode(array_slice($this->input_data, 0, 2)),
         };
     }

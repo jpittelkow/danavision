@@ -1,0 +1,305 @@
+<?php
+
+namespace App\Jobs\AI;
+
+use App\Models\AIJob;
+use App\Models\ItemVendorPrice;
+use App\Models\ListItem;
+use App\Models\PriceHistory;
+use App\Models\Setting;
+use App\Services\Crawler\FirecrawlService;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * FirecrawlRefreshJob
+ * 
+ * Background job for refreshing product prices using Firecrawl Scrape API.
+ * Uses known product URLs to get updated prices without re-discovering stores.
+ * 
+ * This job:
+ * 1. Collects all known product URLs from item_vendor_prices
+ * 2. Uses Firecrawl Scrape API to refresh prices for those URLs
+ * 3. Updates the item_vendor_prices table with new prices
+ * 4. Triggers notifications if price drops are detected
+ */
+class FirecrawlRefreshJob extends BaseAIJob
+{
+    /**
+     * The number of seconds the job can run before timing out.
+     */
+    public int $timeout = 300; // 5 minutes
+
+    /**
+     * Process the Firecrawl refresh job.
+     *
+     * @param AIJob $aiJob The AIJob model
+     * @return array|null The job output data
+     */
+    protected function process(AIJob $aiJob): ?array
+    {
+        $inputData = $aiJob->input_data ?? [];
+        $itemId = $aiJob->related_item_id;
+
+        $this->updateProgress($aiJob, 10);
+
+        // Create Firecrawl service
+        $firecrawlService = FirecrawlService::forUser($this->userId);
+
+        // Check if Firecrawl is available
+        if (!$firecrawlService->isAvailable()) {
+            throw new \RuntimeException('Firecrawl API key not configured. Please set up Firecrawl in Settings.');
+        }
+
+        $this->updateProgress($aiJob, 20);
+
+        // Get the item and its vendor prices with URLs
+        $item = null;
+        $vendorPrices = collect();
+
+        if ($itemId) {
+            $item = ListItem::with('vendorPrices')->find($itemId);
+            if ($item) {
+                $vendorPrices = $item->vendorPrices
+                    ->filter(fn ($vp) => !empty($vp->product_url));
+            }
+        }
+
+        if ($vendorPrices->isEmpty()) {
+            Log::info('FirecrawlRefreshJob: No URLs to refresh', ['item_id' => $itemId]);
+            return [
+                'message' => 'No product URLs found to refresh',
+                'urls_checked' => 0,
+                'prices_updated' => 0,
+            ];
+        }
+
+        // Check for cancellation
+        if ($this->isCancelled($aiJob)) {
+            return ['cancelled' => true];
+        }
+
+        // Collect URLs to scrape
+        $urls = $vendorPrices->pluck('product_url')->toArray();
+
+        Log::info('FirecrawlRefreshJob: Starting URL refresh', [
+            'item_id' => $itemId,
+            'urls_count' => count($urls),
+        ]);
+
+        $this->updateProgress($aiJob, 30);
+
+        // Perform Firecrawl scraping
+        $result = $firecrawlService->scrapeProductUrls($urls);
+
+        $this->updateProgress($aiJob, 70);
+
+        // Check for cancellation
+        if ($this->isCancelled($aiJob)) {
+            return ['cancelled' => true];
+        }
+
+        // Update prices from results
+        $pricesUpdated = 0;
+        $priceDrops = [];
+
+        if ($result->isSuccess() && $result->hasResults()) {
+            foreach ($result->results as $priceResult) {
+                $url = $priceResult['product_url'] ?? null;
+                if (!$url) {
+                    continue;
+                }
+
+                // Find the vendor price record for this URL
+                $vendorPrice = $vendorPrices->first(fn ($vp) => $vp->product_url === $url);
+                if (!$vendorPrice) {
+                    continue;
+                }
+
+                $newPrice = (float) ($priceResult['price'] ?? 0);
+                if ($newPrice <= 0) {
+                    continue;
+                }
+
+                // Track price drop
+                $oldPrice = $vendorPrice->current_price;
+                if ($oldPrice && $newPrice < $oldPrice) {
+                    $priceDrops[] = [
+                        'vendor' => $vendorPrice->vendor,
+                        'old_price' => $oldPrice,
+                        'new_price' => $newPrice,
+                        'drop_amount' => $oldPrice - $newPrice,
+                        'drop_percent' => (($oldPrice - $newPrice) / $oldPrice) * 100,
+                    ];
+                }
+
+                // Determine stock status
+                $inStock = ($priceResult['stock_status'] ?? 'in_stock') !== 'out_of_stock';
+
+                // Update the vendor price
+                $vendorPrice->updatePrice($newPrice, $url, $inStock);
+                $vendorPrice->update([
+                    'last_firecrawl_at' => now(),
+                    'firecrawl_source' => 'daily_refresh',
+                ]);
+
+                $pricesUpdated++;
+            }
+        }
+
+        $this->updateProgress($aiJob, 85);
+
+        // Update the main item with the best price
+        if ($item && $pricesUpdated > 0) {
+            $this->updateItemBestPrice($item);
+        }
+
+        $this->updateProgress($aiJob, 95);
+
+        Log::info('FirecrawlRefreshJob: Completed', [
+            'item_id' => $itemId,
+            'urls_checked' => count($urls),
+            'prices_updated' => $pricesUpdated,
+            'price_drops' => count($priceDrops),
+        ]);
+
+        return [
+            'product_name' => $item?->product_name ?? $inputData['product_name'] ?? null,
+            'urls_checked' => count($urls),
+            'prices_updated' => $pricesUpdated,
+            'price_drops' => $priceDrops,
+            'error' => $result->error,
+        ];
+    }
+
+    /**
+     * Update the main item with the best (lowest) price from vendor prices.
+     *
+     * @param ListItem $item The list item
+     */
+    protected function updateItemBestPrice(ListItem $item): void
+    {
+        $item->refresh();
+        $item->load('vendorPrices');
+
+        // Find the best price among in-stock vendors
+        $bestVendorPrice = $item->vendorPrices
+            ->filter(fn ($vp) => $vp->in_stock && $vp->current_price > 0)
+            ->sortBy('current_price')
+            ->first();
+
+        if (!$bestVendorPrice) {
+            // Fall back to any vendor with a price
+            $bestVendorPrice = $item->vendorPrices
+                ->filter(fn ($vp) => $vp->current_price > 0)
+                ->sortBy('current_price')
+                ->first();
+        }
+
+        if ($bestVendorPrice) {
+            $item->updatePrice($bestVendorPrice->current_price, $bestVendorPrice->vendor);
+            
+            // Update product URL if the item doesn't have one
+            if (empty($item->product_url) && !empty($bestVendorPrice->product_url)) {
+                $item->update(['product_url' => $bestVendorPrice->product_url]);
+            }
+
+            // Capture price history
+            PriceHistory::captureFromItem($item, 'firecrawl_refresh');
+        }
+    }
+
+    /**
+     * Schedule daily refresh for all users with Firecrawl configured.
+     * Called from the scheduler to refresh prices at user-configured times.
+     */
+    public static function scheduleForUsers(): void
+    {
+        $currentTime = now()->format('H:i');
+
+        // Find users whose price_check_time matches the current time
+        $settings = Setting::where('key', Setting::PRICE_CHECK_TIME)
+            ->where('value', $currentTime)
+            ->get();
+
+        foreach ($settings as $setting) {
+            if (!$setting->user_id) {
+                continue;
+            }
+
+            self::scheduleForUser($setting->user_id);
+        }
+
+        // Also check for users who haven't set a time (default 3:00 AM)
+        if ($currentTime === '03:00') {
+            $usersWithCustomTime = Setting::where('key', Setting::PRICE_CHECK_TIME)
+                ->whereNotNull('user_id')
+                ->pluck('user_id');
+
+            $userIds = ListItem::where('is_purchased', false)
+                ->join('shopping_lists', 'list_items.shopping_list_id', '=', 'shopping_lists.id')
+                ->select('shopping_lists.user_id')
+                ->distinct()
+                ->whereNotIn('shopping_lists.user_id', $usersWithCustomTime)
+                ->pluck('user_id');
+
+            foreach ($userIds as $userId) {
+                self::scheduleForUser($userId);
+            }
+        }
+    }
+
+    /**
+     * Schedule refresh jobs for a specific user.
+     *
+     * @param int $userId The user ID
+     */
+    public static function scheduleForUser(int $userId): void
+    {
+        // Check if user has Firecrawl configured
+        $firecrawlService = FirecrawlService::forUser($userId);
+        
+        if (!$firecrawlService->isAvailable()) {
+            Log::info('FirecrawlRefreshJob: Skipping user without Firecrawl', ['user_id' => $userId]);
+            return;
+        }
+
+        // Get all unpurchased items with vendor prices that have URLs
+        $items = ListItem::with(['vendorPrices', 'shoppingList'])
+            ->whereHas('shoppingList', fn ($q) => $q->where('user_id', $userId))
+            ->where('is_purchased', false)
+            ->whereHas('vendorPrices', fn ($q) => $q->whereNotNull('product_url'))
+            ->get();
+
+        if ($items->isEmpty()) {
+            Log::info('FirecrawlRefreshJob: No items to refresh for user', ['user_id' => $userId]);
+            return;
+        }
+
+        // Dispatch refresh job for each item with a delay to spread load
+        $delay = rand(0, 300); // Random initial delay up to 5 minutes
+        
+        foreach ($items as $item) {
+            $aiJob = AIJob::createJob(
+                userId: $userId,
+                type: AIJob::TYPE_FIRECRAWL_REFRESH,
+                inputData: [
+                    'product_name' => $item->product_name,
+                    'source' => 'daily_refresh',
+                ],
+                relatedItemId: $item->id,
+                relatedListId: $item->shopping_list_id,
+            );
+
+            dispatch(new self($aiJob->id, $userId))
+                ->delay(now()->addSeconds($delay));
+            
+            $delay += rand(10, 30); // Space out jobs
+
+            Log::info('FirecrawlRefreshJob: Scheduled daily refresh', [
+                'user_id' => $userId,
+                'item_id' => $item->id,
+                'product' => $item->product_name,
+            ]);
+        }
+    }
+}

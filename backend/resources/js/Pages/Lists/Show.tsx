@@ -8,6 +8,7 @@ import { Input } from '@/Components/ui/input';
 import { Badge } from '@/Components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/Components/ui/switch';
+import { PriceUpdateStatus } from '@/Components/PriceUpdateStatus';
 import {
   RefreshCw,
   Trash2,
@@ -139,19 +140,37 @@ function ItemCard({
     <Card className={cn(item.is_purchased && 'opacity-60')}>
       <CardContent className="p-4">
         <div className="flex items-start gap-4">
-          {/* Product Image */}
-          {item.product_image_url && (
-            <img
-              src={item.product_image_url}
-              alt={item.product_name}
-              className="w-20 h-20 object-contain rounded-lg bg-muted flex-shrink-0"
-            />
-          )}
-          {!item.product_image_url && (
-            <div className="w-20 h-20 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
-              <Package className="h-8 w-8 text-muted-foreground" />
-            </div>
-          )}
+          {/* Product Image - links to best vendor's product URL or item details */}
+          {(() => {
+            const productUrl = bestVendor?.product_url || item.product_url;
+            const imageContent = item.product_image_url ? (
+              <img
+                src={item.product_image_url}
+                alt={item.product_name}
+                className="w-20 h-20 object-contain rounded-lg bg-muted flex-shrink-0"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                <Package className="h-8 w-8 text-muted-foreground" />
+              </div>
+            );
+
+            return productUrl ? (
+              <a
+                href={productUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:opacity-80 transition-opacity cursor-pointer"
+                title={`View at ${bestVendor?.vendor || 'retailer'}`}
+              >
+                {imageContent}
+              </a>
+            ) : (
+              <Link href={`/items/${item.id}`} className="hover:opacity-80 transition-opacity">
+                {imageContent}
+              </Link>
+            );
+          })()}
 
           {/* Item Details */}
           <div className="flex-1 min-w-0">
@@ -273,13 +292,14 @@ function ItemCard({
               )}
             </div>
 
-            {/* Last Checked */}
-            {item.last_checked_at && (
-              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                <Clock className="h-3 w-3" />
-                Updated {formatRelativeTime(item.last_checked_at)}
-              </div>
-            )}
+            {/* Price Update Status */}
+            <div className="mt-1">
+              <PriceUpdateStatus 
+                itemId={item.id} 
+                lastCheckedAt={item.last_checked_at || null}
+                onRetry={handleRefresh}
+              />
+            </div>
 
             {item.notes && (
               <p className="text-sm text-muted-foreground mt-2">{item.notes}</p>

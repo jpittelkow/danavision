@@ -31,6 +31,7 @@ class SettingController extends Controller
             Setting::PRICE_API_PROVIDER,
             Setting::SERPAPI_KEY,
             Setting::RAINFOREST_KEY,
+            Setting::FIRECRAWL_API_KEY,
             Setting::MAIL_DRIVER,
             Setting::MAIL_HOST,
             Setting::MAIL_PORT,
@@ -104,6 +105,9 @@ class SettingController extends Controller
                 'price_provider' => $settings[Setting::PRICE_API_PROVIDER] ?? 'serpapi',
                 'price_api_key' => $settings[Setting::SERPAPI_KEY] || $settings[Setting::RAINFOREST_KEY] ? '********' : null,
                 'has_price_api_key' => !empty($settings[Setting::SERPAPI_KEY]) || !empty($settings[Setting::RAINFOREST_KEY]),
+                // Firecrawl Web Crawler
+                'firecrawl_api_key' => $settings[Setting::FIRECRAWL_API_KEY] ? '********' : null,
+                'has_firecrawl_api_key' => !empty($settings[Setting::FIRECRAWL_API_KEY]),
                 // Email settings
                 'mail_driver' => $settings[Setting::MAIL_DRIVER] ?? 'smtp',
                 'mail_host' => $settings[Setting::MAIL_HOST] ?? '',
@@ -146,6 +150,8 @@ class SettingController extends Controller
             'ai_api_key' => ['nullable', 'string'],
             'price_provider' => ['nullable', 'in:serpapi,rainforest'],
             'price_api_key' => ['nullable', 'string'],
+            // Firecrawl Web Crawler
+            'firecrawl_api_key' => ['nullable', 'string'],
             // Email settings
             'mail_driver' => ['nullable', 'in:smtp,sendmail,mailgun,ses,postmark'],
             'mail_host' => ['nullable', 'string', 'max:255'],
@@ -207,6 +213,11 @@ class SettingController extends Controller
             if ($priceKeyField) {
                 Setting::set($priceKeyField, $validated['price_api_key'], $userId);
             }
+        }
+
+        // Firecrawl API Key (only if not masked)
+        if (isset($validated['firecrawl_api_key']) && $validated['firecrawl_api_key'] !== '********') {
+            Setting::set(Setting::FIRECRAWL_API_KEY, $validated['firecrawl_api_key'], $userId);
         }
 
         // Email Settings

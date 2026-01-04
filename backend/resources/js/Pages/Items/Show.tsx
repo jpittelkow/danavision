@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { CompactImageInput } from '@/Components/ImageUpload';
 import PriceChart from '@/Components/PriceChart';
 import { Switch } from '@/Components/ui/switch';
+import { PriceUpdateStatus } from '@/Components/PriceUpdateStatus';
 import {
   RefreshCw,
   ExternalLink,
@@ -290,19 +291,39 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
         <Card className="mb-6">
           <CardContent className="p-6">
             <div className="flex flex-col md:flex-row gap-6">
-              {/* Product Image */}
+              {/* Product Image - links to best vendor's product URL */}
               <div className="flex-shrink-0">
-                {item.product_image_url ? (
-                  <img
-                    src={item.product_image_url}
-                    alt={item.product_name}
-                    className="w-48 h-48 object-contain rounded-lg bg-muted border"
-                  />
-                ) : (
-                  <div className="w-48 h-48 rounded-lg bg-muted flex items-center justify-center border">
-                    <Package className="h-16 w-16 text-muted-foreground" />
-                  </div>
-                )}
+                {(() => {
+                  const productUrl = bestVendor?.product_url || item.product_url;
+                  const imageContent = item.product_image_url ? (
+                    <img
+                      src={item.product_image_url}
+                      alt={item.product_name}
+                      className="w-48 h-48 object-contain rounded-lg bg-muted border"
+                    />
+                  ) : (
+                    <div className="w-48 h-48 rounded-lg bg-muted flex items-center justify-center border">
+                      <Package className="h-16 w-16 text-muted-foreground" />
+                    </div>
+                  );
+
+                  return productUrl ? (
+                    <a
+                      href={productUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block hover:opacity-80 transition-opacity cursor-pointer relative group"
+                      title={`View at ${bestVendor?.vendor || 'retailer'}`}
+                    >
+                      {imageContent}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                        <ExternalLink className="h-8 w-8 text-white" />
+                      </div>
+                    </a>
+                  ) : (
+                    imageContent
+                  );
+                })()}
               </div>
 
               {/* Product Info */}
@@ -429,11 +450,14 @@ export default function ItemShow({ auth, item, list, price_history, can_edit, fl
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Last Updated</p>
-                    <p className="text-sm text-foreground flex items-center gap-1 mt-1">
-                      <Clock className="h-3 w-3" />
-                      {formatRelativeTime(item.last_checked_at)}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Price Status</p>
+                    <div className="mt-1">
+                      <PriceUpdateStatus
+                        itemId={item.id}
+                        lastCheckedAt={item.last_checked_at || null}
+                        onRetry={handleRefresh}
+                      />
+                    </div>
                   </div>
                 </div>
 

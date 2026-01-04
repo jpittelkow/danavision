@@ -3,6 +3,7 @@
 namespace App\Services\AI;
 
 use App\Models\AIRequestLog;
+use App\Services\AI\AILoggingService;
 use App\Services\Search\LocalStoreService;
 use App\Services\Search\WebSearchService;
 use Illuminate\Support\Facades\Cache;
@@ -764,6 +765,131 @@ PROMPT;
         $normalized = trim($normalized);
         
         return $normalized;
+    }
+
+    /**
+     * Analyze Firecrawl price results with AI.
+     * 
+     * This method takes price results from Firecrawl and uses AI to provide
+     * intelligent analysis: best deals, price comparisons, buying advice.
+     *
+     * @param string $productName The product being analyzed
+     * @param array $priceResults Array of price results from Firecrawl
+     * @param int|null $aiJobId Optional AI job ID for logging
+     * @return array|null Analysis results or null on failure
+     */
+    public function analyzeFirecrawlResults(string $productName, array $priceResults, ?int $aiJobId = null): ?array
+    {
+        if (empty($priceResults)) {
+            return null;
+        }
+
+        if (!$this->isAvailable()) {
+            Log::info('AIPriceSearchService: No AI provider available for Firecrawl analysis');
+            return null;
+        }
+
+        try {
+            // Use AILoggingService if a job ID is set
+            $loggingService = $aiJobId 
+                ? AILoggingService::forUser($this->userId, $aiJobId)
+                : null;
+
+            // Format results for AI analysis (limit to 15 results for token efficiency)
+            $resultsJson = json_encode(array_slice($priceResults, 0, 15), JSON_PRETTY_PRINT);
+
+            $prompt = $this->buildFirecrawlAnalysisPrompt($productName, $resultsJson);
+
+            if ($loggingService) {
+                $response = $loggingService->complete($prompt);
+            } else {
+                $result = $this->multiAI->processWithAllProviders($prompt);
+                
+                if ($result['error'] && !$result['aggregated_response']) {
+                    throw new \RuntimeException($result['error']);
+                }
+                
+                $response = $result['aggregated_response'];
+            }
+
+            // Parse the JSON response
+            if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
+                $parsed = json_decode($matches[0], true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    Log::info('AIPriceSearchService: Firecrawl analysis completed', [
+                        'product' => $productName,
+                        'results_analyzed' => count($priceResults),
+                    ]);
+                    return $parsed;
+                }
+            }
+
+            Log::warning('AIPriceSearchService: Failed to parse Firecrawl analysis response');
+            return null;
+
+        } catch (\Exception $e) {
+            Log::error('AIPriceSearchService: Firecrawl analysis failed', [
+                'product' => $productName,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Build the prompt for AI analysis of Firecrawl results.
+     *
+     * @param string $productName The product name
+     * @param string $resultsJson JSON-encoded price results
+     * @return string The analysis prompt
+     */
+    protected function buildFirecrawlAnalysisPrompt(string $productName, string $resultsJson): string
+    {
+        return <<<PROMPT
+You are analyzing real-time price data from web crawling for "{$productName}".
+
+*** CRITICAL: ONLY USE PRICES FROM THE DATA BELOW ***
+Do NOT invent, estimate, or hallucinate any prices. Every price in your analysis MUST come from the input data.
+
+=== PRICE DATA FROM WEB CRAWLING ===
+{$resultsJson}
+=== END OF PRICE DATA ===
+
+Analyze these prices and provide:
+
+1. **Best Deal**: Which store has the best price? Why is it the best choice?
+2. **Price Range**: What's the spread between lowest and highest prices?
+3. **Stock Status**: Are there any out-of-stock or limited availability items?
+4. **Price Patterns**: Any notable observations (sales, price variations between stores)?
+5. **Buying Advice**: What should the user consider when making a purchase?
+
+Return your analysis as a JSON object:
+{
+    "best_deal": {
+        "store": "Store name from data",
+        "price": 99.99,
+        "reason": "Brief explanation why this is the best deal"
+    },
+    "price_range": {
+        "lowest": 89.99,
+        "highest": 129.99,
+        "average": 105.50,
+        "savings_vs_highest": 40.00
+    },
+    "availability": {
+        "in_stock_count": 5,
+        "out_of_stock_count": 1,
+        "limited_count": 0
+    },
+    "insights": [
+        "Key observation 1",
+        "Key observation 2"
+    ],
+    "recommendation": "1-2 sentence buying recommendation"
+}
+
+IMPORTANT: All prices MUST match the input data exactly. Return ONLY the JSON object.
+PROMPT;
     }
 }
 

@@ -592,4 +592,69 @@ PROMPT;
 
         return $defaults;
     }
+
+    /**
+     * Get the active (pending/processing) job for an item.
+     * 
+     * Used by the frontend to poll for job status and show
+     * real-time price update indicators.
+     *
+     * @param Request $request
+     * @param ListItem $item
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function activeJob(Request $request, ListItem $item): \Illuminate\Http\JsonResponse
+    {
+        $this->authorize('view', $item);
+
+        // Find any active price-related job for this item
+        $activeJob = AIJob::where('related_item_id', $item->id)
+            ->whereIn('type', [
+                AIJob::TYPE_PRICE_SEARCH,
+                AIJob::TYPE_PRICE_REFRESH,
+                AIJob::TYPE_FIRECRAWL_DISCOVERY,
+                AIJob::TYPE_FIRECRAWL_REFRESH,
+            ])
+            ->whereIn('status', [AIJob::STATUS_PENDING, AIJob::STATUS_PROCESSING])
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$activeJob) {
+            // Also check for recently failed jobs (within last 5 minutes)
+            $recentFailedJob = AIJob::where('related_item_id', $item->id)
+                ->whereIn('type', [
+                    AIJob::TYPE_PRICE_SEARCH,
+                    AIJob::TYPE_PRICE_REFRESH,
+                    AIJob::TYPE_FIRECRAWL_DISCOVERY,
+                    AIJob::TYPE_FIRECRAWL_REFRESH,
+                ])
+                ->where('status', AIJob::STATUS_FAILED)
+                ->where('completed_at', '>=', now()->subMinutes(5))
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            if ($recentFailedJob) {
+                return response()->json([
+                    'job' => [
+                        'id' => $recentFailedJob->id,
+                        'status' => $recentFailedJob->status,
+                        'progress' => $recentFailedJob->progress,
+                        'type' => $recentFailedJob->type,
+                        'error_message' => $recentFailedJob->error_message,
+                    ],
+                ]);
+            }
+
+            return response()->json(['job' => null]);
+        }
+
+        return response()->json([
+            'job' => [
+                'id' => $activeJob->id,
+                'status' => $activeJob->status,
+                'progress' => $activeJob->progress,
+                'type' => $activeJob->type,
+            ],
+        ]);
+    }
 }

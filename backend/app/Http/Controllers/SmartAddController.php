@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AI\FirecrawlDiscoveryJob;
 use App\Jobs\AI\ProductIdentificationJob;
 use App\Jobs\AI\PriceSearchJob;
 use App\Models\AIJob;
@@ -9,6 +10,7 @@ use App\Models\ShoppingList;
 use App\Services\AI\AIService;
 use App\Services\AI\AIPriceSearchService;
 use App\Services\AI\MultiAIService;
+use App\Services\Crawler\FirecrawlService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -650,27 +652,55 @@ PROMPT;
             'last_checked_at' => ($validated['current_price'] ?? null) ? now() : null,
         ]);
 
-        // Dispatch background job to search for prices using the new AI Job system
+        // Dispatch background job to search for prices
         // This runs asynchronously after the item is added
         if (!($validated['skip_price_search'] ?? false)) {
-            // Create AIJob record for tracking
-            $aiJob = AIJob::createJob(
-                userId: $request->user()->id,
-                type: AIJob::TYPE_PRICE_SEARCH,
-                inputData: [
-                    'query' => $item->product_query ?? $item->product_name,
-                    'product_name' => $item->product_name,
-                    'is_generic' => $item->is_generic ?? false,
-                    'unit_of_measure' => $item->unit_of_measure ?? null,
-                    'shop_local' => $list->shop_local ?? false,
-                ],
-                relatedItemId: $item->id,
-                relatedListId: $list->id,
-            );
+            $userId = $request->user()->id;
+            
+            // Check if Firecrawl is available - prefer it over standard price search
+            $firecrawlService = FirecrawlService::forUser($userId);
+            
+            if ($firecrawlService->isAvailable()) {
+                // Use Firecrawl for price discovery
+                $aiJob = AIJob::createJob(
+                    userId: $userId,
+                    type: AIJob::TYPE_FIRECRAWL_DISCOVERY,
+                    inputData: [
+                        'product_name' => $item->product_name,
+                        'product_query' => $item->product_query ?? $item->product_name,
+                        'upc' => $item->upc ?? null,
+                        'is_generic' => $item->is_generic ?? false,
+                        'unit_of_measure' => $item->unit_of_measure ?? null,
+                        'shop_local' => $list->shop_local ?? false,
+                        'source' => 'initial_discovery',
+                    ],
+                    relatedItemId: $item->id,
+                    relatedListId: $list->id,
+                );
 
-            // Dispatch the price search job
-            PriceSearchJob::dispatch($aiJob->id, $request->user()->id)
-                ->delay(now()->addSeconds(2)); // Small delay to let the redirect complete
+                // Dispatch the Firecrawl discovery job
+                FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId)
+                    ->delay(now()->addSeconds(2)); // Small delay to let the redirect complete
+            } else {
+                // Fall back to standard price search (SERP API)
+                $aiJob = AIJob::createJob(
+                    userId: $userId,
+                    type: AIJob::TYPE_PRICE_SEARCH,
+                    inputData: [
+                        'query' => $item->product_query ?? $item->product_name,
+                        'product_name' => $item->product_name,
+                        'is_generic' => $item->is_generic ?? false,
+                        'unit_of_measure' => $item->unit_of_measure ?? null,
+                        'shop_local' => $list->shop_local ?? false,
+                    ],
+                    relatedItemId: $item->id,
+                    relatedListId: $list->id,
+                );
+
+                // Dispatch the price search job
+                PriceSearchJob::dispatch($aiJob->id, $userId)
+                    ->delay(now()->addSeconds(2)); // Small delay to let the redirect complete
+            }
         }
 
         return redirect()->route('lists.show', $list)

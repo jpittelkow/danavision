@@ -28,6 +28,8 @@ class ItemVendorPrice extends Model
         'sale_percent_off',
         'in_stock',
         'last_checked_at',
+        'last_firecrawl_at',
+        'firecrawl_source',
     ];
 
     /**
@@ -46,6 +48,7 @@ class ItemVendorPrice extends Model
             'on_sale' => 'boolean',
             'in_stock' => 'boolean',
             'last_checked_at' => 'datetime',
+            'last_firecrawl_at' => 'datetime',
         ];
     }
 

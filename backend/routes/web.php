@@ -62,6 +62,7 @@ Route::middleware('auth')->group(function () {
     Route::post('items/{item}/refresh', [ListItemController::class, 'refresh'])->name('items.refresh');
     Route::post('items/{item}/purchased', [ListItemController::class, 'markPurchased'])->name('items.purchased');
     Route::post('items/{item}/smart-fill', [ListItemController::class, 'smartFill'])->name('items.smart-fill');
+    Route::get('api/items/{item}/active-job', [ListItemController::class, 'activeJob'])->name('items.active-job');
 
     // Search
     Route::get('search', [SearchController::class, 'index'])->name('search');
