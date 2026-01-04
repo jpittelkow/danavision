@@ -38,13 +38,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
-    // Smart Add
+    // Smart Add - Product Identification Flow
+    // Phase 1: Identify products (via image or text)
+    // Phase 2: Add to list (price search runs as background job)
     Route::get('smart-add', [SmartAddController::class, 'index'])->name('smart-add');
+    Route::post('smart-add/identify', [SmartAddController::class, 'identify'])->name('smart-add.identify');
+    Route::post('smart-add/add', [SmartAddController::class, 'addToList'])->name('smart-add.add');
+    // Legacy endpoints (kept for backward compatibility)
     Route::post('smart-add/analyze', [SmartAddController::class, 'analyzeImage'])->name('smart-add.analyze');
     Route::post('smart-add/search', [SmartAddController::class, 'searchText'])->name('smart-add.search');
-    Route::get('smart-add/stream-search', [SmartAddController::class, 'streamSearch'])->name('smart-add.stream');
-    Route::post('smart-add/price-details', [SmartAddController::class, 'getPriceDetails'])->name('smart-add.price-details');
-    Route::post('smart-add/add', [SmartAddController::class, 'addToList'])->name('smart-add.add');
 
     // Shopping Lists
     Route::resource('lists', ShoppingListController::class);

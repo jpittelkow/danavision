@@ -138,41 +138,82 @@ class ShoppingListController extends Controller
 
 ### SmartAddController
 
+Handles the two-phase Smart Add flow:
+- Phase 1: Product identification via AI
+- Phase 2: Add to list with background price search
+
 ```php
 // app/Http/Controllers/SmartAddController.php
 class SmartAddController extends Controller
 {
     public function index(Request $request): Response;     // Smart Add page
+    public function identify(Request $request): JsonResponse;  // AI product identification
+    public function addToList(Request $request): RedirectResponse;  // Add to list + dispatch job
+    // Legacy endpoints (kept for backward compatibility)
     public function analyzeImage(Request $request): Response;  // AI image analysis
     public function searchText(Request $request): Response;    // Text search
-    public function streamSearch(Request $request): StreamedResponse; // SSE streaming search
-    public function getPriceDetails(Request $request): JsonResponse;  // Get detailed pricing
-    public function addToList(Request $request): RedirectResponse;  // Add to list
 }
 ```
 
-#### getPriceDetails Endpoint
+#### identify Endpoint (Phase 1)
 
-Fetches detailed retailer pricing for a specific product:
+Returns up to 5 product suggestions from AI:
 
 ```php
-// POST /smart-add/price-details
+// POST /smart-add/identify
 // Request:
 [
-    'product_name' => 'required|string|max:255',
-    'upc' => 'nullable|string|max:20',
+    'image' => 'nullable|string',  // Base64 encoded image
+    'query' => 'nullable|string|max:500',  // Text search query
 ]
 
 // Response (JSON):
 [
-    'results' => [...],        // Array of price results
-    'lowest_price' => 99.99,
-    'highest_price' => 149.99,
-    'providers_used' => ['openai', 'web_search'],
-    'is_generic' => false,
-    'unit_of_measure' => null,
+    'results' => [
+        [
+            'product_name' => 'Sony WH-1000XM5 Wireless Headphones',
+            'brand' => 'Sony',
+            'model' => 'WH-1000XM5',
+            'category' => 'Electronics',
+            'upc' => '027242917576',
+            'is_generic' => false,
+            'unit_of_measure' => null,
+            'confidence' => 95,
+            'image_url' => 'https://...',
+        ],
+        // ... up to 5 suggestions
+    ],
+    'providers_used' => ['claude', 'openai'],
     'error' => null,
 ]
+```
+
+#### addToList Endpoint (Phase 2)
+
+Adds item to shopping list and dispatches background price search:
+
+```php
+// POST /smart-add/add
+// After successful add, SearchItemPrices job is dispatched
+```
+
+### SearchItemPrices Job
+
+Background job that searches for prices after an item is added:
+
+```php
+// app/Jobs/SearchItemPrices.php
+class SearchItemPrices implements ShouldQueue
+{
+    public function __construct(public int $itemId, public int $userId);
+    
+    public function handle(): void
+    {
+        // Search for prices using AIPriceSearchService
+        // Update item with found prices
+        // Create vendor price entries
+    }
+}
 ```
 
 ### SearchController
@@ -297,13 +338,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
-    // Smart Add
+    // Smart Add - Product Identification Flow
+    // Phase 1: Identify products (via image or text)
+    // Phase 2: Add to list (price search runs as background job)
     Route::get('smart-add', [SmartAddController::class, 'index']);
+    Route::post('smart-add/identify', [SmartAddController::class, 'identify']);
+    Route::post('smart-add/add', [SmartAddController::class, 'addToList']);
+    // Legacy endpoints (kept for backward compatibility)
     Route::post('smart-add/analyze', [SmartAddController::class, 'analyzeImage']);
     Route::post('smart-add/search', [SmartAddController::class, 'searchText']);
-    Route::get('smart-add/stream-search', [SmartAddController::class, 'streamSearch']);
-    Route::post('smart-add/price-details', [SmartAddController::class, 'getPriceDetails']);
-    Route::post('smart-add/add', [SmartAddController::class, 'addToList']);
 
     // Shopping Lists
     Route::resource('lists', ShoppingListController::class);

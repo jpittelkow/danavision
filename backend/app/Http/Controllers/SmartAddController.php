@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ListItem;
 use App\Models\ShoppingList;
 use App\Services\AI\AIService;
 use App\Services\AI\AIPriceSearchService;
@@ -194,58 +193,374 @@ class SmartAddController extends Controller
     }
 
     /**
-     * Get detailed price information for a specific product.
-     * Called when user clicks "Add" to get retailer pricing options.
+     * Identify products from image or text query.
+     * Returns up to 5 product suggestions for the user to select from.
+     * 
+     * This is Phase 1 of the Smart Add flow - product identification.
+     * Price search happens after the item is added to a list.
      *
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getPriceDetails(Request $request): \Illuminate\Http\JsonResponse
+    public function identify(Request $request): \Illuminate\Http\JsonResponse
     {
         $validated = $request->validate([
-            'product_name' => ['required', 'string', 'max:255'],
-            'upc' => ['nullable', 'string', 'max:20'],
+            'image' => ['nullable', 'string'], // Base64 encoded image (data URL)
+            'query' => ['nullable', 'string', 'max:500'],
         ]);
+
+        // Must have either image or query
+        if (empty($validated['image']) && empty($validated['query'])) {
+            return response()->json([
+                'error' => 'Please provide an image or search query.',
+                'results' => [],
+                'providers_used' => [],
+            ], 422);
+        }
 
         $userId = $request->user()->id;
 
         try {
-            // Search for detailed pricing using AI-powered price search
-            $priceService = AIPriceSearchService::forUser($userId);
-            
-            // If UPC is provided, search by UPC for more accurate results
-            $searchQuery = $validated['product_name'];
-            if (!empty($validated['upc'])) {
-                $searchQuery = $validated['upc'] . ' ' . $validated['product_name'];
+            $results = [];
+            $providersUsed = [];
+            $error = null;
+
+            if (!empty($validated['image'])) {
+                // Image-based identification
+                $imageResult = $this->identifyFromImage($validated['image'], $validated['query'] ?? null, $userId);
+                $results = $imageResult['results'];
+                $providersUsed = $imageResult['providers_used'];
+                $error = $imageResult['error'];
+            } else {
+                // Text-based identification
+                $textResult = $this->identifyFromText($validated['query'], $userId);
+                $results = $textResult['results'];
+                $providersUsed = $textResult['providers_used'];
+                $error = $textResult['error'];
             }
-            
-            $searchResult = $priceService->search($searchQuery);
+
+            // Limit to 5 results
+            $results = array_slice($results, 0, 5);
 
             return response()->json([
-                'results' => $searchResult->results,
-                'lowest_price' => $searchResult->lowestPrice,
-                'highest_price' => $searchResult->highestPrice,
-                'providers_used' => $searchResult->providersUsed,
-                'is_generic' => $searchResult->isGeneric,
-                'unit_of_measure' => $searchResult->unitOfMeasure,
-                'error' => $searchResult->error,
+                'results' => $results,
+                'providers_used' => $providersUsed,
+                'error' => $error,
             ]);
+
         } catch (\Exception $e) {
-            \Log::error('Price details search failed', [
-                'product_name' => $validated['product_name'],
+            \Log::error('Product identification failed', [
+                'has_image' => !empty($validated['image']),
+                'query' => $validated['query'] ?? null,
                 'error' => $e->getMessage(),
             ]);
 
             return response()->json([
                 'results' => [],
-                'lowest_price' => null,
-                'highest_price' => null,
                 'providers_used' => [],
-                'is_generic' => false,
-                'unit_of_measure' => null,
-                'error' => 'Failed to fetch price details: ' . $e->getMessage(),
+                'error' => 'Failed to identify product: ' . $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Identify product from an image using AI.
+     */
+    protected function identifyFromImage(string $imageData, ?string $context, int $userId): array
+    {
+        // Parse the base64 data URL
+        $mimeType = 'image/jpeg';
+        $base64 = $imageData;
+
+        if (str_starts_with($imageData, 'data:')) {
+            $parts = explode(',', $imageData, 2);
+            if (count($parts) === 2) {
+                preg_match('/data:(.*?);base64/', $parts[0], $matches);
+                $mimeType = $matches[1] ?? 'image/jpeg';
+                $base64 = $parts[1];
+            }
+        }
+
+        $prompt = $this->buildProductIdentificationPrompt($context);
+
+        // Try multi-AI service first for better accuracy
+        $multiAI = MultiAIService::forUser($userId);
+        
+        if ($multiAI->isAvailable() && $multiAI->getProviderCount() > 1) {
+            $result = $multiAI->analyzeImageWithAllProviders($base64, $mimeType, $prompt);
+            
+            if ($result['aggregated_response']) {
+                $parsed = $this->parseProductSuggestions($result['aggregated_response']);
+                $providersUsed = array_keys(
+                    array_filter($result['individual_responses'], fn($r) => $r['error'] === null)
+                );
+                
+                // Search for product images for each suggestion
+                $parsed = $this->enrichProductSuggestionsWithImages($parsed);
+                
+                return [
+                    'results' => $parsed,
+                    'providers_used' => $providersUsed,
+                    'error' => null,
+                ];
+            }
+            
+            return [
+                'results' => [],
+                'providers_used' => [],
+                'error' => $result['error'] ?? 'All AI providers failed to respond',
+            ];
+        }
+
+        // Fall back to single provider
+        $aiService = AIService::forUser($userId);
+        
+        if (!$aiService) {
+            return [
+                'results' => [],
+                'providers_used' => [],
+                'error' => 'No AI provider configured. Please set up an AI provider in Settings.',
+            ];
+        }
+
+        $response = $aiService->analyzeImage($base64, $mimeType, $prompt);
+        $parsed = $this->parseProductSuggestions($response);
+        $parsed = $this->enrichProductSuggestionsWithImages($parsed);
+        
+        return [
+            'results' => $parsed,
+            'providers_used' => [$aiService->getProviderType()],
+            'error' => null,
+        ];
+    }
+
+    /**
+     * Identify product from text query using AI.
+     */
+    protected function identifyFromText(string $query, int $userId): array
+    {
+        $prompt = $this->buildTextIdentificationPrompt($query);
+
+        // Try multi-AI service first
+        $multiAI = MultiAIService::forUser($userId);
+        
+        if ($multiAI->isAvailable() && $multiAI->getProviderCount() > 1) {
+            $result = $multiAI->completeWithAllProviders($prompt);
+            
+            if ($result['aggregated_response']) {
+                $parsed = $this->parseProductSuggestions($result['aggregated_response']);
+                $providersUsed = array_keys(
+                    array_filter($result['individual_responses'], fn($r) => $r['error'] === null)
+                );
+                
+                // Search for product images for each suggestion
+                $parsed = $this->enrichProductSuggestionsWithImages($parsed);
+                
+                return [
+                    'results' => $parsed,
+                    'providers_used' => $providersUsed,
+                    'error' => null,
+                ];
+            }
+            
+            return [
+                'results' => [],
+                'providers_used' => [],
+                'error' => $result['error'] ?? 'All AI providers failed to respond',
+            ];
+        }
+
+        // Fall back to single provider
+        $aiService = AIService::forUser($userId);
+        
+        if (!$aiService) {
+            return [
+                'results' => [],
+                'providers_used' => [],
+                'error' => 'No AI provider configured. Please set up an AI provider in Settings.',
+            ];
+        }
+
+        $response = $aiService->complete($prompt);
+        $parsed = $this->parseProductSuggestions($response);
+        $parsed = $this->enrichProductSuggestionsWithImages($parsed);
+        
+        return [
+            'results' => $parsed,
+            'providers_used' => [$aiService->getProviderType()],
+            'error' => null,
+        ];
+    }
+
+    /**
+     * Build prompt for product identification from image.
+     */
+    protected function buildProductIdentificationPrompt(?string $context): string
+    {
+        $contextPart = '';
+        if ($context) {
+            $contextPart = "Additional context from user: {$context}\n\n";
+        }
+
+        return <<<PROMPT
+{$contextPart}Analyze this product image and identify what product it is. Return up to 5 possible product matches, ranked by confidence.
+
+Return a JSON array with the following format:
+[
+    {
+        "product_name": "Full product name including brand and model",
+        "brand": "Brand/manufacturer name",
+        "model": "Model number if identifiable",
+        "category": "Product category (e.g., Electronics, Groceries, Home & Kitchen)",
+        "upc": "12-digit UPC barcode if known, null otherwise",
+        "is_generic": false,
+        "unit_of_measure": null,
+        "confidence": 95
+    }
+]
+
+IMPORTANT GUIDELINES:
+1. Return up to 5 possible matches, ranked by confidence (highest first)
+2. Be specific - include brand and model when identifiable
+3. Confidence score should be 0-100 based on how certain you are
+4. For branded products, set is_generic: false
+5. For generic items (produce, bulk goods, deli items), set is_generic: true and unit_of_measure to appropriate unit (lb, oz, each, dozen, gallon, etc.)
+6. Generic items do NOT have UPCs - use null
+7. If you recognize the product and know its UPC, include it
+8. If multiple interpretations are possible, include them as separate results
+
+Examples:
+- Sony WH-1000XM5 headphones → is_generic: false, upc: "027242917576"
+- Organic bananas → is_generic: true, unit_of_measure: "lb", upc: null
+- iPhone 15 Pro → is_generic: false, upc: null (varies by carrier/storage)
+
+Only return the JSON array, no other text.
+PROMPT;
+    }
+
+    /**
+     * Build prompt for product identification from text query.
+     */
+    protected function buildTextIdentificationPrompt(string $query): string
+    {
+        return <<<PROMPT
+Based on this search query, identify what product the user is looking for: "{$query}"
+
+Return up to 5 possible product matches that could match this query, ranked by how likely they are what the user wants.
+
+Return a JSON array with the following format:
+[
+    {
+        "product_name": "Full product name including brand and model",
+        "brand": "Brand/manufacturer name",
+        "model": "Model number if applicable",
+        "category": "Product category (e.g., Electronics, Groceries, Home & Kitchen)",
+        "upc": "12-digit UPC barcode if known, null otherwise",
+        "is_generic": false,
+        "unit_of_measure": null,
+        "confidence": 95
+    }
+]
+
+IMPORTANT GUIDELINES:
+1. Return up to 5 possible matches, ranked by confidence (highest first)
+2. Think about what products the user might be searching for
+3. Include popular/common variants if the query is general
+4. Confidence score should be 0-100 based on how likely this is what the user wants
+5. For branded products, set is_generic: false
+6. For generic items (produce, bulk goods, meat, dairy), set is_generic: true and unit_of_measure to appropriate unit (lb, oz, each, dozen, gallon, etc.)
+7. Generic items do NOT have UPCs - use null
+
+Examples:
+- Query "airpods" might return: AirPods Pro 2, AirPods 3rd Gen, AirPods Max, etc.
+- Query "milk" might return: various milk types with is_generic: true
+- Query "sony headphones" might return: WH-1000XM5, WH-1000XM4, WF-1000XM5, etc.
+
+Only return the JSON array, no other text.
+PROMPT;
+    }
+
+    /**
+     * Parse product suggestions from AI response.
+     */
+    protected function parseProductSuggestions(string $response): array
+    {
+        $results = [];
+
+        // Try to extract JSON array from the response
+        if (preg_match('/\[[\s\S]*\]/', $response, $matches)) {
+            $parsed = json_decode($matches[0], true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($parsed)) {
+                foreach ($parsed as $item) {
+                    if (isset($item['product_name']) || isset($item['brand'])) {
+                        $results[] = [
+                            'product_name' => $item['product_name'] ?? ($item['brand'] . ' ' . ($item['model'] ?? '')),
+                            'brand' => $item['brand'] ?? null,
+                            'model' => $item['model'] ?? null,
+                            'category' => $item['category'] ?? null,
+                            'upc' => $item['upc'] ?? null,
+                            'is_generic' => (bool) ($item['is_generic'] ?? false),
+                            'unit_of_measure' => $item['unit_of_measure'] ?? null,
+                            'confidence' => (int) ($item['confidence'] ?? 50),
+                            'image_url' => null, // Will be populated by enrichProductSuggestionsWithImages
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Sort by confidence descending
+        usort($results, fn($a, $b) => $b['confidence'] <=> $a['confidence']);
+
+        return $results;
+    }
+
+    /**
+     * Enrich product suggestions with images via web search.
+     */
+    protected function enrichProductSuggestionsWithImages(array $results): array
+    {
+        // Only search for images for top 5 results to avoid rate limiting
+        $maxSearches = min(5, count($results));
+        
+        for ($i = 0; $i < $maxSearches; $i++) {
+            $result = $results[$i];
+            
+            // Skip if already has image
+            if (!empty($result['image_url'])) {
+                continue;
+            }
+            
+            // Skip generic items (usually don't have specific product images)
+            if ($result['is_generic'] ?? false) {
+                continue;
+            }
+            
+            // Build search query for product image
+            $searchQuery = trim(($result['brand'] ?? '') . ' ' . ($result['model'] ?? '') . ' ' . ($result['product_name'] ?? ''));
+            if (empty($searchQuery)) {
+                continue;
+            }
+            
+            // Try to find product image via web search
+            $imageUrl = $this->searchProductImage($searchQuery);
+            if ($imageUrl) {
+                $results[$i]['image_url'] = $imageUrl;
+            }
+        }
+        
+        return $results;
+    }
+
+    /**
+     * Search for a product image using AI-powered web search.
+     */
+    protected function searchProductImage(string $query): ?string
+    {
+        // This is a simplified image search - in production you might use
+        // a dedicated image search API like Google Custom Search or SerpAPI
+        // For now, return null and let the frontend handle missing images
+        return null;
     }
 
     /**
@@ -269,6 +584,7 @@ class SmartAddController extends Controller
             'priority' => ['in:low,medium,high'],
             'is_generic' => ['nullable', 'boolean'],
             'unit_of_measure' => ['nullable', 'string', 'max:20'],
+            'skip_price_search' => ['nullable', 'boolean'], // Option to skip background price search
         ]);
 
         $list = ShoppingList::findOrFail($validated['list_id']);
@@ -280,7 +596,7 @@ class SmartAddController extends Controller
             $uploadedImagePath = $this->saveUploadedImage($validated['uploaded_image'], $request->user()->id);
         }
 
-        $list->items()->create([
+        $item = $list->items()->create([
             'added_by_user_id' => $request->user()->id,
             'product_name' => $validated['product_name'],
             'product_query' => $validated['product_query'] ?? $validated['product_name'],
@@ -301,8 +617,15 @@ class SmartAddController extends Controller
             'last_checked_at' => ($validated['current_price'] ?? null) ? now() : null,
         ]);
 
+        // Dispatch background job to search for prices (Phase 2 of Smart Add)
+        // This runs asynchronously after the item is added
+        if (!($validated['skip_price_search'] ?? false)) {
+            \App\Jobs\SearchItemPrices::dispatch($item->id, $request->user()->id)
+                ->delay(now()->addSeconds(2)); // Small delay to let the redirect complete
+        }
+
         return redirect()->route('lists.show', $list)
-            ->with('success', 'Item added to ' . $list->name . '!');
+            ->with('success', 'Item added to ' . $list->name . '! Price search running in background.');
     }
 
     /**
@@ -582,134 +905,4 @@ PROMPT;
         return null;
     }
 
-    /**
-     * Stream price search results using Server-Sent Events.
-     * 
-     * This provides real-time updates as AI providers search for prices,
-     * showing which AI is being queried and results as they arrive.
-     */
-    public function streamSearch(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
-    {
-        $validated = $request->validate([
-            'query' => ['required', 'string', 'max:255'],
-        ]);
-
-        $userId = $request->user()->id;
-        $query = $validated['query'];
-
-        return response()->stream(function () use ($userId, $query) {
-            // Disable output buffering for real-time streaming
-            if (ob_get_level()) {
-                ob_end_clean();
-            }
-
-            // Send initial searching event
-            $this->sendSSE('searching', [
-                'api' => 'AI Search',
-                'status' => 'Initializing AI-powered search...',
-            ]);
-
-            $priceService = AIPriceSearchService::forUser($userId);
-            
-            if (!$priceService->isAvailable()) {
-                $this->sendSSE('error', [
-                    'message' => 'No AI providers configured. Please set up an AI provider in Settings.',
-                ]);
-                $this->sendSSE('complete', [
-                    'total' => 0,
-                    'apis_queried' => [],
-                ]);
-                return;
-            }
-
-            $providerCount = $priceService->getProviderCount();
-            
-            // Send searching status
-            $this->sendSSE('searching', [
-                'api' => 'AI Providers',
-                'status' => "Querying {$providerCount} AI provider" . ($providerCount > 1 ? 's' : '') . "...",
-            ]);
-
-            // Perform the AI search
-            try {
-                $searchResult = $priceService->search($query);
-                
-                // Stream each result individually with a small delay for visual effect
-                $results = $searchResult->results;
-                $total = count($results);
-                
-                // Send provider info
-                $providersUsed = implode(', ', array_map('ucfirst', $searchResult->providersUsed));
-                
-                if ($total === 0) {
-                    $this->sendSSE('searching', [
-                        'api' => $providersUsed ?: 'AI',
-                        'status' => 'No results found',
-                    ]);
-                } else {
-                    $this->sendSSE('searching', [
-                        'api' => $providersUsed ?: 'AI',
-                        'status' => "Found {$total} results from {$providersUsed}, loading...",
-                    ]);
-                }
-
-                foreach ($results as $index => $result) {
-                    // Small delay between results for streaming effect
-                    usleep(100000); // 100ms delay
-                    
-                    $this->sendSSE('result', [
-                        'index' => $index,
-                        'total' => $total,
-                        'title' => $result['title'] ?? '',
-                        'price' => $result['price'] ?? 0,
-                        'url' => $result['url'] ?? '',
-                        'image_url' => $result['image_url'] ?? null,
-                        'retailer' => $result['retailer'] ?? 'Unknown',
-                        'upc' => $result['upc'] ?? null,
-                        'in_stock' => $result['in_stock'] ?? true,
-                    ]);
-                }
-
-                // Send completion event
-                $this->sendSSE('complete', [
-                    'total' => $total,
-                    'apis_queried' => $searchResult->providersUsed,
-                    'lowest_price' => $searchResult->lowestPrice,
-                    'highest_price' => $searchResult->highestPrice,
-                    'is_generic' => $searchResult->isGeneric,
-                    'unit_of_measure' => $searchResult->unitOfMeasure,
-                ]);
-
-            } catch (\Exception $e) {
-                $this->sendSSE('error', [
-                    'message' => 'AI search failed: ' . $e->getMessage(),
-                ]);
-                $this->sendSSE('complete', [
-                    'total' => 0,
-                    'apis_queried' => [],
-                ]);
-            }
-
-        }, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'Connection' => 'keep-alive',
-            'X-Accel-Buffering' => 'no', // Disable nginx buffering
-        ]);
-    }
-
-    /**
-     * Send a Server-Sent Event.
-     */
-    protected function sendSSE(string $event, array $data): void
-    {
-        echo "event: {$event}\n";
-        echo "data: " . json_encode($data) . "\n\n";
-        
-        // Flush output immediately
-        if (ob_get_level()) {
-            ob_flush();
-        }
-        flush();
-    }
 }

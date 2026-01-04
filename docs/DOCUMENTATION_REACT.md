@@ -391,64 +391,92 @@ export function useTheme() {
 
 ### Smart Add Page
 
-The Smart Add page allows AI-powered product identification with a two-phase search flow:
+The Smart Add page allows AI-powered product identification with a two-phase flow:
 
-**Phase 1 - Search**: Returns unique products with name, image, lowest price, and UPC
-**Phase 2 - Add Modal**: Clicking "Add" opens a modal with detailed pricing options
+**Phase 1 - Product Identification**: User uploads image or enters text, AI returns up to 5 product suggestions
+**Phase 2 - Add to List**: User selects correct product, fills form, adds to list (price search runs in background)
 
 ```tsx
 // Pages/SmartAdd.tsx
-export default function SmartAdd({ auth, lists, analysis, price_results, flash }: Props) {
-  const [mode, setMode] = useState<'idle' | 'image' | 'text'>('idle');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<PriceResult | null>(null);
+interface ProductSuggestion {
+  product_name: string;
+  brand: string | null;
+  model: string | null;
+  category: string | null;
+  upc: string | null;
+  is_generic: boolean;
+  unit_of_measure: string | null;
+  confidence: number;  // 0-100
+  image_url: string | null;
+}
+
+export default function SmartAdd({ auth, lists, flash }: Props) {
+  const [analysisState, setAnalysisState] = useState<AnalysisState>('idle');
+  const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
-  // Open modal with pre-filled product data
-  const openAddModal = (result: PriceResult) => {
-    setSelectedProduct(result);
-    setIsModalOpen(true);
+  // Phase 1: Submit search/image for AI identification
+  const submitIdentification = async () => {
+    const response = await fetch('/smart-add/identify', { ... });
+    setSuggestions(data.results);  // Up to 5 suggestions
+  };
+  
+  // Phase 2: User selects product, inline form appears
+  const handleSelectProduct = (index: number) => {
+    setSelectedIndex(index);
+    // Pre-fill form with selected product data
+  };
+  
+  // Submit adds item, background job searches for prices
+  const handleSubmitAdd = (e: FormEvent) => {
+    addForm.post('/smart-add/add');  // Dispatches SearchItemPrices job
   };
 }
 ```
 
-#### AddItemModal Component
+#### Key UI Elements
 
-Modal for adding items to shopping lists with pre-filled data:
+1. **Search Input & Upload Area**: Text search or drag-and-drop image upload
+2. **Product Suggestions**: Radio-button style selection of AI suggestions
+3. **Confidence Indicator**: Visual confidence percentage for each suggestion
+4. **Google Verification Link**: External link to verify product on Google
+5. **Inline Add Form**: Appears when product is selected (not a modal)
+6. **Background Price Search Note**: Informs user prices will be found after adding
+
+#### ProductSuggestion Interface
+
+```tsx
+interface ProductSuggestion {
+  product_name: string;    // Full product name
+  brand: string | null;    // Brand/manufacturer
+  model: string | null;    // Model number
+  category: string | null; // Product category
+  upc: string | null;      // UPC barcode if known
+  is_generic: boolean;     // True for items sold by weight
+  unit_of_measure: string | null;  // lb, oz, gallon, each, dozen
+  confidence: number;      // 0-100 AI confidence score
+  image_url: string | null; // Product image URL
+}
+```
+
+#### AddItemModal Component (Optional)
+
+Simple modal for adding items from other contexts:
 
 ```tsx
 // Components/AddItemModal.tsx
 interface AddItemModalProps {
   isOpen: boolean;
   onClose: () => void;
-  product: ProductData | null;  // Pre-filled from search
+  product: ProductData | null;
   lists: { id: number; name: string }[];
   uploadedImage?: string;
-  isGeneric?: boolean;
-  unitOfMeasure?: string;
 }
 
 // Features:
-// - Opens with form pre-filled (name, price, retailer, UPC)
-// - Fetches detailed pricing via POST /smart-add/price-details
-// - Displays retailer options for selection
-// - Submits via POST /smart-add/add
-```
-
-#### StreamingSearchResults Component
-
-Displays real-time search results with simplified product cards:
-
-```tsx
-// Components/StreamingSearchResults.tsx
-interface StreamingSearchResultsProps {
-  query: string;
-  onComplete: (results: PriceResult[]) => void;
-  onAddClick: (result: PriceResult) => void;  // Opens AddItemModal
-  isActive: boolean;
-  onCancel: () => void;
-}
-
-// Each card shows: image, title, price, retailer, UPC badge, Add button
+// - Pre-filled with product data
+// - No price fetching (prices found in background after add)
+// - Simple form: list, name, target price, priority, notes
 ```
 
 ### Dashboard
