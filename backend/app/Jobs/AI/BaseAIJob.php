@@ -136,14 +136,21 @@ abstract class BaseAIJob implements ShouldQueue
     }
 
     /**
-     * Update the job progress.
+     * Update the job progress with optional logs.
      *
      * @param AIJob $aiJob The AIJob model
      * @param int $progress Progress percentage (0-100)
+     * @param array|null $logs Optional array of log entries
      */
-    protected function updateProgress(AIJob $aiJob, int $progress): void
+    protected function updateProgress(AIJob $aiJob, int $progress, ?array $logs = null): void
     {
-        $aiJob->updateProgress($progress);
+        $statusMessage = null;
+        if ($logs && !empty($logs)) {
+            // Use the last log entry as the status message
+            $statusMessage = end($logs);
+        }
+        
+        $aiJob->updateProgress($progress, $statusMessage, $logs);
     }
 
     /**

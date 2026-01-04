@@ -292,15 +292,34 @@ class AIJob extends Model
     }
 
     /**
-     * Update the job progress.
+     * Update the job progress with optional status message and logs.
      *
      * @param int $progress Progress percentage (0-100)
+     * @param string|null $statusMessage Optional status message to display
+     * @param array|null $logs Optional array of log entries to store
      */
-    public function updateProgress(int $progress): self
+    public function updateProgress(int $progress, ?string $statusMessage = null, ?array $logs = null): self
     {
-        $this->update([
+        $updates = [
             'progress' => min(100, max(0, $progress)),
-        ]);
+        ];
+
+        // Store logs and status message in output_data without overwriting other data
+        if ($statusMessage !== null || $logs !== null) {
+            $currentOutput = $this->output_data ?? [];
+            
+            if ($statusMessage !== null) {
+                $currentOutput['status_message'] = $statusMessage;
+            }
+            
+            if ($logs !== null) {
+                $currentOutput['progress_logs'] = $logs;
+            }
+            
+            $updates['output_data'] = $currentOutput;
+        }
+
+        $this->update($updates);
 
         return $this;
     }

@@ -7,6 +7,9 @@ interface ActiveJob {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
   progress: number;
   type: string;
+  status_message?: string | null;
+  error_message?: string | null;
+  logs?: string[] | null;
 }
 
 interface Props {
@@ -114,13 +117,22 @@ export function PriceUpdateStatus({ itemId, lastCheckedAt, className, onRetry }:
     return null;
   }
 
-  // Job is pending or processing - show spinner
+  // Job is pending or processing - show spinner with status message
   if (activeJob && ['pending', 'processing'].includes(activeJob.status)) {
+    // Determine display text
+    let statusText = activeJob.status === 'pending' ? 'Queued...' : 'Updating prices...';
+    if (activeJob.status_message) {
+      // Truncate long status messages
+      statusText = activeJob.status_message.length > 40 
+        ? activeJob.status_message.substring(0, 40) + '...'
+        : activeJob.status_message;
+    }
+
     return (
       <div className={cn('flex items-center gap-1.5 text-amber-500', className)}>
         <Loader2 className="h-4 w-4 animate-spin" />
         <span className="text-xs">
-          {activeJob.status === 'pending' ? 'Queued...' : 'Updating prices...'}
+          {statusText}
           {activeJob.progress > 0 && activeJob.progress < 100 && ` (${activeJob.progress}%)`}
         </span>
       </div>
@@ -129,19 +141,29 @@ export function PriceUpdateStatus({ itemId, lastCheckedAt, className, onRetry }:
 
   // Job failed - show error with retry option
   if (activeJob && activeJob.status === 'failed') {
+    // Get a user-friendly error message
+    let errorText = 'Update failed';
+    if (activeJob.error_message) {
+      // Extract first part of error message (before any technical details)
+      const errorMsg = activeJob.error_message.split('\n')[0];
+      errorText = errorMsg.length > 50 ? errorMsg.substring(0, 50) + '...' : errorMsg;
+    }
+
     return (
-      <div className={cn('flex items-center gap-1.5 text-red-500', className)}>
-        <XCircle className="h-4 w-4" />
-        <span className="text-xs">Update failed</span>
-        {onRetry && (
-          <button
-            onClick={onRetry}
-            className="ml-1 text-xs text-primary hover:underline flex items-center gap-0.5"
-          >
-            <RefreshCw className="h-3 w-3" />
-            Retry
-          </button>
-        )}
+      <div className={cn('flex flex-col gap-1', className)}>
+        <div className="flex items-center gap-1.5 text-red-500">
+          <XCircle className="h-4 w-4" />
+          <span className="text-xs">{errorText}</span>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="ml-1 text-xs text-primary hover:underline flex items-center gap-0.5"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Retry
+            </button>
+          )}
+        </div>
       </div>
     );
   }

@@ -8,7 +8,6 @@ use App\Models\ListItem;
 use App\Models\PriceHistory;
 use App\Services\Crawler\FirecrawlResult;
 use App\Services\Crawler\FirecrawlService;
-use App\Services\AI\AIPriceSearchService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -43,12 +42,14 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         $inputData = $aiJob->input_data ?? [];
         $productName = $inputData['product_name'] ?? null;
         $itemId = $aiJob->related_item_id;
+        $logs = [];
 
         if (!$productName) {
             throw new \RuntimeException('No product name provided for Firecrawl discovery.');
         }
 
-        $this->updateProgress($aiJob, 10);
+        $logs[] = "Starting price discovery for: {$productName}";
+        $this->updateProgress($aiJob, 10, $logs);
 
         // Create Firecrawl service
         $firecrawlService = FirecrawlService::forUser($this->userId);
@@ -58,55 +59,104 @@ class FirecrawlDiscoveryJob extends BaseAIJob
             throw new \RuntimeException('Firecrawl API key not configured. Please set up Firecrawl in Settings.');
         }
 
-        $this->updateProgress($aiJob, 20);
+        $logs[] = "Firecrawl service initialized";
+        $this->updateProgress($aiJob, 20, $logs);
 
         // Check for cancellation
         if ($this->isCancelled($aiJob)) {
-            return ['cancelled' => true];
+            return ['cancelled' => true, 'logs' => $logs];
         }
 
         // Perform Firecrawl discovery
+        $shopLocal = $inputData['shop_local'] ?? false;
+        $logs[] = "Sending request to Firecrawl Agent API...";
+        $logs[] = $shopLocal ? "Searching local stores first" : "Searching all online retailers";
+        $this->updateProgress($aiJob, 30, $logs);
+
         Log::info('FirecrawlDiscoveryJob: Starting discovery', [
+            'ai_job_id' => $aiJob->id,
             'product_name' => $productName,
             'item_id' => $itemId,
-            'shop_local' => $inputData['shop_local'] ?? false,
+            'shop_local' => $shopLocal,
         ]);
 
         $result = $firecrawlService->discoverProductPrices($productName, [
-            'shop_local' => $inputData['shop_local'] ?? false,
+            'shop_local' => $shopLocal,
             'upc' => $inputData['upc'] ?? null,
             'brand' => $inputData['brand'] ?? null,
             'is_generic' => $inputData['is_generic'] ?? false,
             'unit_of_measure' => $inputData['unit_of_measure'] ?? null,
         ]);
 
-        $this->updateProgress($aiJob, 60);
+        $logs[] = "Firecrawl response received";
+        $this->updateProgress($aiJob, 60, $logs);
 
         // Check for cancellation
         if ($this->isCancelled($aiJob)) {
-            return ['cancelled' => true];
+            return ['cancelled' => true, 'logs' => $logs];
         }
 
         if (!$result->isSuccess()) {
+            $logs[] = "ERROR: " . ($result->error ?? 'Firecrawl discovery failed');
+            Log::error('FirecrawlDiscoveryJob: Discovery failed', [
+                'ai_job_id' => $aiJob->id,
+                'product_name' => $productName,
+                'error' => $result->error,
+            ]);
             throw new \RuntimeException($result->error ?? 'Firecrawl discovery failed');
         }
 
-        // If we have a related item, update its prices
-        if ($itemId && $result->hasResults()) {
-            $this->updateItemPrices($itemId, $result);
+        $logs[] = "Found {$result->count()} price results";
+        
+        if ($result->hasResults()) {
+            $logs[] = "Price range: \${$result->getLowestPrice()} - \${$result->getHighestPrice()}";
+            
+            // List stores found
+            $stores = array_unique(array_column($result->results, 'store_name'));
+            $logs[] = "Stores found: " . implode(', ', array_slice($stores, 0, 5));
+            if (count($stores) > 5) {
+                $logs[] = "...and " . (count($stores) - 5) . " more stores";
+            }
+        } else {
+            $logs[] = "No prices found for this product";
         }
 
-        $this->updateProgress($aiJob, 80);
+        $this->updateProgress($aiJob, 70, $logs);
+
+        // If we have a related item, update its prices
+        if ($itemId && $result->hasResults()) {
+            $logs[] = "Saving prices to database...";
+            $this->updateProgress($aiJob, 75, $logs);
+            
+            $this->updateItemPrices($itemId, $result);
+            
+            $logs[] = "Prices saved successfully";
+        }
+
+        $this->updateProgress($aiJob, 80, $logs);
 
         // Optionally analyze results with AI
         $analysis = null;
         if ($result->hasResults() && $itemId) {
+            $logs[] = "Analyzing price data...";
+            $this->updateProgress($aiJob, 85, $logs);
+            
             $analysis = $this->analyzeResultsWithAI($result, $aiJob);
+            
+            if ($analysis) {
+                $logs[] = "Price analysis complete";
+                if (isset($analysis['best_deal'])) {
+                    $logs[] = "Best deal: {$analysis['best_deal']['store']} at \${$analysis['best_deal']['price']}";
+                }
+            }
         }
 
-        $this->updateProgress($aiJob, 95);
+        $this->updateProgress($aiJob, 95, $logs);
 
+        $logs[] = "Discovery completed successfully";
+        
         Log::info('FirecrawlDiscoveryJob: Completed', [
+            'ai_job_id' => $aiJob->id,
             'product_name' => $productName,
             'results_count' => $result->count(),
             'lowest_price' => $result->getLowestPrice(),
@@ -120,6 +170,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
             'highest_price' => $result->getHighestPrice(),
             'source' => $result->source,
             'analysis' => $analysis,
+            'logs' => $logs,
         ];
     }
 

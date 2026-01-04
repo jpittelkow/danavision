@@ -53,19 +53,20 @@ Notify on price drops
 
 We use two Firecrawl endpoints:
 
-1. **Extract API** (`/v1/extract`): Intelligent discovery with web search
+1. **Agent API** (`/v2/agent`): Autonomous price discovery
    - Used for initial product price discovery
    - Used for weekly new vendor discovery
    - Takes natural language prompt and JSON schema
-   - Enabled with `enableWebSearch: true` to find products across the web
-   - Returns structured price data from multiple sites
-   - More widely available than the newer Agent API
+   - Autonomously searches the web for products and prices
+   - Returns structured price data from multiple retailers
+   - Asynchronous: Returns job ID, requires polling for results
 
 2. **Scrape API** (`/v1/scrape`): Targeted extraction
    - Used for daily price refreshes
-   - Scrapes known product URLs
+   - Scrapes known product URLs with LLM extraction
    - More cost-effective than re-discovery
    - Returns updated prices with stock status
+   - Uses `jsonOptions` with schema and prompt for structured extraction
 
 ### Firecrawl vs SERP API
 

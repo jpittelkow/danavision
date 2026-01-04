@@ -242,13 +242,19 @@ test('firecrawl service makes discovery api call with correct structure', functi
     $user = User::factory()->create();
     Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
     
+    // The Agent API is async - it returns a job ID first, then we poll for results
+    // Mock both the initial POST and the GET status check
     Http::fake([
-        'api.firecrawl.dev/*' => Http::response([
-            'success' => true,
+        'api.firecrawl.dev/v2/agent' => Http::response([
+            'id' => 'job-123',
+            'status' => 'processing',
+        ], 200),
+        'api.firecrawl.dev/v2/agent/job-123' => Http::response([
+            'status' => 'completed',
             'data' => [
                 [
                     'store_name' => 'Amazon',
-                    'item' => 'Test Product',
+                    'item_name' => 'Test Product',
                     'price' => 29.99,
                     'stock_status' => 'in_stock',
                     'unit_of_measure' => 'each',
@@ -262,8 +268,8 @@ test('firecrawl service makes discovery api call with correct structure', functi
     $result = $service->discoverProductPrices('Test Product');
     
     Http::assertSent(function ($request) {
-        // Now uses /extract endpoint with enableWebSearch
-        return str_contains($request->url(), 'firecrawl.dev/v1/extract') &&
+        // Now uses /v2/agent endpoint for autonomous price discovery
+        return str_contains($request->url(), 'firecrawl.dev/v2/agent') &&
                $request->hasHeader('Authorization');
     });
     

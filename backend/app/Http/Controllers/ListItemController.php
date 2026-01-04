@@ -555,12 +555,19 @@ PROMPT;
             return response()->json(['job' => null]);
         }
 
+        // Extract status message from output_data if available
+        $outputData = $activeJob->output_data ?? [];
+        $statusMessage = $outputData['status_message'] ?? null;
+        $progressLogs = $outputData['progress_logs'] ?? null;
+
         return response()->json([
             'job' => [
                 'id' => $activeJob->id,
                 'status' => $activeJob->status,
                 'progress' => $activeJob->progress,
                 'type' => $activeJob->type,
+                'status_message' => $statusMessage,
+                'logs' => $progressLogs,
             ],
         ]);
     }

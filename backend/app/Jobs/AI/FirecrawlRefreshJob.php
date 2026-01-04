@@ -39,8 +39,10 @@ class FirecrawlRefreshJob extends BaseAIJob
     {
         $inputData = $aiJob->input_data ?? [];
         $itemId = $aiJob->related_item_id;
+        $logs = [];
 
-        $this->updateProgress($aiJob, 10);
+        $logs[] = "Starting price refresh job";
+        $this->updateProgress($aiJob, 10, $logs);
 
         // Create Firecrawl service
         $firecrawlService = FirecrawlService::forUser($this->userId);
@@ -50,7 +52,8 @@ class FirecrawlRefreshJob extends BaseAIJob
             throw new \RuntimeException('Firecrawl API key not configured. Please set up Firecrawl in Settings.');
         }
 
-        $this->updateProgress($aiJob, 20);
+        $logs[] = "Firecrawl service initialized";
+        $this->updateProgress($aiJob, 20, $logs);
 
         // Get the item and its vendor prices with URLs
         $item = null;
@@ -61,41 +64,52 @@ class FirecrawlRefreshJob extends BaseAIJob
             if ($item) {
                 $vendorPrices = $item->vendorPrices
                     ->filter(fn ($vp) => !empty($vp->product_url));
+                $logs[] = "Found product: {$item->product_name}";
             }
         }
 
         if ($vendorPrices->isEmpty()) {
+            $logs[] = "No product URLs found to refresh";
             Log::info('FirecrawlRefreshJob: No URLs to refresh', ['item_id' => $itemId]);
             return [
                 'message' => 'No product URLs found to refresh',
                 'urls_checked' => 0,
                 'prices_updated' => 0,
+                'logs' => $logs,
             ];
         }
 
         // Check for cancellation
         if ($this->isCancelled($aiJob)) {
-            return ['cancelled' => true];
+            return ['cancelled' => true, 'logs' => $logs];
         }
 
         // Collect URLs to scrape
         $urls = $vendorPrices->pluck('product_url')->toArray();
+        $logs[] = "Found " . count($urls) . " URLs to check";
+        
+        // List vendors
+        $vendors = $vendorPrices->pluck('vendor')->toArray();
+        $logs[] = "Stores: " . implode(', ', array_slice($vendors, 0, 5));
 
         Log::info('FirecrawlRefreshJob: Starting URL refresh', [
+            'ai_job_id' => $aiJob->id,
             'item_id' => $itemId,
             'urls_count' => count($urls),
         ]);
 
-        $this->updateProgress($aiJob, 30);
+        $logs[] = "Sending scrape requests to Firecrawl...";
+        $this->updateProgress($aiJob, 30, $logs);
 
         // Perform Firecrawl scraping
         $result = $firecrawlService->scrapeProductUrls($urls);
 
-        $this->updateProgress($aiJob, 70);
+        $logs[] = "Received response from Firecrawl";
+        $this->updateProgress($aiJob, 70, $logs);
 
         // Check for cancellation
         if ($this->isCancelled($aiJob)) {
-            return ['cancelled' => true];
+            return ['cancelled' => true, 'logs' => $logs];
         }
 
         // Update prices from results
@@ -103,6 +117,8 @@ class FirecrawlRefreshJob extends BaseAIJob
         $priceDrops = [];
 
         if ($result->isSuccess() && $result->hasResults()) {
+            $logs[] = "Processing {$result->count()} price results...";
+            
             foreach ($result->results as $priceResult) {
                 $url = $priceResult['product_url'] ?? null;
                 if (!$url) {
@@ -130,6 +146,7 @@ class FirecrawlRefreshJob extends BaseAIJob
                         'drop_amount' => $oldPrice - $newPrice,
                         'drop_percent' => (($oldPrice - $newPrice) / $oldPrice) * 100,
                     ];
+                    $logs[] = "Price drop at {$vendorPrice->vendor}: \${$oldPrice} → \${$newPrice}";
                 }
 
                 // Determine stock status
@@ -144,18 +161,28 @@ class FirecrawlRefreshJob extends BaseAIJob
 
                 $pricesUpdated++;
             }
+        } else if ($result->error) {
+            $logs[] = "ERROR: " . $result->error;
         }
 
-        $this->updateProgress($aiJob, 85);
+        $logs[] = "Updated {$pricesUpdated} prices";
+        $this->updateProgress($aiJob, 85, $logs);
 
         // Update the main item with the best price
         if ($item && $pricesUpdated > 0) {
             $this->updateItemBestPrice($item);
+            $logs[] = "Updated best price for item";
         }
 
-        $this->updateProgress($aiJob, 95);
+        if (count($priceDrops) > 0) {
+            $logs[] = "Found " . count($priceDrops) . " price drop(s)!";
+        }
+
+        $logs[] = "Price refresh completed";
+        $this->updateProgress($aiJob, 95, $logs);
 
         Log::info('FirecrawlRefreshJob: Completed', [
+            'ai_job_id' => $aiJob->id,
             'item_id' => $itemId,
             'urls_checked' => count($urls),
             'prices_updated' => $pricesUpdated,
@@ -168,6 +195,7 @@ class FirecrawlRefreshJob extends BaseAIJob
             'prices_updated' => $pricesUpdated,
             'price_drops' => $priceDrops,
             'error' => $result->error,
+            'logs' => $logs,
         ];
     }
 
