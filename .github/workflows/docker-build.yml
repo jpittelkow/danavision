@@ -1,4 +1,4 @@
-﻿name: Build and Push Docker Image
+name: Build and Push Docker Image
 
 on:
   push:
@@ -55,6 +55,10 @@ jobs:
           sed -i 's|DB_DATABASE=.*|DB_DATABASE=database/database.sqlite|' .env
           mkdir -p tests/Unit
           php artisan migrate --force
+          # Create .env.testing for test environment
+          cp .env .env.testing
+          sed -i 's|APP_ENV=.*|APP_ENV=testing|' .env.testing
+          sed -i 's|DB_DATABASE=.*|DB_DATABASE=:memory:|' .env.testing
 
       - name: Run tests
         run: ./vendor/bin/pest
