@@ -145,8 +145,34 @@ class SmartAddController extends Controller
     public function index(Request $request): Response;     // Smart Add page
     public function analyzeImage(Request $request): Response;  // AI image analysis
     public function searchText(Request $request): Response;    // Text search
+    public function streamSearch(Request $request): StreamedResponse; // SSE streaming search
+    public function getPriceDetails(Request $request): JsonResponse;  // Get detailed pricing
     public function addToList(Request $request): RedirectResponse;  // Add to list
 }
+```
+
+#### getPriceDetails Endpoint
+
+Fetches detailed retailer pricing for a specific product:
+
+```php
+// POST /smart-add/price-details
+// Request:
+[
+    'product_name' => 'required|string|max:255',
+    'upc' => 'nullable|string|max:20',
+]
+
+// Response (JSON):
+[
+    'results' => [...],        // Array of price results
+    'lowest_price' => 99.99,
+    'highest_price' => 149.99,
+    'providers_used' => ['openai', 'web_search'],
+    'is_generic' => false,
+    'unit_of_measure' => null,
+    'error' => null,
+]
 ```
 
 ### SearchController
@@ -275,6 +301,8 @@ Route::middleware('auth')->group(function () {
     Route::get('smart-add', [SmartAddController::class, 'index']);
     Route::post('smart-add/analyze', [SmartAddController::class, 'analyzeImage']);
     Route::post('smart-add/search', [SmartAddController::class, 'searchText']);
+    Route::get('smart-add/stream-search', [SmartAddController::class, 'streamSearch']);
+    Route::post('smart-add/price-details', [SmartAddController::class, 'getPriceDetails']);
     Route::post('smart-add/add', [SmartAddController::class, 'addToList']);
 
     // Shopping Lists

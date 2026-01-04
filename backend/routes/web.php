@@ -43,6 +43,7 @@ Route::middleware('auth')->group(function () {
     Route::post('smart-add/analyze', [SmartAddController::class, 'analyzeImage'])->name('smart-add.analyze');
     Route::post('smart-add/search', [SmartAddController::class, 'searchText'])->name('smart-add.search');
     Route::get('smart-add/stream-search', [SmartAddController::class, 'streamSearch'])->name('smart-add.stream');
+    Route::post('smart-add/price-details', [SmartAddController::class, 'getPriceDetails'])->name('smart-add.price-details');
     Route::post('smart-add/add', [SmartAddController::class, 'addToList'])->name('smart-add.add');
 
     // Shopping Lists

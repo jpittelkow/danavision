@@ -391,17 +391,64 @@ export function useTheme() {
 
 ### Smart Add Page
 
-The Smart Add page allows AI-powered product identification:
+The Smart Add page allows AI-powered product identification with a two-phase search flow:
+
+**Phase 1 - Search**: Returns unique products with name, image, lowest price, and UPC
+**Phase 2 - Add Modal**: Clicking "Add" opens a modal with detailed pricing options
 
 ```tsx
 // Pages/SmartAdd.tsx
 export default function SmartAdd({ auth, lists, analysis, price_results, flash }: Props) {
   const [mode, setMode] = useState<'idle' | 'image' | 'text'>('idle');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<PriceResult | null>(null);
   
-  // Image upload handling
-  // Text search handling
-  // Add to list flow
+  // Open modal with pre-filled product data
+  const openAddModal = (result: PriceResult) => {
+    setSelectedProduct(result);
+    setIsModalOpen(true);
+  };
 }
+```
+
+#### AddItemModal Component
+
+Modal for adding items to shopping lists with pre-filled data:
+
+```tsx
+// Components/AddItemModal.tsx
+interface AddItemModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  product: ProductData | null;  // Pre-filled from search
+  lists: { id: number; name: string }[];
+  uploadedImage?: string;
+  isGeneric?: boolean;
+  unitOfMeasure?: string;
+}
+
+// Features:
+// - Opens with form pre-filled (name, price, retailer, UPC)
+// - Fetches detailed pricing via POST /smart-add/price-details
+// - Displays retailer options for selection
+// - Submits via POST /smart-add/add
+```
+
+#### StreamingSearchResults Component
+
+Displays real-time search results with simplified product cards:
+
+```tsx
+// Components/StreamingSearchResults.tsx
+interface StreamingSearchResultsProps {
+  query: string;
+  onComplete: (results: PriceResult[]) => void;
+  onAddClick: (result: PriceResult) => void;  // Opens AddItemModal
+  isActive: boolean;
+  onCancel: () => void;
+}
+
+// Each card shows: image, title, price, retailer, UPC badge, Add button
 ```
 
 ### Dashboard

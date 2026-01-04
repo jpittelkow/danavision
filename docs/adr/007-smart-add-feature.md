@@ -37,13 +37,21 @@ After identifying the product:
 2. Display prices from multiple vendors
 3. Show product images from search results
 
-### Add to List Flow
+### Add to List Flow (Two-Phase)
 
+**Phase 1 - Search:**
 1. User uploads image OR enters text search
 2. AI analyzes and identifies product (if image)
-3. Price search returns vendor results
-4. User selects result and target list
-5. Item created with pre-populated data
+3. Price search returns unique products with lowest prices and UPC codes
+4. Results displayed as simplified cards with "Add" button
+
+**Phase 2 - Add Modal:**
+1. User clicks "Add" on a product card
+2. Modal opens with form pre-filled (name, price, retailer, UPC)
+3. Modal fetches detailed pricing via `POST /smart-add/price-details`
+4. User can select different retailer/price or keep default
+5. User selects target list and submits
+6. Item created with all data
 
 ### Architecture
 

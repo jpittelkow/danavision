@@ -7,10 +7,11 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
   ImageIcon,
   Search,
   Zap,
+  Plus,
+  Barcode,
 } from 'lucide-react';
 
 interface PriceResult {
@@ -19,7 +20,13 @@ interface PriceResult {
   url: string;
   image_url?: string;
   retailer: string;
+  upc?: string;
   in_stock?: boolean;
+  other_prices?: {
+    retailer: string;
+    price: number;
+    url: string;
+  }[];
 }
 
 interface SearchStatus {
@@ -30,8 +37,7 @@ interface SearchStatus {
 interface StreamingSearchResultsProps {
   query: string;
   onComplete: (results: PriceResult[]) => void;
-  onSelectResult: (result: PriceResult) => void;
-  selectedResult: PriceResult | null;
+  onAddClick: (result: PriceResult) => void;
   isActive: boolean;
   onCancel: () => void;
 }
@@ -50,8 +56,7 @@ const getProxiedImageUrl = (url: string | undefined) => {
 export function StreamingSearchResults({
   query,
   onComplete,
-  onSelectResult,
-  selectedResult,
+  onAddClick,
   isActive,
   onCancel,
 }: StreamingSearchResultsProps) {
@@ -96,6 +101,7 @@ export function StreamingSearchResults({
         url: data.url,
         image_url: data.image_url,
         retailer: data.retailer,
+        upc: data.upc,
         in_stock: data.in_stock,
       }]);
       
@@ -235,19 +241,16 @@ export function StreamingSearchResults({
         </CardContent>
       </Card>
 
-      {/* Streaming Results */}
+      {/* Streaming Results - Simplified Cards */}
       <div className="grid gap-4">
         {results.map((result, index) => (
           <Card
             key={`${result.url}-${index}`}
             className={cn(
-              'cursor-pointer transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300',
-              selectedResult?.url === result.url
-                ? 'border-violet-500 bg-violet-500/5 ring-2 ring-violet-500/20'
-                : 'hover:border-violet-400/50'
+              'transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300',
+              'hover:border-violet-400/50'
             )}
             style={{ animationDelay: `${index * 50}ms` }}
-            onClick={() => onSelectResult(result)}
           >
             <CardContent className="p-4">
               <div className="flex gap-4">
@@ -272,33 +275,34 @@ export function StreamingSearchResults({
                   <h4 className="font-medium text-foreground line-clamp-2">
                     {result.title}
                   </h4>
-                  <div className="flex items-center gap-3 mt-2">
+                  <div className="flex items-center flex-wrap gap-2 mt-2">
                     <span className="text-xl font-bold text-primary">
                       ${formatPrice(result.price)}
                     </span>
                     <Badge variant="secondary">{result.retailer}</Badge>
+                    {result.upc && (
+                      <Badge variant="outline" className="text-xs gap-1">
+                        <Barcode className="h-3 w-3" />
+                        {result.upc}
+                      </Badge>
+                    )}
                     {result.in_stock === false && (
                       <Badge variant="outline" className="text-muted-foreground">
                         Out of stock
                       </Badge>
                     )}
                   </div>
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-2"
-                  >
-                    View on {result.retailer}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
                 </div>
-                {selectedResult?.url === result.url && (
-                  <div className="flex items-center">
-                    <CheckCircle2 className="h-6 w-6 text-violet-500" />
-                  </div>
-                )}
+                <div className="flex items-center">
+                  <Button
+                    size="sm"
+                    onClick={() => onAddClick(result)}
+                    className="gap-1 bg-green-600 hover:bg-green-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

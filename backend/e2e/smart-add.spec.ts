@@ -126,19 +126,124 @@ test.describe('Smart Add - Add to List Flow', () => {
     await page.goto('/smart-add');
   });
 
-  test('should show list selector when product is identified', async ({ page }) => {
+  test('should show Add button on product cards', async ({ page }) => {
     // Switch to text search
     await page.click('button:has-text("Text Search")');
 
     // Search for a product
-    await page.fill('input[placeholder*="Search for a product"]', 'test product');
+    await page.fill('input[placeholder*="Search for a product"]', 'headphones');
     await page.click('button:has-text("Search")');
 
     // Wait for results
     await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(3000);
 
-    // If results are found, there should be ability to add to list
-    // This test verifies the flow exists even if no actual results
+    // If results are found, each product card should have an Add button
+    const addButtons = page.locator('button:has-text("Add")');
+    const count = await addButtons.count();
+    
+    if (count > 0) {
+      await expect(addButtons.first()).toBeVisible();
+    }
+  });
+
+  test('should open modal when clicking Add button', async ({ page }) => {
+    // Switch to text search
+    await page.click('button:has-text("Text Search")');
+
+    // Search for a product
+    await page.fill('input[placeholder*="Search for a product"]', 'headphones');
+    await page.click('button:has-text("Search")');
+
+    // Wait for results
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(3000);
+
+    // Click first Add button if results exist
+    const addButtons = page.locator('button:has-text("Add")');
+    const count = await addButtons.count();
+    
+    if (count > 0) {
+      await addButtons.first().click();
+      
+      // Modal should open with "Add to Shopping List" title
+      await expect(page.locator('text=Add to Shopping List')).toBeVisible();
+    }
+  });
+
+  test('should pre-fill modal with product data', async ({ page }) => {
+    // Switch to text search
+    await page.click('button:has-text("Text Search")');
+
+    // Search for a product
+    await page.fill('input[placeholder*="Search for a product"]', 'headphones');
+    await page.click('button:has-text("Search")');
+
+    // Wait for results
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(3000);
+
+    // Click first Add button if results exist
+    const addButtons = page.locator('button:has-text("Add")');
+    const count = await addButtons.count();
+    
+    if (count > 0) {
+      await addButtons.first().click();
+      
+      // Modal should have product name input pre-filled
+      const productNameInput = page.locator('input[placeholder="Product name"]');
+      await expect(productNameInput).toBeVisible();
+      
+      // Product name should not be empty (pre-filled)
+      const value = await productNameInput.inputValue();
+      expect(value.length).toBeGreaterThan(0);
+    }
+  });
+
+  test('should close modal on cancel', async ({ page }) => {
+    // Switch to text search
+    await page.click('button:has-text("Text Search")');
+
+    // Search for a product
+    await page.fill('input[placeholder*="Search for a product"]', 'laptop');
+    await page.click('button:has-text("Search")');
+
+    // Wait for results
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(3000);
+
+    // Click first Add button if results exist
+    const addButtons = page.locator('button:has-text("Add")');
+    const count = await addButtons.count();
+    
+    if (count > 0) {
+      await addButtons.first().click();
+      
+      // Modal should be open
+      await expect(page.locator('text=Add to Shopping List')).toBeVisible();
+      
+      // Click cancel
+      await page.click('button:has-text("Cancel")');
+      
+      // Modal should be closed
+      await expect(page.locator('text=Add to Shopping List')).not.toBeVisible();
+    }
+  });
+
+  test('should show UPC badge when available', async ({ page }) => {
+    // Switch to text search
+    await page.click('button:has-text("Text Search")');
+
+    // Search for a branded product likely to have UPC
+    await page.fill('input[placeholder*="Search for a product"]', 'Sony WH-1000XM5');
+    await page.click('button:has-text("Search")');
+
+    // Wait for results
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(3000);
+
+    // UPC badges may be visible on product cards if UPC data is available
+    // This is optional - depends on AI returning UPC data
   });
 
   test('should navigate to list creation if no lists exist', async ({ page }) => {

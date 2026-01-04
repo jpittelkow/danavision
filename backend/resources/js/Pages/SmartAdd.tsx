@@ -7,15 +7,9 @@ import { Input } from '@/Components/ui/input';
 import { Card, CardContent } from '@/Components/ui/card';
 import { Badge } from '@/Components/ui/badge';
 import { Switch } from '@/Components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/Components/ui/select';
 import { cn, isMobileDevice } from '@/lib/utils';
 import StreamingSearchResults from '@/Components/StreamingSearchResults';
+import AddItemModal from '@/Components/AddItemModal';
 import {
   Sparkles,
   Camera,
@@ -25,7 +19,6 @@ import {
   X,
   AlertCircle,
   CheckCircle2,
-  ExternalLink,
   Plus,
   ImageIcon,
   Zap,
@@ -36,8 +29,9 @@ import {
   Radio,
   Scale,
   Package,
+  Barcode,
 } from 'lucide-react';
-import { UNITS_OF_MEASURE, UnitOfMeasure } from '@/types';
+
 
 interface OtherPrice {
   retailer: string;
@@ -184,10 +178,6 @@ export default function SmartAdd({
   const [mode, setMode] = useState<'idle' | 'image' | 'text'>('idle');
   const [imagePreview, setImagePreview] = useState<string | null>(uploaded_image || null);
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedResult, setSelectedResult] = useState<PriceResult | null>(null);
-  const [selectedListId, setSelectedListId] = useState<string>(
-    lists.length > 0 ? String(lists[0].id) : ''
-  );
   const [isEditingQuery, setIsEditingQuery] = useState(false);
   const [customSearchQuery, setCustomSearchQuery] = useState('');
   
@@ -196,6 +186,10 @@ export default function SmartAdd({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingQuery, setStreamingQuery] = useState('');
   const [streamedResults, setStreamedResults] = useState<PriceResult[]>([]);
+
+  // Modal state for adding items
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<PriceResult | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -207,24 +201,6 @@ export default function SmartAdd({
 
   const searchForm = useForm({
     query: search_query || '',
-  });
-
-  const addForm = useForm({
-    list_id: selectedListId,
-    product_name: '',
-    product_query: '',
-    product_url: '',
-    product_image_url: '',
-    uploaded_image: '',
-    sku: '',
-    upc: '',
-    current_price: '',
-    current_retailer: '',
-    target_price: '',
-    notes: '',
-    priority: 'medium',
-    is_generic: false,
-    unit_of_measure: '' as string,
   });
 
   const isMobile = isMobileDevice();
@@ -353,36 +329,26 @@ export default function SmartAdd({
     setMode('idle');
   };
 
-  const handleSelectResult = (result: PriceResult) => {
-    setSelectedResult(result);
-    addForm.setData({
-      list_id: selectedListId,
-      product_name: analysis?.product_name || result.title,
-      product_query: analysis?.product_name || result.title,
-      product_url: result.url,
-      product_image_url: result.image_url || '',
-      uploaded_image: uploaded_image || '',
-      sku: '',
-      upc: result.upc || analysis?.upc || '',
-      current_price: String(result.price),
-      current_retailer: result.retailer,
-      target_price: '',
-      notes: '',
-      priority: 'medium',
-      is_generic: analysis?.is_generic || false,
-      unit_of_measure: analysis?.unit_of_measure || '',
-    });
+  /**
+   * Open the Add Item modal with the selected product
+   */
+  const openAddModal = (result: PriceResult) => {
+    setSelectedProduct(result);
+    setIsModalOpen(true);
   };
 
-  const handleAddToList = (e: FormEvent) => {
-    e.preventDefault();
-    addForm.setData('list_id', selectedListId);
-    addForm.post('/smart-add/add');
+  /**
+   * Close the Add Item modal
+   */
+  const closeAddModal = () => {
+    setIsModalOpen(false);
+    setSelectedProduct(null);
   };
 
   const resetAll = () => {
     setImagePreview(null);
-    setSelectedResult(null);
+    setSelectedProduct(null);
+    setIsModalOpen(false);
     setMode('idle');
     setIsEditingQuery(false);
     setCustomSearchQuery('');
@@ -391,7 +357,6 @@ export default function SmartAdd({
     setStreamedResults([]);
     analyzeForm.reset();
     searchForm.reset();
-    addForm.reset();
     router.get('/smart-add');
   };
 
@@ -639,8 +604,7 @@ export default function SmartAdd({
             <StreamingSearchResults
               query={streamingQuery}
               onComplete={handleStreamingComplete}
-              onSelectResult={handleSelectResult}
-              selectedResult={selectedResult}
+              onAddClick={openAddModal}
               isActive={isStreaming}
               onCancel={handleStreamingCancel}
             />
@@ -825,12 +789,12 @@ export default function SmartAdd({
               </Card>
             )}
 
-            {/* Static Price Results (non-streaming) */}
+            {/* Static Price Results (non-streaming) - Simplified Cards */}
             {hasResults && !isStreaming && streamedResults.length === 0 && (
               <>
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-foreground">
-                    {displayResults.length} Price{displayResults.length !== 1 ? 's' : ''} Found
+                    {displayResults.length} Product{displayResults.length !== 1 ? 's' : ''} Found
                   </h3>
                   {hasAnalysis && (
                     <Button
@@ -852,13 +816,7 @@ export default function SmartAdd({
                   {displayResults.map((result, index) => (
                     <Card
                       key={index}
-                      className={cn(
-                        'cursor-pointer transition-all hover:shadow-md',
-                        selectedResult === result
-                          ? 'border-violet-500 bg-violet-500/5 ring-2 ring-violet-500/20'
-                          : 'hover:border-violet-400/50'
-                      )}
-                      onClick={() => handleSelectResult(result)}
+                      className="transition-all hover:shadow-md hover:border-violet-400/50"
                     >
                       <CardContent className="p-4">
                         <div className="flex gap-4">
@@ -868,7 +826,6 @@ export default function SmartAdd({
                               alt={result.title}
                               className="w-20 h-20 object-contain rounded-lg bg-muted flex-shrink-0"
                               onError={(e) => {
-                                // Fallback to original URL if proxy fails
                                 const target = e.target as HTMLImageElement;
                                 if (!target.src.includes(result.image_url!)) {
                                   target.src = result.image_url!;
@@ -884,61 +841,34 @@ export default function SmartAdd({
                             <h4 className="font-medium text-foreground line-clamp-2">
                               {result.title}
                             </h4>
-                            <div className="flex items-center gap-3 mt-2">
+                            <div className="flex items-center flex-wrap gap-2 mt-2">
                               <span className="text-xl font-bold text-primary">
                                 ${formatPrice(result.price)}
                               </span>
                               <Badge variant="secondary">{result.retailer}</Badge>
+                              {result.upc && (
+                                <Badge variant="outline" className="text-xs gap-1">
+                                  <Barcode className="h-3 w-3" />
+                                  {result.upc}
+                                </Badge>
+                              )}
                               {result.other_prices && result.other_prices.length > 0 && (
                                 <Badge variant="outline" className="text-xs">
-                                  +{result.other_prices.length} more retailer{result.other_prices.length > 1 ? 's' : ''}
+                                  +{result.other_prices.length} more
                                 </Badge>
                               )}
                             </div>
-                            {result.upc && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                UPC: {result.upc}
-                              </p>
-                            )}
-                            <div className="flex items-center gap-3 mt-2">
-                              <a
-                                href={result.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                              >
-                                View on {result.retailer}
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            </div>
-                            {result.other_prices && result.other_prices.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                {result.other_prices.slice(0, 3).map((other, i) => (
-                                  <a
-                                    key={i}
-                                    href={other.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-xs text-muted-foreground hover:text-primary"
-                                  >
-                                    {other.retailer}: ${formatPrice(other.price)}
-                                  </a>
-                                ))}
-                                {result.other_prices.length > 3 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    +{result.other_prices.length - 3} more
-                                  </span>
-                                )}
-                              </div>
-                            )}
                           </div>
-                          {selectedResult === result && (
-                            <div className="flex items-center">
-                              <CheckCircle2 className="h-6 w-6 text-violet-500" />
-                            </div>
-                          )}
+                          <div className="flex items-center">
+                            <Button
+                              size="sm"
+                              onClick={() => openAddModal(result)}
+                              className="gap-1 bg-green-600 hover:bg-green-700"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Add
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -977,170 +907,8 @@ export default function SmartAdd({
               </Card>
             )}
 
-            {/* Add to List Form */}
-            {(selectedResult || (hasAnalysis && !hasResults)) && lists.length > 0 && (
-              <Card className="border-green-400/50 bg-green-500/5">
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <Plus className="h-5 w-5" />
-                    Add to Shopping List
-                  </h3>
-                  <form onSubmit={handleAddToList} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                          Shopping List
-                        </label>
-                        <Select
-                          value={selectedListId}
-                          onValueChange={setSelectedListId}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select a list" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {lists.map((list) => (
-                              <SelectItem key={list.id} value={String(list.id)}>
-                                {list.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                          Product Name
-                        </label>
-                        <Input
-                          type="text"
-                          value={addForm.data.product_name}
-                          onChange={(e) => addForm.setData('product_name', e.target.value)}
-                          placeholder="Product name"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                          Target Price (optional)
-                        </label>
-                        <Input
-                          type="number"
-                          value={addForm.data.target_price}
-                          onChange={(e) => addForm.setData('target_price', e.target.value)}
-                          placeholder="Notify when price drops to..."
-                          step="0.01"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-1">
-                          Priority
-                        </label>
-                        <Select
-                          value={addForm.data.priority}
-                          onValueChange={(value) => addForm.setData('priority', value)}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    
-                    {/* Generic Item Settings */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center gap-3">
-                        <Switch
-                          checked={addForm.data.is_generic}
-                          onCheckedChange={(checked) => {
-                            addForm.setData('is_generic', checked);
-                            if (!checked) {
-                              addForm.setData('unit_of_measure', '');
-                            } else if (!addForm.data.unit_of_measure) {
-                              addForm.setData('unit_of_measure', 'lb');
-                            }
-                          }}
-                          className="data-[state=checked]:bg-violet-600"
-                        />
-                        <div>
-                          <label className="text-sm font-medium text-foreground flex items-center gap-1">
-                            <Scale className="h-3.5 w-3.5" />
-                            Generic Item
-                          </label>
-                          <p className="text-xs text-muted-foreground">
-                            Sold by weight, volume, or count
-                          </p>
-                        </div>
-                      </div>
-                      {addForm.data.is_generic && (
-                        <div>
-                          <label className="block text-sm font-medium text-foreground mb-1">
-                            Unit of Measure
-                          </label>
-                          <Select
-                            value={addForm.data.unit_of_measure}
-                            onValueChange={(value) => addForm.setData('unit_of_measure', value)}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Select unit" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="lb">Pound (lb)</SelectItem>
-                              <SelectItem value="oz">Ounce (oz)</SelectItem>
-                              <SelectItem value="kg">Kilogram (kg)</SelectItem>
-                              <SelectItem value="g">Gram (g)</SelectItem>
-                              <SelectItem value="gallon">Gallon</SelectItem>
-                              <SelectItem value="liter">Liter</SelectItem>
-                              <SelectItem value="quart">Quart</SelectItem>
-                              <SelectItem value="pint">Pint</SelectItem>
-                              <SelectItem value="fl_oz">Fluid Ounce</SelectItem>
-                              <SelectItem value="each">Each</SelectItem>
-                              <SelectItem value="dozen">Dozen</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1">
-                        Notes (optional)
-                      </label>
-                      <Input
-                        type="text"
-                        value={addForm.data.notes}
-                        onChange={(e) => addForm.setData('notes', e.target.value)}
-                        placeholder="Any notes about this item..."
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      disabled={addForm.processing || !addForm.data.product_name || !selectedListId}
-                      className="w-full gap-2 bg-green-600 hover:bg-green-700"
-                    >
-                      {addForm.processing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Adding...
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="h-4 w-4" />
-                          Add to List
-                        </>
-                      )}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-            )}
-
             {/* No Lists Warning */}
-            {lists.length === 0 && (
+            {lists.length === 0 && hasResults && (
               <Card className="border-amber-400/50 bg-amber-500/5">
                 <CardContent className="py-6 text-center">
                   <AlertCircle className="h-8 w-8 mx-auto text-amber-500 mb-3" />
@@ -1161,6 +929,17 @@ export default function SmartAdd({
           </div>
         )}
       </div>
+
+      {/* Add Item Modal */}
+      <AddItemModal
+        isOpen={isModalOpen}
+        onClose={closeAddModal}
+        product={selectedProduct}
+        lists={lists}
+        uploadedImage={uploaded_image}
+        isGeneric={analysis?.is_generic}
+        unitOfMeasure={analysis?.unit_of_measure || undefined}
+      />
     </AppLayout>
   );
 }

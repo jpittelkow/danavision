@@ -194,6 +194,61 @@ class SmartAddController extends Controller
     }
 
     /**
+     * Get detailed price information for a specific product.
+     * Called when user clicks "Add" to get retailer pricing options.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getPriceDetails(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'product_name' => ['required', 'string', 'max:255'],
+            'upc' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $userId = $request->user()->id;
+
+        try {
+            // Search for detailed pricing using AI-powered price search
+            $priceService = AIPriceSearchService::forUser($userId);
+            
+            // If UPC is provided, search by UPC for more accurate results
+            $searchQuery = $validated['product_name'];
+            if (!empty($validated['upc'])) {
+                $searchQuery = $validated['upc'] . ' ' . $validated['product_name'];
+            }
+            
+            $searchResult = $priceService->search($searchQuery);
+
+            return response()->json([
+                'results' => $searchResult->results,
+                'lowest_price' => $searchResult->lowestPrice,
+                'highest_price' => $searchResult->highestPrice,
+                'providers_used' => $searchResult->providersUsed,
+                'is_generic' => $searchResult->isGeneric,
+                'unit_of_measure' => $searchResult->unitOfMeasure,
+                'error' => $searchResult->error,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Price details search failed', [
+                'product_name' => $validated['product_name'],
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'results' => [],
+                'lowest_price' => null,
+                'highest_price' => null,
+                'providers_used' => [],
+                'is_generic' => false,
+                'unit_of_measure' => null,
+                'error' => 'Failed to fetch price details: ' . $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Add the identified product to a shopping list.
      */
     public function addToList(Request $request): \Illuminate\Http\RedirectResponse
@@ -610,6 +665,7 @@ PROMPT;
                         'url' => $result['url'] ?? '',
                         'image_url' => $result['image_url'] ?? null,
                         'retailer' => $result['retailer'] ?? 'Unknown',
+                        'upc' => $result['upc'] ?? null,
                         'in_stock' => $result['in_stock'] ?? true,
                     ]);
                 }

@@ -122,3 +122,70 @@ test('smart add sets initial lowest and highest price from current price', funct
     expect($item->lowest_price)->toBe('149.99');
     expect($item->highest_price)->toBe('149.99');
 });
+
+test('price details endpoint returns json response', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->postJson('/smart-add/price-details', [
+        'product_name' => 'Sony WH-1000XM5',
+    ]);
+
+    // Should return JSON with expected structure
+    $response->assertStatus(200);
+    $response->assertJsonStructure([
+        'results',
+        'lowest_price',
+        'highest_price',
+        'providers_used',
+    ]);
+});
+
+test('price details endpoint requires authentication', function () {
+    $response = $this->postJson('/smart-add/price-details', [
+        'product_name' => 'Test Product',
+    ]);
+
+    $response->assertStatus(401);
+});
+
+test('price details endpoint validates product name is required', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->postJson('/smart-add/price-details', [
+        // missing product_name
+    ]);
+
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors('product_name');
+});
+
+test('price details endpoint accepts optional upc', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->postJson('/smart-add/price-details', [
+        'product_name' => 'Sony WH-1000XM5',
+        'upc' => '027242917576',
+    ]);
+
+    $response->assertStatus(200);
+    $response->assertJsonStructure([
+        'results',
+    ]);
+});
+
+test('smart add includes upc when adding item', function () {
+    $user = User::factory()->create();
+    $list = ShoppingList::factory()->create(['user_id' => $user->id]);
+
+    $response = $this->actingAs($user)->post('/smart-add/add', [
+        'list_id' => $list->id,
+        'product_name' => 'Sony Headphones',
+        'upc' => '027242917576',
+        'priority' => 'medium',
+    ]);
+
+    $response->assertRedirect("/lists/{$list->id}");
+    
+    $item = \App\Models\ListItem::where('product_name', 'Sony Headphones')->first();
+    expect($item->upc)->toBe('027242917576');
+});

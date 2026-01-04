@@ -444,9 +444,16 @@ Important guidelines:
 - Prices should be numeric (no $ symbol in the price field)
 - If you don't know a URL, use an empty string
 - If this is a generic item (like produce), set is_generic to true and unit_of_measure to the appropriate unit
-- Include UPC (12-digit barcode) for packaged retail products if known
-- Generic items (produce, bulk goods, deli) do NOT have UPCs - use null
 - Note: This is a best-effort estimate. For accurate real-time prices, configure a SerpAPI key.
+
+UPC/Barcode Guidelines (IMPORTANT - prioritize finding UPCs):
+- ALWAYS try to include the UPC (12-digit barcode) for packaged retail products
+- UPCs are critical for accurate price tracking across retailers
+- Look up the UPC from your knowledge of common products
+- Common UPC databases: If you know the product, you likely know its UPC
+- Example: Sony WH-1000XM5 headphones UPC is 027242917576
+- Generic items (produce, bulk goods, deli items) do NOT have UPCs - use null for these
+- When in doubt about the exact UPC, use null rather than guessing
 
 Return ONLY the JSON object, no other text.
 PROMPT;
@@ -531,7 +538,13 @@ Guidelines:
 - If shop local is requested, put local store results first
 - Prices should be numeric (no $ symbol)
 - Keep all valid results, remove obviously wrong or duplicate entries
-- Include UPC (barcode) for packaged products if known; use null for generic items
+
+UPC/Barcode Guidelines (IMPORTANT - prioritize finding UPCs):
+- ALWAYS try to include the UPC (12-digit barcode) for packaged retail products
+- Extract UPC from search results if available in product listings
+- Look up the UPC from your knowledge if the product is identifiable
+- UPCs help users track prices accurately across different retailers
+- Generic items (produce, bulk goods, deli) do NOT have UPCs - use null
 
 Return ONLY the JSON object, no other text.
 PROMPT;
@@ -602,6 +615,7 @@ PROMPT;
     /**
      * Deduplicate results by unique product, keeping the lowest price.
      * Groups results by normalized product title and stores other prices.
+     * Preserves UPC codes when available from any result.
      */
     protected function deduplicateResults(array $results): array
     {
@@ -634,6 +648,12 @@ PROMPT;
                 
                 // Assign to new result and replace
                 $result['other_prices'] = $otherPrices;
+                
+                // Preserve UPC from old result if new one doesn't have it
+                if (empty($result['upc']) && !empty($oldResult['upc'])) {
+                    $result['upc'] = $oldResult['upc'];
+                }
+                
                 $grouped[$key] = $result;
             } else {
                 // Add to other_prices
@@ -642,6 +662,11 @@ PROMPT;
                     'price' => $result['price'] ?? 0,
                     'url' => $result['url'] ?? '',
                 ];
+                
+                // Preserve UPC from this result if grouped one doesn't have it
+                if (empty($grouped[$key]['upc']) && !empty($result['upc'])) {
+                    $grouped[$key]['upc'] = $result['upc'];
+                }
             }
         }
 

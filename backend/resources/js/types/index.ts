@@ -111,6 +111,25 @@ export interface PriceHistory {
   recorded_at: string;
 }
 
+/**
+ * Price search result from Smart Add feature.
+ * Represents a product found during price search.
+ */
+export interface SmartAddPriceResult {
+  title: string;
+  price: number;
+  url: string;
+  image_url?: string;
+  retailer: string;
+  upc?: string;
+  in_stock?: boolean;
+  other_prices?: {
+    retailer: string;
+    price: number;
+    url: string;
+  }[];
+}
+
 export interface DashboardData {
   lists_count: number;
   items_count: number;
