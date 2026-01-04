@@ -28,9 +28,6 @@ class SettingController extends Controller
             Setting::ANTHROPIC_API_KEY,
             Setting::OPENAI_API_KEY,
             Setting::GEMINI_API_KEY,
-            Setting::PRICE_API_PROVIDER,
-            Setting::SERPAPI_KEY,
-            Setting::RAINFOREST_KEY,
             Setting::FIRECRAWL_API_KEY,
             Setting::MAIL_DRIVER,
             Setting::MAIL_HOST,
@@ -102,10 +99,7 @@ class SettingController extends Controller
             'settings' => [
                 'ai_provider' => $settings[Setting::AI_PROVIDER] ?? 'claude',
                 'ai_api_key' => $settings[Setting::ANTHROPIC_API_KEY] || $settings[Setting::OPENAI_API_KEY] || $settings[Setting::GEMINI_API_KEY] ? '********' : null,
-                'price_provider' => $settings[Setting::PRICE_API_PROVIDER] ?? 'serpapi',
-                'price_api_key' => $settings[Setting::SERPAPI_KEY] || $settings[Setting::RAINFOREST_KEY] ? '********' : null,
-                'has_price_api_key' => !empty($settings[Setting::SERPAPI_KEY]) || !empty($settings[Setting::RAINFOREST_KEY]),
-                // Firecrawl Web Crawler
+                // Firecrawl Web Crawler (primary price search provider)
                 'firecrawl_api_key' => $settings[Setting::FIRECRAWL_API_KEY] ? '********' : null,
                 'has_firecrawl_api_key' => !empty($settings[Setting::FIRECRAWL_API_KEY]),
                 // Email settings
@@ -148,9 +142,7 @@ class SettingController extends Controller
         $validated = $request->validate([
             'ai_provider' => ['nullable', 'in:claude,openai,gemini,local'],
             'ai_api_key' => ['nullable', 'string'],
-            'price_provider' => ['nullable', 'in:serpapi,rainforest'],
-            'price_api_key' => ['nullable', 'string'],
-            // Firecrawl Web Crawler
+            // Firecrawl Web Crawler (primary price search provider)
             'firecrawl_api_key' => ['nullable', 'string'],
             // Email settings
             'mail_driver' => ['nullable', 'in:smtp,sendmail,mailgun,ses,postmark'],
@@ -195,23 +187,6 @@ class SettingController extends Controller
             };
             if ($aiKeyField) {
                 Setting::set($aiKeyField, $validated['ai_api_key'], $userId);
-            }
-        }
-
-        // Price Provider
-        if (isset($validated['price_provider'])) {
-            Setting::set(Setting::PRICE_API_PROVIDER, $validated['price_provider'], $userId);
-        }
-
-        // Price API Key (only if not masked)
-        if (isset($validated['price_api_key']) && $validated['price_api_key'] !== '********') {
-            $priceKeyField = match($validated['price_provider'] ?? 'serpapi') {
-                'serpapi' => Setting::SERPAPI_KEY,
-                'rainforest' => Setting::RAINFOREST_KEY,
-                default => null,
-            };
-            if ($priceKeyField) {
-                Setting::set($priceKeyField, $validated['price_api_key'], $userId);
             }
         }
 

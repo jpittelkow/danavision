@@ -119,23 +119,38 @@ class FirecrawlService
         ]);
 
         try {
+            // Try the extract endpoint (more widely available than agent)
             $response = Http::timeout($this->timeout)
                 ->withHeaders([
                     'Authorization' => "Bearer {$this->apiKey}",
                     'Content-Type' => 'application/json',
                 ])
-                ->post(self::BASE_URL . '/agent', [
+                ->post(self::BASE_URL . '/extract', [
                     'prompt' => $prompt,
                     'schema' => $this->buildPriceSchema($isGeneric),
+                    // Let Firecrawl search for URLs based on the prompt
+                    'enableWebSearch' => true,
                 ]);
 
             if (!$response->successful()) {
+                $statusCode = $response->status();
                 $errorMessage = $response->json('error') ?? $response->body();
-                Log::warning('Firecrawl Agent API error', [
-                    'status' => $response->status(),
+                
+                Log::warning('Firecrawl Extract API error', [
+                    'status' => $statusCode,
                     'error' => $errorMessage,
                     'product' => $productName,
                 ]);
+                
+                // Return a more helpful error message
+                if ($statusCode === 404) {
+                    return FirecrawlResult::error('Firecrawl API endpoint not found. Please verify your API key has access to the extract feature.');
+                } elseif ($statusCode === 401 || $statusCode === 403) {
+                    return FirecrawlResult::error('Firecrawl API authentication failed. Please verify your API key in Settings.');
+                } elseif ($statusCode === 429) {
+                    return FirecrawlResult::error('Firecrawl API rate limit exceeded. Please try again later.');
+                }
+                
                 return FirecrawlResult::error("Firecrawl API error: {$errorMessage}");
             }
 

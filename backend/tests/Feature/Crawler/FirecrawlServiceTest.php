@@ -262,7 +262,8 @@ test('firecrawl service makes discovery api call with correct structure', functi
     $result = $service->discoverProductPrices('Test Product');
     
     Http::assertSent(function ($request) {
-        return str_contains($request->url(), 'firecrawl.dev') &&
+        // Now uses /extract endpoint with enableWebSearch
+        return str_contains($request->url(), 'firecrawl.dev/v1/extract') &&
                $request->hasHeader('Authorization');
     });
     

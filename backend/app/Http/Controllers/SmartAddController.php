@@ -4,11 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Jobs\AI\FirecrawlDiscoveryJob;
 use App\Jobs\AI\ProductIdentificationJob;
-use App\Jobs\AI\PriceSearchJob;
 use App\Models\AIJob;
 use App\Models\ShoppingList;
 use App\Services\AI\AIService;
-use App\Services\AI\AIPriceSearchService;
 use App\Services\AI\MultiAIService;
 use App\Services\Crawler\FirecrawlService;
 use Illuminate\Http\Request;
@@ -114,36 +112,13 @@ class SmartAddController extends Controller
             }
         }
 
-        // Search for prices if we identified a product using AI
-        $priceResults = [];
-        $searchError = null;
-
-        if (!empty($analysis['product_name'])) {
-            $searchQuery = $analysis['product_name'];
-            if (!empty($analysis['brand']) && !str_contains(strtolower($analysis['product_name']), strtolower($analysis['brand']))) {
-                $searchQuery = $analysis['brand'] . ' ' . $analysis['product_name'];
-            }
-
-            $priceService = AIPriceSearchService::forUser($userId);
-            $searchResult = $priceService->search($searchQuery, [
-                'is_generic' => $analysis['is_generic'] ?? false,
-                'unit_of_measure' => $analysis['unit_of_measure'] ?? null,
-            ]);
-            $priceResults = $searchResult->results;
-            $searchError = $searchResult->error;
-            
-            // Update analysis with any generic info from the search
-            if ($searchResult->isGeneric && !$analysis['is_generic']) {
-                $analysis['is_generic'] = true;
-                $analysis['unit_of_measure'] = $searchResult->unitOfMeasure;
-            }
-        }
-
+        // Price search now happens via Firecrawl after item is added to a list
+        // Just return the analysis without inline price results
         return Inertia::render('SmartAdd', [
             'lists' => $lists,
             'analysis' => $analysis,
-            'price_results' => $priceResults,
-            'search_error' => $searchError,
+            'price_results' => [],
+            'search_error' => null,
             'uploaded_image' => $validated['image'],
         ]);
     }
@@ -166,17 +141,7 @@ class SmartAddController extends Controller
         // Use AI to classify the query first (for generic item detection)
         $genericInfo = $this->classifySearchQuery($validated['query'], $userId);
 
-        // Search using AI-powered price search
-        $priceService = AIPriceSearchService::forUser($userId);
-        $searchResult = $priceService->search($validated['query'], [
-            'is_generic' => $genericInfo['is_generic'],
-            'unit_of_measure' => $genericInfo['unit_of_measure'],
-        ]);
-
-        // Use search result's generic info if available
-        $isGeneric = $searchResult->isGeneric || $genericInfo['is_generic'];
-        $unitOfMeasure = $searchResult->unitOfMeasure ?? $genericInfo['unit_of_measure'];
-
+        // Price search now happens via Firecrawl after item is added to a list
         return Inertia::render('SmartAdd', [
             'lists' => $lists,
             'analysis' => [
@@ -184,15 +149,15 @@ class SmartAddController extends Controller
                 'brand' => null,
                 'model' => null,
                 'category' => $genericInfo['category'],
-                'is_generic' => $isGeneric,
-                'unit_of_measure' => $unitOfMeasure,
+                'is_generic' => $genericInfo['is_generic'],
+                'unit_of_measure' => $genericInfo['unit_of_measure'],
                 'search_terms' => [],
                 'confidence' => 100,
                 'error' => null,
-                'providers_used' => $searchResult->providersUsed,
+                'providers_used' => [],
             ],
-            'price_results' => $searchResult->results,
-            'search_error' => $searchResult->error,
+            'price_results' => [],
+            'search_error' => null,
             'search_query' => $validated['query'],
         ]);
     }
@@ -652,16 +617,13 @@ PROMPT;
             'last_checked_at' => ($validated['current_price'] ?? null) ? now() : null,
         ]);
 
-        // Dispatch background job to search for prices
+        // Dispatch background job to search for prices using Firecrawl
         // This runs asynchronously after the item is added
         if (!($validated['skip_price_search'] ?? false)) {
             $userId = $request->user()->id;
-            
-            // Check if Firecrawl is available - prefer it over standard price search
             $firecrawlService = FirecrawlService::forUser($userId);
             
             if ($firecrawlService->isAvailable()) {
-                // Use Firecrawl for price discovery
                 $aiJob = AIJob::createJob(
                     userId: $userId,
                     type: AIJob::TYPE_FIRECRAWL_DISCOVERY,
@@ -681,26 +643,9 @@ PROMPT;
                 // Dispatch the Firecrawl discovery job
                 FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId)
                     ->delay(now()->addSeconds(2)); // Small delay to let the redirect complete
-            } else {
-                // Fall back to standard price search (SERP API)
-                $aiJob = AIJob::createJob(
-                    userId: $userId,
-                    type: AIJob::TYPE_PRICE_SEARCH,
-                    inputData: [
-                        'query' => $item->product_query ?? $item->product_name,
-                        'product_name' => $item->product_name,
-                        'is_generic' => $item->is_generic ?? false,
-                        'unit_of_measure' => $item->unit_of_measure ?? null,
-                        'shop_local' => $list->shop_local ?? false,
-                    ],
-                    relatedItemId: $item->id,
-                    relatedListId: $list->id,
-                );
-
-                // Dispatch the price search job
-                PriceSearchJob::dispatch($aiJob->id, $userId)
-                    ->delay(now()->addSeconds(2)); // Small delay to let the redirect complete
             }
+            // If Firecrawl is not configured, item is still added but no price search runs
+            // User will see a message in the UI to configure Firecrawl in Settings
         }
 
         return redirect()->route('lists.show', $list)

@@ -6,14 +6,18 @@ use App\Models\AIJob;
 use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
-use App\Services\AI\AIPriceSearchService;
+use App\Services\Crawler\FirecrawlService;
+use App\Services\Crawler\FirecrawlResult;
 use Illuminate\Support\Facades\Log;
 
 /**
  * PriceSearchJob
  * 
- * Background job for searching prices using SERP API + AI aggregation.
- * This job uses real-time data from SERP API and does NOT fabricate prices.
+ * Background job for searching prices using Firecrawl.
+ * This job uses real-time web crawling for accurate pricing data.
+ * 
+ * @deprecated Use FirecrawlDiscoveryJob instead. This job is kept
+ * for backward compatibility with existing queued jobs.
  */
 class PriceSearchJob extends BaseAIJob
 {
@@ -35,13 +39,12 @@ class PriceSearchJob extends BaseAIJob
 
         $this->updateProgress($aiJob, 10);
 
-        // Create price search service
-        $priceService = AIPriceSearchService::forUser($this->userId);
-        $priceService->setAIJobId($aiJob->id);
+        // Create Firecrawl service
+        $firecrawlService = FirecrawlService::forUser($this->userId);
 
-        // Check if SERP API is available
-        if (!$priceService->isWebSearchAvailable()) {
-            throw new \RuntimeException('SERP API is not configured. Please set up a SerpAPI key in Settings.');
+        // Check if Firecrawl is available
+        if (!$firecrawlService->isAvailable()) {
+            throw new \RuntimeException('Firecrawl is not configured. Please set up a Firecrawl API key in Settings.');
         }
 
         $this->updateProgress($aiJob, 20);
@@ -51,12 +54,17 @@ class PriceSearchJob extends BaseAIJob
             return ['cancelled' => true];
         }
 
-        // Perform price search
-        $searchResult = $priceService->search($query, [
+        Log::info('PriceSearchJob: Starting Firecrawl discovery', [
+            'query' => $query,
+            'item_id' => $itemId,
+            'shop_local' => $inputData['shop_local'] ?? false,
+        ]);
+
+        // Perform price search using Firecrawl
+        $result = $firecrawlService->discoverProductPrices($query, [
+            'shop_local' => $inputData['shop_local'] ?? false,
             'is_generic' => $inputData['is_generic'] ?? false,
             'unit_of_measure' => $inputData['unit_of_measure'] ?? null,
-            'shop_local' => $inputData['shop_local'] ?? true,
-            'zip_code' => $inputData['zip_code'] ?? null,
         ]);
 
         $this->updateProgress($aiJob, 70);
@@ -66,23 +74,25 @@ class PriceSearchJob extends BaseAIJob
             return ['cancelled' => true];
         }
 
+        if (!$result->isSuccess()) {
+            throw new \RuntimeException($result->error ?? 'Firecrawl discovery failed');
+        }
+
         // If we have a related item, update its prices
-        if ($itemId && !$searchResult->hasError() && $searchResult->hasResults()) {
-            $this->updateItemPrices($itemId, $searchResult);
+        if ($itemId && $result->hasResults()) {
+            $this->updateItemPrices($itemId, $result);
         }
 
         $this->updateProgress($aiJob, 90);
 
         return [
-            'query' => $searchResult->query,
-            'results' => $searchResult->results,
-            'lowest_price' => $searchResult->lowestPrice,
-            'highest_price' => $searchResult->highestPrice,
-            'providers_used' => $searchResult->providersUsed,
-            'is_generic' => $searchResult->isGeneric,
-            'unit_of_measure' => $searchResult->unitOfMeasure,
-            'error' => $searchResult->error,
-            'results_count' => count($searchResult->results),
+            'query' => $query,
+            'results' => $result->results,
+            'lowest_price' => $result->getLowestPrice(),
+            'highest_price' => $result->getHighestPrice(),
+            'providers_used' => ['firecrawl'],
+            'results_count' => $result->count(),
+            'source' => $result->source,
         ];
     }
 
@@ -90,9 +100,9 @@ class PriceSearchJob extends BaseAIJob
      * Update the related item with price search results.
      *
      * @param int $itemId The list item ID
-     * @param \App\Services\AI\AIPriceSearchResult $searchResult The search result
+     * @param FirecrawlResult $result The Firecrawl result
      */
-    protected function updateItemPrices(int $itemId, $searchResult): void
+    protected function updateItemPrices(int $itemId, FirecrawlResult $result): void
     {
         $item = ListItem::find($itemId);
 
@@ -105,9 +115,9 @@ class PriceSearchJob extends BaseAIJob
         $lowestVendor = null;
         $lowestUrl = null;
 
-        foreach ($searchResult->results as $result) {
-            $vendor = ItemVendorPrice::normalizeVendor($result['retailer'] ?? 'Unknown');
-            $price = (float) ($result['price'] ?? 0);
+        foreach ($result->results as $priceResult) {
+            $vendor = ItemVendorPrice::normalizeVendor($priceResult['store_name'] ?? 'Unknown');
+            $price = (float) ($priceResult['price'] ?? 0);
 
             if ($price <= 0) {
                 continue;
@@ -118,26 +128,30 @@ class PriceSearchJob extends BaseAIJob
                 ->where('vendor', $vendor)
                 ->first();
 
+            $stockStatus = $priceResult['stock_status'] ?? 'in_stock';
+            $inStock = $stockStatus !== 'out_of_stock';
+
             if ($vendorPrice) {
-                $vendorPrice->updatePrice($price, $result['url'] ?? null, true);
+                $vendorPrice->updatePrice($price, $priceResult['product_url'] ?? null, true);
+                $vendorPrice->update(['in_stock' => $inStock]);
             } else {
                 $item->vendorPrices()->create([
                     'vendor' => $vendor,
                     'vendor_sku' => null,
-                    'product_url' => $result['url'] ?? null,
+                    'product_url' => $priceResult['product_url'] ?? null,
                     'current_price' => $price,
                     'lowest_price' => $price,
                     'highest_price' => $price,
-                    'in_stock' => $result['in_stock'] ?? true,
+                    'in_stock' => $inStock,
                     'last_checked_at' => now(),
                 ]);
             }
 
-            // Track lowest price
-            if ($lowestPrice === null || $price < $lowestPrice) {
+            // Track lowest price from in-stock items
+            if ($inStock && ($lowestPrice === null || $price < $lowestPrice)) {
                 $lowestPrice = $price;
                 $lowestVendor = $vendor;
-                $lowestUrl = $result['url'] ?? null;
+                $lowestUrl = $priceResult['product_url'] ?? null;
             }
         }
 
@@ -150,33 +164,18 @@ class PriceSearchJob extends BaseAIJob
                 $item->update(['product_url' => $lowestUrl]);
             }
 
-            // Update product image URL if missing
-            if (empty($item->product_image_url)) {
-                foreach ($searchResult->results as $result) {
-                    if (!empty($result['image_url'])) {
-                        $item->update(['product_image_url' => $result['image_url']]);
-                        break;
-                    }
-                }
-            }
-
             // Capture price history
             PriceHistory::captureFromItem($item, 'job_search');
         }
 
-        // Update generic info from search if not already set
-        if ($searchResult->isGeneric && !$item->is_generic) {
-            $item->update([
-                'is_generic' => true,
-                'unit_of_measure' => $searchResult->unitOfMeasure,
-            ]);
-        }
+        // Update last_checked_at
+        $item->update(['last_checked_at' => now()]);
 
         Log::info('PriceSearchJob: Updated item prices', [
             'item_id' => $itemId,
             'lowest_price' => $lowestPrice,
             'lowest_vendor' => $lowestVendor,
-            'results_count' => count($searchResult->results),
+            'results_count' => $result->count(),
         ]);
     }
 }

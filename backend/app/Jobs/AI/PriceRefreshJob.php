@@ -6,15 +6,18 @@ use App\Models\AIJob;
 use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
-use App\Models\Setting;
-use App\Services\AI\AIPriceSearchService;
+use App\Services\Crawler\FirecrawlService;
+use App\Services\Crawler\FirecrawlResult;
 use Illuminate\Support\Facades\Log;
 
 /**
  * PriceRefreshJob
  * 
  * Background job for refreshing prices for a single item.
- * Uses SERP API for real-time pricing data.
+ * Uses Firecrawl for real-time web crawling.
+ * 
+ * @deprecated Use FirecrawlDiscoveryJob or FirecrawlRefreshJob instead. 
+ * This job is kept for backward compatibility with existing queued jobs.
  */
 class PriceRefreshJob extends BaseAIJob
 {
@@ -40,13 +43,12 @@ class PriceRefreshJob extends BaseAIJob
 
         $this->updateProgress($aiJob, 10);
 
-        // Create price search service
-        $priceService = AIPriceSearchService::forUser($this->userId);
-        $priceService->setAIJobId($aiJob->id);
+        // Create Firecrawl service
+        $firecrawlService = FirecrawlService::forUser($this->userId);
 
-        // Check if SERP API is available
-        if (!$priceService->isWebSearchAvailable()) {
-            throw new \RuntimeException('SERP API is not configured. Please set up a SerpAPI key in Settings.');
+        // Check if Firecrawl is available
+        if (!$firecrawlService->isAvailable()) {
+            throw new \RuntimeException('Firecrawl is not configured. Please set up a Firecrawl API key in Settings.');
         }
 
         $this->updateProgress($aiJob, 20);
@@ -56,21 +58,24 @@ class PriceRefreshJob extends BaseAIJob
             return ['cancelled' => true];
         }
 
-        // Get user's home zip code for local searches
-        $homeZipCode = Setting::get(Setting::HOME_ZIP_CODE, $this->userId);
-
         // Determine if shop_local is enabled
         $shopLocal = $item->shouldShopLocal();
 
         // Build search query
         $searchQuery = $item->product_query ?? $item->product_name;
 
-        // Perform price search
-        $searchResult = $priceService->search($searchQuery, [
-            'is_generic' => $item->is_generic ?? false,
-            'unit_of_measure' => $item->unit_of_measure,
+        Log::info('PriceRefreshJob: Starting Firecrawl discovery', [
+            'item_id' => $itemId,
+            'query' => $searchQuery,
             'shop_local' => $shopLocal,
-            'zip_code' => $homeZipCode,
+        ]);
+
+        // Perform price search using Firecrawl
+        $result = $firecrawlService->discoverProductPrices($searchQuery, [
+            'shop_local' => $shopLocal,
+            'is_generic' => $item->is_generic ?? false,
+            'unit_of_measure' => $item->unit_of_measure ?? null,
+            'upc' => $item->upc ?? null,
         ]);
 
         $this->updateProgress($aiJob, 70);
@@ -80,19 +85,19 @@ class PriceRefreshJob extends BaseAIJob
             return ['cancelled' => true];
         }
 
-        if ($searchResult->hasError()) {
+        if (!$result->isSuccess()) {
             return [
                 'success' => false,
-                'error' => $searchResult->error,
-                'providers_used' => $searchResult->providersUsed,
+                'error' => $result->error,
+                'providers_used' => ['firecrawl'],
             ];
         }
 
-        if (!$searchResult->hasResults()) {
+        if (!$result->hasResults()) {
             return [
                 'success' => false,
                 'error' => 'No prices found for this item.',
-                'providers_used' => $searchResult->providersUsed,
+                'providers_used' => ['firecrawl'],
             ];
         }
 
@@ -101,13 +106,16 @@ class PriceRefreshJob extends BaseAIJob
         $lowestVendor = null;
         $resultsProcessed = 0;
 
-        foreach ($searchResult->results as $result) {
-            $vendor = ItemVendorPrice::normalizeVendor($result['retailer'] ?? 'Unknown');
-            $price = (float) ($result['price'] ?? 0);
+        foreach ($result->results as $priceResult) {
+            $vendor = ItemVendorPrice::normalizeVendor($priceResult['store_name'] ?? 'Unknown');
+            $price = (float) ($priceResult['price'] ?? 0);
 
             if ($price <= 0) {
                 continue;
             }
+
+            $stockStatus = $priceResult['stock_status'] ?? 'in_stock';
+            $inStock = $stockStatus !== 'out_of_stock';
 
             // Find or create vendor price entry
             $vendorPrice = $item->vendorPrices()
@@ -115,23 +123,24 @@ class PriceRefreshJob extends BaseAIJob
                 ->first();
 
             if ($vendorPrice) {
-                $vendorPrice->updatePrice($price, $result['url'] ?? null, true);
+                $vendorPrice->updatePrice($price, $priceResult['product_url'] ?? null, true);
+                $vendorPrice->update(['in_stock' => $inStock]);
             } else {
                 $item->vendorPrices()->create([
                     'vendor' => $vendor,
-                    'product_url' => $result['url'] ?? null,
+                    'product_url' => $priceResult['product_url'] ?? null,
                     'current_price' => $price,
                     'lowest_price' => $price,
                     'highest_price' => $price,
-                    'in_stock' => $result['in_stock'] ?? true,
+                    'in_stock' => $inStock,
                     'last_checked_at' => now(),
                 ]);
             }
 
             $resultsProcessed++;
 
-            // Track lowest price
-            if ($lowestPrice === null || $price < $lowestPrice) {
+            // Track lowest price from in-stock items
+            if ($inStock && ($lowestPrice === null || $price < $lowestPrice)) {
                 $lowestPrice = $price;
                 $lowestVendor = $vendor;
             }
@@ -149,13 +158,8 @@ class PriceRefreshJob extends BaseAIJob
             PriceHistory::captureFromItem($item, 'user_refresh');
         }
 
-        // Update generic info from search if not already set
-        if ($searchResult->isGeneric && !$item->is_generic) {
-            $item->update([
-                'is_generic' => true,
-                'unit_of_measure' => $searchResult->unitOfMeasure,
-            ]);
-        }
+        // Update last_checked_at
+        $item->update(['last_checked_at' => now()]);
 
         $this->updateProgress($aiJob, 90);
 
@@ -188,9 +192,8 @@ class PriceRefreshJob extends BaseAIJob
             'price_change' => $priceChange,
             'price_change_percent' => $priceChangePercent,
             'results_count' => $resultsProcessed,
-            'providers_used' => $searchResult->providersUsed,
-            'is_generic' => $searchResult->isGeneric,
-            'unit_of_measure' => $searchResult->unitOfMeasure,
+            'providers_used' => ['firecrawl'],
+            'source' => $result->source,
         ];
     }
 }

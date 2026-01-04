@@ -1,8 +1,9 @@
 <?php
 
 use App\Models\User;
+use App\Models\Setting;
 use App\Models\ShoppingList;
-use App\Jobs\AI\PriceSearchJob;
+use App\Jobs\AI\FirecrawlDiscoveryJob;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
@@ -82,6 +83,9 @@ test('users can add item to list from smart add', function () {
 test('adding item dispatches background price search job', function () {
     $user = User::factory()->create();
     $list = ShoppingList::factory()->create(['user_id' => $user->id]);
+    
+    // Configure Firecrawl for the user
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
     $response = $this->actingAs($user)->post('/smart-add/add', [
         'list_id' => $list->id,
@@ -91,13 +95,16 @@ test('adding item dispatches background price search job', function () {
 
     $response->assertRedirect("/lists/{$list->id}");
 
-    // Verify the PriceSearchJob was dispatched
-    Queue::assertPushed(PriceSearchJob::class);
+    // Verify the FirecrawlDiscoveryJob was dispatched (Firecrawl is now the primary price search)
+    Queue::assertPushed(FirecrawlDiscoveryJob::class);
 });
 
 test('adding item can skip price search job', function () {
     $user = User::factory()->create();
     $list = ShoppingList::factory()->create(['user_id' => $user->id]);
+    
+    // Configure Firecrawl for the user (so we can verify skip works)
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
     $response = $this->actingAs($user)->post('/smart-add/add', [
         'list_id' => $list->id,
@@ -108,8 +115,8 @@ test('adding item can skip price search job', function () {
 
     $response->assertRedirect("/lists/{$list->id}");
 
-    // Verify NO job was dispatched
-    Queue::assertNotPushed(PriceSearchJob::class);
+    // Verify NO job was dispatched (Firecrawl is now the primary price search)
+    Queue::assertNotPushed(FirecrawlDiscoveryJob::class);
 });
 
 test('users can add item with uploaded image from smart add', function () {

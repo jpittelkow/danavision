@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\AI\PriceRefreshJob;
+use App\Jobs\AI\FirecrawlDiscoveryJob;
+use App\Jobs\AI\FirecrawlRefreshJob;
 use App\Jobs\AI\SmartFillJob;
+use App\Services\Crawler\FirecrawlService;
 use App\Models\AIJob;
 use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
 use App\Models\Setting;
 use App\Models\ShoppingList;
-use App\Services\AI\AIPriceSearchService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -197,35 +198,40 @@ class ListItemController extends Controller
     }
 
     /**
-     * Refresh price for a single item using AI search.
+     * Refresh price for a single item using Firecrawl.
      * 
-     * Supports two modes via query param:
-     * - async=false (default): Returns redirect response after sync processing
-     * - async=true: Dispatches background job and returns JSON with job ID
+     * Always dispatches an async job for price refresh.
+     * Returns JSON with job ID for polling.
      */
     public function refresh(Request $request, ListItem $item): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $this->authorize('update', $item);
 
         $useAsync = $request->boolean('async', false);
+        $userId = $request->user()->id;
 
-        // Check if web search is available
-        $priceService = AIPriceSearchService::forUser($request->user()->id);
-        if (!$priceService->isWebSearchAvailable()) {
-            $error = 'SERP API is not configured. Please set up a SerpAPI key in Settings.';
+        // Check if Firecrawl is available
+        $firecrawlService = FirecrawlService::forUser($userId);
+        
+        if (!$firecrawlService->isAvailable()) {
+            $error = 'Firecrawl is not configured. Please set up a Firecrawl API key in Settings.';
             return $useAsync
                 ? response()->json(['error' => $error], 422)
                 : back()->with('error', $error);
         }
 
-        // Async mode: dispatch job and return JSON
-        if ($useAsync) {
+        // Check if item has vendor URLs for refresh, otherwise do discovery
+        $vendorUrls = $item->vendorPrices()->pluck('product_url')->filter()->toArray();
+        
+        if (!empty($vendorUrls)) {
+            // Has URLs - do a refresh
             $aiJob = AIJob::createJob(
-                userId: $request->user()->id,
-                type: AIJob::TYPE_PRICE_REFRESH,
+                userId: $userId,
+                type: AIJob::TYPE_FIRECRAWL_REFRESH,
                 inputData: [
                     'product_name' => $item->product_name,
                     'product_query' => $item->product_query,
+                    'product_urls' => $vendorUrls,
                     'is_generic' => $item->is_generic ?? false,
                     'unit_of_measure' => $item->unit_of_measure,
                     'shop_local' => $item->shouldShopLocal(),
@@ -234,8 +240,29 @@ class ListItemController extends Controller
                 relatedListId: $item->shopping_list_id,
             );
 
-            PriceRefreshJob::dispatch($aiJob->id, $request->user()->id);
+            FirecrawlRefreshJob::dispatch($aiJob->id, $userId);
+        } else {
+            // No URLs yet - do a discovery
+            $aiJob = AIJob::createJob(
+                userId: $userId,
+                type: AIJob::TYPE_FIRECRAWL_DISCOVERY,
+                inputData: [
+                    'product_name' => $item->product_name,
+                    'product_query' => $item->product_query ?? $item->product_name,
+                    'upc' => $item->upc ?? null,
+                    'is_generic' => $item->is_generic ?? false,
+                    'unit_of_measure' => $item->unit_of_measure ?? null,
+                    'shop_local' => $item->shouldShopLocal(),
+                    'source' => 'manual_refresh',
+                ],
+                relatedItemId: $item->id,
+                relatedListId: $item->shopping_list_id,
+            );
 
+            FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId);
+        }
+
+        if ($useAsync) {
             return response()->json([
                 'job_id' => $aiJob->id,
                 'status' => 'pending',
@@ -243,83 +270,7 @@ class ListItemController extends Controller
             ], 202);
         }
 
-        // Sync mode: process immediately (legacy behavior)
-        // Get user's home zip code for local searches
-        $homeZipCode = Setting::get(Setting::HOME_ZIP_CODE, $request->user()->id);
-
-        // Determine if shop_local is enabled (item-level takes precedence over list-level)
-        $shopLocal = $item->shouldShopLocal();
-
-        $searchQuery = $item->product_query ?? $item->product_name;
-        $searchResult = $priceService->search($searchQuery, [
-            'is_generic' => $item->is_generic ?? false,
-            'unit_of_measure' => $item->unit_of_measure,
-            'shop_local' => $shopLocal,
-            'zip_code' => $homeZipCode,
-        ]);
-
-        if ($searchResult->hasError()) {
-            return back()->with('error', 'Price search failed: ' . $searchResult->error);
-        }
-
-        if (!$searchResult->hasResults()) {
-            return back()->with('error', 'No prices found for this item.');
-        }
-
-        // Update vendor prices
-        $lowestPrice = null;
-        $lowestVendor = null;
-
-        foreach ($searchResult->results as $result) {
-            $vendor = ItemVendorPrice::normalizeVendor($result['retailer'] ?? 'Unknown');
-            $price = (float) ($result['price'] ?? 0);
-            
-            if ($price <= 0) continue;
-
-            // Find or create vendor price entry
-            $vendorPrice = $item->vendorPrices()
-                ->where('vendor', $vendor)
-                ->first();
-
-            if ($vendorPrice) {
-                $vendorPrice->updatePrice($price, $result['url'] ?? null, true);
-            } else {
-                $vendorPrice = $item->vendorPrices()->create([
-                    'vendor' => $vendor,
-                    'product_url' => $result['url'] ?? null,
-                    'current_price' => $price,
-                    'lowest_price' => $price,
-                    'highest_price' => $price,
-                    'in_stock' => $result['in_stock'] ?? true,
-                    'last_checked_at' => now(),
-                ]);
-            }
-
-            // Track lowest price
-            if ($lowestPrice === null || $price < $lowestPrice) {
-                $lowestPrice = $price;
-                $lowestVendor = $vendor;
-            }
-        }
-
-        // Update main item with best price
-        if ($lowestPrice !== null) {
-            $item->updatePrice($lowestPrice, $lowestVendor);
-            
-            // Capture price history
-            PriceHistory::captureFromItem($item, 'user_refresh');
-        }
-
-        // Update generic info from search if not already set
-        if ($searchResult->isGeneric && !$item->is_generic) {
-            $item->update([
-                'is_generic' => true,
-                'unit_of_measure' => $searchResult->unitOfMeasure,
-            ]);
-        }
-
-        $providerNames = implode(', ', array_map('ucfirst', $searchResult->providersUsed));
-        return back()->with('success', "Prices updated using {$providerNames}!");
+        return back()->with('success', 'Price refresh started. Check back in a moment for updated prices.');
     }
 
     /**
@@ -398,7 +349,6 @@ class ListItemController extends Controller
         // Sync mode: process immediately (legacy behavior)
         $productName = $item->product_name;
         $providersUsed = [];
-        $priceService = AIPriceSearchService::forUser($userId);
 
         // Build prompt for AI to analyze the product
         $prompt = $this->buildSmartFillPrompt($productName, $item);
@@ -423,58 +373,15 @@ class ListItemController extends Controller
                 ->keys()
                 ->toArray();
 
-            // Now search for prices to get current market data and images
-            $searchQuery = $productName;
-            $searchResult = $priceService->search($searchQuery, [
-                'is_generic' => $item->is_generic ?? false,
-                'unit_of_measure' => $item->unit_of_measure,
-            ]);
-
-            // Calculate suggested target price (median of all found prices)
-            $suggestedTargetPrice = null;
-            $commonPrice = null;
-            $foundImageUrl = $aiData['image_url'] ?? null;
-
-            if ($searchResult->hasResults()) {
-                $prices = array_filter(array_column($searchResult->results, 'price'));
-                if (!empty($prices)) {
-                    sort($prices);
-                    $count = count($prices);
-                    // Use median price as suggested target (good deal)
-                    $medianIndex = floor($count / 2);
-                    $commonPrice = $count % 2 === 0
-                        ? ($prices[$medianIndex - 1] + $prices[$medianIndex]) / 2
-                        : $prices[$medianIndex];
-                    
-                    // Suggest target price slightly below median (10% discount)
-                    $suggestedTargetPrice = round($commonPrice * 0.9, 2);
-                }
-
-                // Get image from first result with an image if AI didn't provide one
-                if (!$foundImageUrl) {
-                    foreach ($searchResult->results as $priceResult) {
-                        if (!empty($priceResult['image_url'])) {
-                            $foundImageUrl = $priceResult['image_url'];
-                            break;
-                        }
-                    }
-                }
-
-                // Add web_search to providers if used
-                if (in_array('web_search', $searchResult->providersUsed)) {
-                    $providersUsed[] = 'web_search';
-                }
-            }
-
-            // Build the response
+            // Build the response (price search now happens via Firecrawl after item is added)
             $response = [
                 'success' => true,
-                'product_image_url' => $foundImageUrl,
+                'product_image_url' => $aiData['image_url'] ?? null,
                 'sku' => $aiData['sku'] ?? null,
                 'upc' => $aiData['upc'] ?? null,
                 'description' => $aiData['description'] ?? null,
-                'suggested_target_price' => $suggestedTargetPrice,
-                'common_price' => $commonPrice,
+                'suggested_target_price' => null, // Price search happens via Firecrawl
+                'common_price' => null,
                 'brand' => $aiData['brand'] ?? null,
                 'category' => $aiData['category'] ?? null,
                 'is_generic' => $aiData['is_generic'] ?? $item->is_generic ?? false,

@@ -142,10 +142,7 @@ export interface DashboardData {
 export interface Settings {
   ai_provider: 'claude' | 'openai' | 'gemini' | 'local';
   ai_api_key?: string;
-  price_provider: 'serpapi' | 'rainforest';
-  price_api_key?: string;
-  has_price_api_key?: boolean;
-  // Firecrawl Web Crawler
+  // Firecrawl Web Crawler (primary price search provider)
   firecrawl_api_key?: string;
   has_firecrawl_api_key?: boolean;
   // Email configuration

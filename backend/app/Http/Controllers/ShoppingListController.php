@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ItemVendorPrice;
-use App\Models\PriceHistory;
+use App\Jobs\AI\FirecrawlDiscoveryJob;
+use App\Models\AIJob;
 use App\Models\Setting;
 use App\Models\ShoppingList;
-use App\Services\AI\AIPriceSearchService;
+use App\Services\Crawler\FirecrawlService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -217,17 +217,18 @@ class ShoppingListController extends Controller
     }
 
     /**
-     * Refresh prices for all items in the list using AI search.
+     * Refresh prices for all items in the list using Firecrawl.
      */
     public function refresh(Request $request, ShoppingList $list): RedirectResponse
     {
         $this->authorize('update', $list);
 
-        $priceService = AIPriceSearchService::forUser($request->user()->id);
+        $userId = $request->user()->id;
+        $firecrawlService = FirecrawlService::forUser($userId);
         
-        // Check if either AI or web search is available
-        if (!$priceService->isAvailable() && !$priceService->isWebSearchAvailable()) {
-            return back()->with('error', 'No AI providers or web search configured. Please set up an AI provider or SerpAPI key in Settings.');
+        // Check if Firecrawl is available
+        if (!$firecrawlService->isAvailable()) {
+            return back()->with('error', 'Firecrawl is not configured. Please set up a Firecrawl API key in Settings.');
         }
 
         $items = $list->items()->where('is_purchased', false)->get();
@@ -235,97 +236,31 @@ class ShoppingListController extends Controller
         if ($items->isEmpty()) {
             return back()->with('error', 'No items to refresh.');
         }
-
-        // Get user's home zip code for local searches
-        $homeZipCode = Setting::get(Setting::HOME_ZIP_CODE, $request->user()->id);
-
-        // Get list-level shop_local setting
-        $listShopLocal = $list->shop_local ?? false;
-
-        $updated = 0;
-        $errors = [];
-        $providersUsed = [];
-
-        foreach ($items as $item) {
-            // Determine if shop_local is enabled (item-level takes precedence over list-level)
-            $shopLocal = $item->shouldShopLocal();
-
-            $searchQuery = $item->product_query ?? $item->product_name;
-            $searchResult = $priceService->search($searchQuery, [
-                'is_generic' => $item->is_generic ?? false,
-                'unit_of_measure' => $item->unit_of_measure,
-                'shop_local' => $shopLocal,
-                'zip_code' => $homeZipCode,
-            ]);
-
-            // Track providers used
-            $providersUsed = array_unique(array_merge($providersUsed, $searchResult->providersUsed));
-
-            if ($searchResult->hasError() || !$searchResult->hasResults()) {
-                $errors[] = $item->product_name;
-                continue;
-            }
-
-            $lowestPrice = null;
-            $lowestVendor = null;
-
-            foreach ($searchResult->results as $result) {
-                $vendor = ItemVendorPrice::normalizeVendor($result['retailer'] ?? 'Unknown');
-                $price = (float) ($result['price'] ?? 0);
-                
-                if ($price <= 0) continue;
-
-                // Find or create vendor price entry
-                $vendorPrice = $item->vendorPrices()
-                    ->where('vendor', $vendor)
-                    ->first();
-
-                if ($vendorPrice) {
-                    $vendorPrice->updatePrice($price, $result['url'] ?? null, true);
-                } else {
-                    $item->vendorPrices()->create([
-                        'vendor' => $vendor,
-                        'product_url' => $result['url'] ?? null,
-                        'current_price' => $price,
-                        'lowest_price' => $price,
-                        'highest_price' => $price,
-                        'in_stock' => $result['in_stock'] ?? true,
-                        'last_checked_at' => now(),
-                    ]);
-                }
-
-                if ($lowestPrice === null || $price < $lowestPrice) {
-                    $lowestPrice = $price;
-                    $lowestVendor = $vendor;
-                }
-            }
-
-            // Update main item with best price
-            if ($lowestPrice !== null) {
-                $item->updatePrice($lowestPrice, $lowestVendor);
-                PriceHistory::captureFromItem($item, 'user_refresh');
-                $updated++;
-            }
-
-            // Update generic info from search if not already set
-            if ($searchResult->isGeneric && !$item->is_generic) {
-                $item->update([
-                    'is_generic' => true,
-                    'unit_of_measure' => $searchResult->unitOfMeasure,
-                ]);
-            }
-        }
-
-        $providerNames = implode(', ', array_map('ucfirst', $providersUsed));
-        $message = "Updated prices for {$updated} item" . ($updated !== 1 ? 's' : '') . " using {$providerNames}";
         
-        if (!empty($errors)) {
-            $message .= '. Failed: ' . implode(', ', array_slice($errors, 0, 3));
-            if (count($errors) > 3) {
-                $message .= ' and ' . (count($errors) - 3) . ' more';
-            }
-        }
+        // Dispatch async jobs for each item
+        $jobCount = 0;
+        foreach ($items as $item) {
+            $aiJob = AIJob::createJob(
+                userId: $userId,
+                type: AIJob::TYPE_FIRECRAWL_DISCOVERY,
+                inputData: [
+                    'product_name' => $item->product_name,
+                    'product_query' => $item->product_query ?? $item->product_name,
+                    'upc' => $item->upc ?? null,
+                    'is_generic' => $item->is_generic ?? false,
+                    'unit_of_measure' => $item->unit_of_measure ?? null,
+                    'shop_local' => $item->shouldShopLocal(),
+                    'source' => 'list_refresh',
+                ],
+                relatedItemId: $item->id,
+                relatedListId: $list->id,
+            );
 
-        return back()->with('success', $message);
+            FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId)
+                ->delay(now()->addSeconds($jobCount * 2)); // Stagger jobs to avoid rate limits
+            $jobCount++;
+        }
+        
+        return back()->with('success', "Refreshing prices for {$jobCount} items. This may take a few minutes.");
     }
 }
