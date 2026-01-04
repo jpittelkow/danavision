@@ -168,8 +168,8 @@ class SearchItemPrices implements ShouldQueue
                 }
             }
 
-            // Capture price history
-            PriceHistory::captureFromItem($item, 'smart_add');
+            // Capture price history (using 'daily_job' as source since both are automated background processes)
+            PriceHistory::captureFromItem($item, 'daily_job');
         }
 
         Log::info("SearchItemPrices: Completed for item {$item->id}. Found {$resultsProcessed} prices. Lowest: \${$lowestPrice} at {$lowestVendor}");
