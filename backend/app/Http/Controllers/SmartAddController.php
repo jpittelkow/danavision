@@ -549,8 +549,8 @@ PROMPT;
             'list_id' => ['required', 'exists:shopping_lists,id'],
             'product_name' => ['required', 'string', 'max:255'],
             'product_query' => ['nullable', 'string', 'max:255'],
-            'product_url' => ['nullable', 'url', 'max:2048'],
-            'product_image_url' => ['nullable', 'url', 'max:2048'],
+            'product_url' => ['nullable', 'string', 'max:2048'], // Allow empty strings
+            'product_image_url' => ['nullable', 'string', 'max:2048'], // Allow empty strings
             'uploaded_image' => ['nullable', 'string'], // Base64 data URL
             'sku' => ['nullable', 'string', 'max:100'],
             'upc' => ['nullable', 'string', 'max:20'],
@@ -563,6 +563,14 @@ PROMPT;
             'unit_of_measure' => ['nullable', 'string', 'max:20'],
             'skip_price_search' => ['nullable', 'boolean'], // Option to skip background price search
         ]);
+
+        // Clean up empty URL strings
+        if (empty($validated['product_url'])) {
+            $validated['product_url'] = null;
+        }
+        if (empty($validated['product_image_url'])) {
+            $validated['product_image_url'] = null;
+        }
 
         $list = ShoppingList::findOrFail($validated['list_id']);
         $this->authorize('update', $list);

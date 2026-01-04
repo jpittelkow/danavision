@@ -879,6 +879,21 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
                       />
                     </div>
 
+                    {/* Form Errors */}
+                    {Object.keys(addForm.errors).length > 0 && (
+                      <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/50 rounded-lg">
+                        <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-destructive">Please fix the following errors:</p>
+                          <ul className="text-xs text-destructive mt-1 list-disc list-inside">
+                            {Object.entries(addForm.errors).map(([field, error]) => (
+                              <li key={field}>{error}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
                     {/* No Lists Warning */}
                     {lists.length === 0 && (
                       <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-400/50 rounded-lg">
