@@ -301,16 +301,21 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
     e.preventDefault();
     if (!addForm.data.product_name || !selectedListId) return;
 
-    // Use transform to ensure list_id is set at submission time
-    addForm.transform((data) => ({
-      ...data,
-      list_id: selectedListId,
-    })).post('/smart-add/add', {
+    // Post the form - list_id is synced via handleListChange
+    addForm.post('/smart-add/add', {
       onSuccess: () => {
         // Reset state after successful add
         resetAll();
       },
     });
+  };
+
+  /**
+   * Handle list selection change - keep form in sync
+   */
+  const handleListChange = (value: string) => {
+    setSelectedListId(value);
+    addForm.setData('list_id', value);
   };
 
   /**
@@ -745,7 +750,7 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
                       <label className="block text-sm font-medium text-foreground mb-1">
                         Shopping List *
                       </label>
-                      <Select value={selectedListId} onValueChange={setSelectedListId}>
+                      <Select value={selectedListId} onValueChange={handleListChange}>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select a list" />
                         </SelectTrigger>
