@@ -345,7 +345,7 @@ class SmartAddController extends Controller
         $multiAI = MultiAIService::forUser($userId);
         
         if ($multiAI->isAvailable() && $multiAI->getProviderCount() > 1) {
-            $result = $multiAI->completeWithAllProviders($prompt);
+            $result = $multiAI->processWithAllProviders($prompt);
             
             if ($result['aggregated_response']) {
                 $parsed = $this->parseProductSuggestions($result['aggregated_response']);
@@ -413,6 +413,7 @@ Return a JSON array with the following format:
         "model": "Model number if identifiable",
         "category": "Product category (e.g., Electronics, Groceries, Home & Kitchen)",
         "upc": "12-digit UPC barcode if known, null otherwise",
+        "image_url": "Direct URL to a product image if you know one, null otherwise",
         "is_generic": false,
         "unit_of_measure": null,
         "confidence": 95
@@ -428,10 +429,11 @@ IMPORTANT GUIDELINES:
 6. Generic items do NOT have UPCs - use null
 7. If you recognize the product and know its UPC, include it
 8. If multiple interpretations are possible, include them as separate results
+9. For image_url, provide a direct link to a product image from a major retailer (Amazon, Walmart, Target, Best Buy, manufacturer site) if you know one. Use stable CDN URLs when possible. Set to null if unknown.
 
 Examples:
 - Sony WH-1000XM5 headphones → is_generic: false, upc: "027242917576"
-- Organic bananas → is_generic: true, unit_of_measure: "lb", upc: null
+- Organic bananas → is_generic: true, unit_of_measure: "lb", upc: null, image_url: null
 - iPhone 15 Pro → is_generic: false, upc: null (varies by carrier/storage)
 
 Only return the JSON array, no other text.
@@ -456,6 +458,7 @@ Return a JSON array with the following format:
         "model": "Model number if applicable",
         "category": "Product category (e.g., Electronics, Groceries, Home & Kitchen)",
         "upc": "12-digit UPC barcode if known, null otherwise",
+        "image_url": "Direct URL to a product image if you know one, null otherwise",
         "is_generic": false,
         "unit_of_measure": null,
         "confidence": 95
@@ -470,10 +473,11 @@ IMPORTANT GUIDELINES:
 5. For branded products, set is_generic: false
 6. For generic items (produce, bulk goods, meat, dairy), set is_generic: true and unit_of_measure to appropriate unit (lb, oz, each, dozen, gallon, etc.)
 7. Generic items do NOT have UPCs - use null
+8. For image_url, provide a direct link to a product image from a major retailer (Amazon, Walmart, Target, Best Buy, manufacturer site) if you know one. Use stable CDN URLs when possible. Set to null if unknown.
 
 Examples:
 - Query "airpods" might return: AirPods Pro 2, AirPods 3rd Gen, AirPods Max, etc.
-- Query "milk" might return: various milk types with is_generic: true
+- Query "milk" might return: various milk types with is_generic: true, image_url: null
 - Query "sony headphones" might return: WH-1000XM5, WH-1000XM4, WF-1000XM5, etc.
 
 Only return the JSON array, no other text.
@@ -502,7 +506,7 @@ PROMPT;
                             'is_generic' => (bool) ($item['is_generic'] ?? false),
                             'unit_of_measure' => $item['unit_of_measure'] ?? null,
                             'confidence' => (int) ($item['confidence'] ?? 50),
-                            'image_url' => null, // Will be populated by enrichProductSuggestionsWithImages
+                            'image_url' => $item['image_url'] ?? null, // Use AI-provided image URL
                         ];
                     }
                 }
@@ -516,51 +520,24 @@ PROMPT;
     }
 
     /**
-     * Enrich product suggestions with images via web search.
+     * Enrich product suggestions with images.
+     * AI now provides image URLs directly in its response.
+     * This method validates and returns the results.
      */
     protected function enrichProductSuggestionsWithImages(array $results): array
     {
-        // Only search for images for top 5 results to avoid rate limiting
-        $maxSearches = min(5, count($results));
-        
-        for ($i = 0; $i < $maxSearches; $i++) {
-            $result = $results[$i];
-            
-            // Skip if already has image
+        // AI now provides image URLs directly in the response
+        // Just validate that image URLs look reasonable
+        foreach ($results as $i => $result) {
             if (!empty($result['image_url'])) {
-                continue;
-            }
-            
-            // Skip generic items (usually don't have specific product images)
-            if ($result['is_generic'] ?? false) {
-                continue;
-            }
-            
-            // Build search query for product image
-            $searchQuery = trim(($result['brand'] ?? '') . ' ' . ($result['model'] ?? '') . ' ' . ($result['product_name'] ?? ''));
-            if (empty($searchQuery)) {
-                continue;
-            }
-            
-            // Try to find product image via web search
-            $imageUrl = $this->searchProductImage($searchQuery);
-            if ($imageUrl) {
-                $results[$i]['image_url'] = $imageUrl;
+                // Basic validation - ensure it's a valid URL
+                if (!filter_var($result['image_url'], FILTER_VALIDATE_URL)) {
+                    $results[$i]['image_url'] = null;
+                }
             }
         }
         
         return $results;
-    }
-
-    /**
-     * Search for a product image using AI-powered web search.
-     */
-    protected function searchProductImage(string $query): ?string
-    {
-        // This is a simplified image search - in production you might use
-        // a dedicated image search API like Google Custom Search or SerpAPI
-        // For now, return null and let the frontend handle missing images
-        return null;
     }
 
     /**
