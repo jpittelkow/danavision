@@ -235,22 +235,24 @@ test('store preference update validates input', function () {
     $user = User::factory()->create();
     $store = Store::where('slug', 'amazon')->first();
 
-    // Invalid priority
-    $response = $this->actingAs($user)->patch("/api/stores/{$store->id}/preference", [
+    // Invalid priority - use patchJson to get JSON validation errors instead of redirect
+    $response = $this->actingAs($user)->patchJson("/api/stores/{$store->id}/preference", [
         'priority' => 9999, // Over max
     ]);
 
     $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['priority']);
 });
 
 test('cannot update preference for non-existent store', function () {
     $user = User::factory()->create();
 
-    $response = $this->actingAs($user)->patch('/api/stores/99999/preference', [
+    $response = $this->actingAs($user)->patchJson('/api/stores/99999/preference', [
         'enabled' => false,
     ]);
 
     $response->assertStatus(404);
+    $response->assertJson(['success' => false]);
 });
 
 test('unauthenticated user cannot access store endpoints', function () {

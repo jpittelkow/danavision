@@ -251,9 +251,10 @@ class StoreDiscoveryService
         // Use batch scraping for efficiency
         $result = $this->firecrawlService->scrapeUrlsBatch($urls);
 
-        // Attribute results to stores
+        // Attribute results to stores (copy array since FirecrawlResult::$results is readonly)
+        $attributedResults = [];
         if ($result->hasResults()) {
-            foreach ($result->results as &$priceResult) {
+            foreach ($result->results as $priceResult) {
                 $url = $priceResult['product_url'] ?? null;
                 if ($url) {
                     // Try to match URL to a store
@@ -264,10 +265,11 @@ class StoreDiscoveryService
                         }
                     }
                 }
+                $attributedResults[] = $priceResult;
             }
         }
 
-        return FirecrawlResult::success($result->results ?? [], 'tier1_template');
+        return FirecrawlResult::success($attributedResults, 'tier1_template');
     }
 
     /**
