@@ -81,6 +81,17 @@ class FirecrawlService
     }
 
     /**
+     * Get the user's suppressed (blacklisted) vendors.
+     *
+     * @return array
+     */
+    protected function getSuppressedVendors(): array
+    {
+        $json = Setting::get(Setting::SUPPRESSED_VENDORS, $this->userId);
+        return $json ? (json_decode($json, true) ?: []) : [];
+    }
+
+    /**
      * Discover product prices using the Firecrawl Agent API (v2).
      * 
      * The Agent API autonomously searches the web for product prices
@@ -141,7 +152,7 @@ class FirecrawlService
                 ->post(self::BASE_URL_V2 . '/agent', [
                     'prompt' => $prompt,
                     'schema' => $this->buildPriceSchema($isGeneric),
-                    'maxCredits' => 100, // Limit credits per search
+                    'maxCredits' => 1000, // Limit credits per search
                 ]);
 
             Log::info('FirecrawlService: Agent API initial response', [
@@ -546,17 +557,18 @@ class FirecrawlService
 
         $prompt .= " from online retailers and stores.";
 
-        // Add local store constraint
+        // Add local store constraint with 20-mile radius
         if ($shopLocal) {
             $address = $this->getUserAddress();
             $zipCode = $this->getUserZipCode();
             $location = $address ?? $zipCode;
 
             if ($location) {
-                $prompt .= "\n\n*** IMPORTANT: PRIORITIZE LOCAL STORES ***";
+                $prompt .= "\n\n*** IMPORTANT: LOCAL STORES ONLY ***";
                 $prompt .= "\nUser location: {$location}";
-                $prompt .= "\nPrioritize stores near this location: Walmart, Target, Kroger, Costco, Publix, Safeway, Whole Foods, local grocery stores.";
-                $prompt .= "\nInclude both local store websites and major online retailers.";
+                $prompt .= "\nOnly search for stores WITHIN 20 MILES of this location.";
+                $prompt .= "\nFocus on: Walmart, Target, Kroger, Costco, Publix, Safeway, Whole Foods, local grocery stores.";
+                $prompt .= "\nDo NOT include online-only retailers or stores outside this 20-mile radius.";
             }
         } else {
             $prompt .= "\n\nSearch major retailers including: Amazon, Walmart, Target, Best Buy, Costco, and specialty stores.";
@@ -571,6 +583,19 @@ class FirecrawlService
             $prompt .= "\nFocus on grocery stores, supermarkets, and food retailers.";
         }
 
+        // Add suppressed vendors (blacklist)
+        $suppressedVendors = $this->getSuppressedVendors();
+        if (!empty($suppressedVendors)) {
+            $vendorList = implode(', ', $suppressedVendors);
+            $prompt .= "\n\n*** IMPORTANT: EXCLUDE THESE STORES ***";
+            $prompt .= "\nDo NOT include results from: {$vendorList}";
+        }
+
+        // Add pricing rules - ignore shipping
+        $prompt .= "\n\n*** PRICING RULES ***";
+        $prompt .= "\nOnly report the ITEM PRICE (product price). Do NOT include shipping costs, handling fees, or delivery charges.";
+        $prompt .= "\nIf only a total price with shipping is shown, skip that result.";
+
         $prompt .= "\n\nFor each store/retailer found, extract and return:";
         $prompt .= "\n1. store_name: The retailer/store name (e.g., 'Amazon', 'Walmart', 'Target')";
         $prompt .= "\n2. item_name: The exact product name as listed on the store's website";
@@ -580,6 +605,7 @@ class FirecrawlService
         $prompt .= "\n6. product_url: The direct URL to the product page on that store's website";
         
         $prompt .= "\n\nReturn results from multiple different stores to allow price comparison.";
+        $prompt .= "\nONLY return ONE result per store - do not include multiple products from the same retailer.";
         $prompt .= "\nOnly include results where you can confirm an actual price - do not guess or estimate prices.";
 
         Log::debug('FirecrawlService: Built discovery prompt', [
@@ -587,6 +613,7 @@ class FirecrawlService
             'prompt_length' => strlen($prompt),
             'shop_local' => $shopLocal,
             'is_generic' => $isGeneric,
+            'suppressed_vendors' => $suppressedVendors,
         ]);
 
         return $prompt;
