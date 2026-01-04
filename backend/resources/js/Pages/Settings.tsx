@@ -304,7 +304,10 @@ function ProviderCard({ provider, onUpdate }: { provider: AIProviderData; onUpda
           <>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">API Key</span>
-              <span className="font-mono">
+              <span 
+                className="font-mono text-xs truncate max-w-[200px]" 
+                title={provider.has_api_key ? provider.masked_api_key || undefined : undefined}
+              >
                 {provider.has_api_key ? provider.masked_api_key : 'Not configured'}
               </span>
             </div>
@@ -312,7 +315,9 @@ function ProviderCard({ provider, onUpdate }: { provider: AIProviderData; onUpda
             {provider.provider === 'local' && provider.base_url && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Base URL</span>
-                <span className="font-mono text-xs">{provider.base_url}</span>
+                <span className="font-mono text-xs truncate max-w-[200px]" title={provider.base_url}>
+                  {provider.base_url}
+                </span>
               </div>
             )}
 

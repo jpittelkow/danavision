@@ -38,7 +38,7 @@ test.describe('Settings - Address Typeahead', () => {
     await page.waitForTimeout(1000);
 
     // Check if dropdown or suggestions appear
-    // Note: Actual suggestions depend on Nominatim API availability
+    // Note: Actual suggestions depend on Google Places API availability and key configuration
   });
 
   test('should allow clearing address', async ({ page }) => {

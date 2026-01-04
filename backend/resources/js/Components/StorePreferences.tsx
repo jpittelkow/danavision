@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, type ReactNode } from 'react';
 import axios from 'axios';
 import type { Store, StoreCategory } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
@@ -44,7 +44,7 @@ interface StorePreferencesProps {
   onUpdate?: () => void;
 }
 
-const categoryIcons: Record<string, React.ReactNode> = {
+const categoryIcons: Record<string, ReactNode> = {
   general: <ShoppingCart className="h-4 w-4" />,
   electronics: <Tv className="h-4 w-4" />,
   grocery: <Package className="h-4 w-4" />,
@@ -67,6 +67,7 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
   const [loading, setLoading] = useState<Record<number, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [localOnly, setLocalOnly] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
@@ -97,6 +98,10 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
       if (categoryFilter !== 'all' && store.category !== categoryFilter) {
         return false;
       }
+      // Local only filter
+      if (localOnly && !store.is_local) {
+        return false;
+      }
       return true;
     })
     .sort((a, b) => {
@@ -109,6 +114,7 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
 
   const enabledCount = stores.filter((s) => s.enabled).length;
   const favoriteCount = stores.filter((s) => s.is_favorite).length;
+  const localCount = stores.filter((s) => s.is_local).length;
 
   // Toggle store enabled state
   const handleToggleEnabled = useCallback(async (storeId: number, enabled: boolean) => {
@@ -139,6 +145,24 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
       onUpdate?.();
     } catch (err) {
       console.error('Failed to toggle favorite:', err);
+    } finally {
+      setLoading((prev) => ({ ...prev, [storeId]: false }));
+    }
+  }, [onUpdate]);
+
+  // Toggle store local state
+  const handleToggleLocal = useCallback(async (storeId: number) => {
+    setLoading((prev) => ({ ...prev, [storeId]: true }));
+    try {
+      const response = await axios.post(`/api/stores/${storeId}/local`);
+      setStores((prev) =>
+        prev.map((s) =>
+          s.id === storeId ? { ...s, is_local: response.data.is_local } : s
+        )
+      );
+      onUpdate?.();
+    } catch (err) {
+      console.error('Failed to toggle local:', err);
     } finally {
       setLoading((prev) => ({ ...prev, [storeId]: false }));
     }
@@ -221,6 +245,10 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
             <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
             {favoriteCount} favorites
           </Badge>
+          <Badge variant="outline" className="gap-1">
+            <MapPin className="h-3 w-3 text-green-600" />
+            {localCount} local
+          </Badge>
         </div>
       </div>
 
@@ -254,6 +282,15 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
                   ))}
                 </SelectContent>
               </Select>
+              <Button
+                variant={localOnly ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setLocalOnly(!localOnly)}
+                className="gap-1"
+              >
+                <MapPin className="h-4 w-4" />
+                <span className="hidden sm:inline">Local Only</span>
+              </Button>
             </div>
 
             <div className="flex gap-2">
@@ -394,13 +431,14 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
             {filteredStores.length} store{filteredStores.length !== 1 ? 's' : ''} shown
             {searchQuery && ` matching "${searchQuery}"`}
             {categoryFilter !== 'all' && ` in ${storeCategories[categoryFilter as StoreCategory]}`}
+            {localOnly && ' (local only)'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
             {filteredStores.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
-                {searchQuery || categoryFilter !== 'all' ? (
+                {searchQuery || categoryFilter !== 'all' || localOnly ? (
                   <p>No stores match your filters</p>
                 ) : (
                   <p>No stores available. Add a custom store to get started.</p>
@@ -415,6 +453,7 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
                   categoryLabel={storeCategories[store.category as StoreCategory]}
                   onToggleEnabled={handleToggleEnabled}
                   onToggleFavorite={handleToggleFavorite}
+                  onToggleLocal={handleToggleLocal}
                 />
               ))
             )}
@@ -461,9 +500,10 @@ interface StoreRowProps {
   categoryLabel?: string;
   onToggleEnabled: (storeId: number, enabled: boolean) => void;
   onToggleFavorite: (storeId: number) => void;
+  onToggleLocal: (storeId: number) => void;
 }
 
-function StoreRow({ store, loading, categoryLabel, onToggleEnabled, onToggleFavorite }: StoreRowProps) {
+function StoreRow({ store, loading, categoryLabel, onToggleEnabled, onToggleFavorite, onToggleLocal }: StoreRowProps) {
   return (
     <div
       className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
@@ -512,6 +552,18 @@ function StoreRow({ store, loading, categoryLabel, onToggleEnabled, onToggleFavo
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        {/* Local button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onToggleLocal(store.id)}
+          disabled={loading}
+          className={store.is_local ? 'text-green-600 hover:text-green-700' : 'text-muted-foreground'}
+          title={store.is_local ? 'Mark as non-local' : 'Mark as local'}
+        >
+          <MapPin className={`h-4 w-4 ${store.is_local ? 'fill-current' : ''}`} />
+        </Button>
+
         {/* Favorite button */}
         <Button
           variant="ghost"
@@ -519,6 +571,7 @@ function StoreRow({ store, loading, categoryLabel, onToggleEnabled, onToggleFavo
           onClick={() => onToggleFavorite(store.id)}
           disabled={loading}
           className={store.is_favorite ? 'text-yellow-500 hover:text-yellow-600' : 'text-muted-foreground'}
+          title={store.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Star className={`h-4 w-4 ${store.is_favorite ? 'fill-current' : ''}`} />
         </Button>

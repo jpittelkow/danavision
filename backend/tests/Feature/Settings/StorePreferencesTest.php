@@ -114,6 +114,50 @@ test('user can toggle store favorite', function () {
     ]);
 });
 
+test('user can toggle store local status', function () {
+    $user = User::factory()->create();
+    $store = Store::where('slug', 'walmart')->first();
+
+    // Ensure store starts as not local
+    $store->update(['is_local' => false]);
+
+    // First toggle - should become local
+    $response = $this->actingAs($user)->post("/api/stores/{$store->id}/local");
+
+    $response->assertStatus(200);
+    $response->assertJson([
+        'success' => true,
+        'is_local' => true,
+    ]);
+
+    // Verify database was updated
+    expect($store->fresh()->is_local)->toBeTrue();
+
+    // Second toggle - should remove local
+    $response = $this->actingAs($user)->post("/api/stores/{$store->id}/local");
+
+    $response->assertStatus(200);
+    $response->assertJson([
+        'success' => true,
+        'is_local' => false,
+    ]);
+
+    // Verify database was updated
+    expect($store->fresh()->is_local)->toBeFalse();
+});
+
+test('toggle local returns 404 for non-existent store', function () {
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)->postJson('/api/stores/99999/local');
+
+    $response->assertStatus(404);
+    $response->assertJson([
+        'success' => false,
+        'message' => 'Store not found',
+    ]);
+});
+
 test('user can update store priorities', function () {
     $user = User::factory()->create();
     $amazon = Store::where('slug', 'amazon')->first();

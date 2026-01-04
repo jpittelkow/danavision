@@ -1,69 +1,84 @@
 # Page snapshot
 
 ```yaml
-- generic [ref=e3]:
-  - complementary [ref=e4]:
-    - generic [ref=e6]:
-      - img "DanaVision" [ref=e7]
-      - generic [ref=e8]: DanaVision
-    - navigation [ref=e9]:
-      - link "Smart Add" [ref=e10] [cursor=pointer]:
-        - /url: /smart-add
-        - img [ref=e11]
-        - generic [ref=e14]: Smart Add
-      - link "Dashboard" [ref=e15] [cursor=pointer]:
-        - /url: /dashboard
-        - img [ref=e16]
-        - generic [ref=e21]: Dashboard
-      - link "Lists" [ref=e22] [cursor=pointer]:
-        - /url: /lists
-        - img [ref=e23]
-        - generic [ref=e26]: Lists
-      - link "Search" [ref=e27] [cursor=pointer]:
-        - /url: /search
-        - img [ref=e28]
-        - generic [ref=e31]: Search
-      - link "Settings" [ref=e32] [cursor=pointer]:
-        - /url: /settings
-        - img [ref=e33]
-        - generic [ref=e36]: Settings
-    - generic [ref=e37]:
-      - generic [ref=e38]:
-        - generic [ref=e39]: T
-        - generic [ref=e40]:
-          - paragraph [ref=e41]: Test User
-          - paragraph [ref=e42]: test@example.com
-      - button "Sign Out" [ref=e43] [cursor=pointer]:
-        - img [ref=e44]
-        - generic [ref=e47]: Sign Out
-  - generic [ref=e48]:
-    - banner [ref=e49]:
-      - button "Toggle theme" [ref=e52] [cursor=pointer]:
-        - img [ref=e53]
-        - generic [ref=e55]: Toggle theme
-    - main [ref=e56]:
-      - generic [ref=e57]:
-        - link "← Back to Lists" [ref=e59] [cursor=pointer]:
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e6]:
+        - img "DanaVision" [ref=e7]
+        - generic [ref=e8]: DanaVision
+      - navigation [ref=e9]:
+        - link "Smart Add" [ref=e10] [cursor=pointer]:
+          - /url: /smart-add
+          - img [ref=e11]
+          - generic [ref=e14]: Smart Add
+        - link "Dashboard" [ref=e15] [cursor=pointer]:
+          - /url: /dashboard
+          - img [ref=e16]
+          - generic [ref=e21]: Dashboard
+        - link "Lists" [ref=e22] [cursor=pointer]:
           - /url: /lists
-        - generic [ref=e60]:
-          - heading "Create New List" [level=1] [ref=e61]
-          - generic [ref=e62]:
-            - generic [ref=e63]:
-              - generic [ref=e64]: List Name *
-              - textbox "e.g., Electronics Wishlist" [ref=e65]
-            - generic [ref=e66]:
-              - generic [ref=e67]: Description
-              - textbox "What's this list for?" [ref=e68]
-            - generic [ref=e69]:
-              - heading "Price Notifications" [level=3] [ref=e70]
-              - generic [ref=e71]:
-                - checkbox "Notify me on any price drop" [checked] [ref=e72]
-                - generic [ref=e73]: Notify me on any price drop
-              - generic [ref=e74]:
-                - checkbox "Only notify when drop exceeds threshold" [ref=e75]
-                - generic [ref=e76]: Only notify when drop exceeds threshold
-            - generic [ref=e77]:
-              - link "Cancel" [ref=e78] [cursor=pointer]:
-                - /url: /lists
-              - button "Create List" [ref=e79] [cursor=pointer]
+          - img [ref=e23]
+          - generic [ref=e26]: Lists
+        - link "Search" [ref=e27] [cursor=pointer]:
+          - /url: /search
+          - img [ref=e28]
+          - generic [ref=e31]: Search
+        - link "Settings" [ref=e32] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e33]
+          - generic [ref=e36]: Settings
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - generic [ref=e39]: T
+          - generic [ref=e40]:
+            - paragraph [ref=e41]: Test User
+            - paragraph [ref=e42]: test@example.com
+        - button "Sign Out" [ref=e43] [cursor=pointer]:
+          - img [ref=e44]
+          - generic [ref=e47]: Sign Out
+    - generic [ref=e48]:
+      - banner [ref=e49]:
+        - button "Toggle theme" [ref=e52] [cursor=pointer]:
+          - img [ref=e53]
+          - generic [ref=e55]: Toggle theme
+      - main [ref=e56]:
+        - generic [ref=e57]:
+          - link "← Back to Lists" [ref=e59] [cursor=pointer]:
+            - /url: /lists
+          - generic [ref=e60]:
+            - heading "Create New List" [level=1] [ref=e61]
+            - generic [ref=e62]:
+              - generic [ref=e63]:
+                - generic [ref=e64]: List Name *
+                - textbox "e.g., Electronics Wishlist" [ref=e65]
+              - generic [ref=e66]:
+                - generic [ref=e67]: Description
+                - textbox "What's this list for?" [ref=e68]
+              - generic [ref=e69]:
+                - heading "Price Notifications" [level=3] [ref=e70]
+                - generic [ref=e71]:
+                  - checkbox "Notify me on any price drop" [checked] [ref=e72]
+                  - generic [ref=e73]: Notify me on any price drop
+                - generic [ref=e74]:
+                  - checkbox "Only notify when drop exceeds threshold" [ref=e75]
+                  - generic [ref=e76]: Only notify when drop exceeds threshold
+              - generic [ref=e77]:
+                - link "Cancel" [ref=e78] [cursor=pointer]:
+                  - /url: /lists
+                - button "Create List" [ref=e79] [cursor=pointer]
+  - generic [ref=e82]:
+    - generic [ref=e83]: "[plugin:vite:react-babel] C:\\Users\\jpitt_6932a9v\\code\\danavision\\backend\\resources\\js\\Pages\\Settings.tsx: Identifier 'Store' has already been declared. (52:2) 55 | Activity,"
+    - generic [ref=e84]: C:/Users/jpitt_6932a9v/code/danavision/backend/resources/js/Pages/Settings.tsx:52:2
+    - generic [ref=e85]: "55 | Activity, 56 | ScrollText, 57 | Globe, | ^ 58 | MapPin, 59 | } from 'lucide-react';"
+    - generic [ref=e86]: at constructor (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:367:19) at TypeScriptParserMixin.raise (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:6624:19) at TypeScriptScopeHandler.declareName (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:4895:21) at TypeScriptParserMixin.declareNameFromIdentifier (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:7594:16) at TypeScriptParserMixin.checkIdentifier (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:7590:12) at TypeScriptParserMixin.checkLVal (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:7527:12) at TypeScriptParserMixin.finishImportSpecifier (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:14342:10) at TypeScriptParserMixin.parseImportSpecifier (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:14499:17) at TypeScriptParserMixin.parseImportSpecifier (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:10205:18) at TypeScriptParserMixin.parseNamedImportSpecifiers (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:14478:36) at TypeScriptParserMixin.parseImportSpecifiersAndAfter (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:14318:37) at TypeScriptParserMixin.parseImport (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:14311:17) at TypeScriptParserMixin.parseImport (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:9412:26) at TypeScriptParserMixin.parseStatementContent (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:12952:27) at TypeScriptParserMixin.parseStatementContent (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:9569:18) at TypeScriptParserMixin.parseStatementLike (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:12843:17) at TypeScriptParserMixin.parseModuleItem (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:12820:17) at TypeScriptParserMixin.parseBlockOrModuleBlockBody (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:13392:36) at TypeScriptParserMixin.parseBlockBody (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:13385:10) at TypeScriptParserMixin.parseProgram (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:12698:10) at TypeScriptParserMixin.parseTopLevel (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:12688:25) at TypeScriptParserMixin.parse (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:14568:25) at TypeScriptParserMixin.parse (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:10183:18) at parse (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\parser\lib\index.js:14602:38) at parser (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\core\lib\parser\index.js:41:34) at parser.next (<anonymous>) at normalizeFile (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\core\lib\transformation\normalize-file.js:64:37) at normalizeFile.next (<anonymous>) at run (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\core\lib\transformation\index.js:22:50) at run.next (<anonymous>) at transform (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\core\lib\transform.js:22:33) at transform.next (<anonymous>) at step (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\gensync\index.js:261:32) at C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\gensync\index.js:273:13 at async.call.result.err.err (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\gensync\index.js:223:11) at C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\gensync\index.js:189:28 at C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\@babel\core\lib\gensync-utils\async.js:67:7 at C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\gensync\index.js:113:33 at step (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\gensync\index.js:287:14) at C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\gensync\index.js:273:13 at async.call.result.err.err (C:\Users\jpitt_6932a9v\code\danavision\backend\node_modules\gensync\index.js:223:11
+    - generic [ref=e87]:
+      - text: Click outside, press Esc key, or fix the code to dismiss.
+      - text: You can also disable this overlay by setting
+      - code [ref=e88]: server.hmr.overlay
+      - text: to
+      - code [ref=e89]: "false"
+      - text: in
+      - code [ref=e90]: vite.config.ts
+      - text: .
 ```

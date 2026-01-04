@@ -502,6 +502,33 @@ class SettingController extends Controller
     }
 
     /**
+     * Toggle local status for a store.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function toggleStoreLocal(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Store not found',
+            ], 404);
+        }
+
+        $store->is_local = !$store->is_local;
+        $store->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => $store->is_local ? 'Store marked as local' : 'Store unmarked as local',
+            'is_local' => $store->is_local,
+        ]);
+    }
+
+    /**
      * Bulk update store priorities (for drag-and-drop reordering).
      *
      * @param Request $request

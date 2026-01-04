@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import type {
   StoreCategory,
@@ -83,11 +83,14 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [geolocationSupported] = useState(() => typeof navigator !== 'undefined' && 'geolocation' in navigator);
 
   // Preview state
   const [previewStores, setPreviewStores] = useState<NearbyStoreResult[]>([]);
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewComplete, setPreviewComplete] = useState(false);
 
   // Discovery state
   const [discovering, setDiscovering] = useState(false);
@@ -96,11 +99,12 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
   const [discoveryStatus, setDiscoveryStatus] = useState<AIJobStatus | null>(null);
   const [discoveryLogs, setDiscoveryLogs] = useState<string[]>([]);
   const [discoveryResult, setDiscoveryResult] = useState<{
+    stores_found: number;
     stores_added: number;
     stores_configured: number;
   } | null>(null);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
-  const pollingCleanupRef = React.useRef<(() => void) | null>(null);
+  const pollingCleanupRef = useRef<(() => void) | null>(null);
 
   // Check availability when dialog opens
   useEffect(() => {
@@ -137,11 +141,15 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
   };
 
   const getCurrentLocation = useCallback(() => {
-    if (!navigator.geolocation) {
+    if (!geolocationSupported) {
+      setLocationError('Geolocation is not supported by your browser');
+      setUseCurrentLocation(false);
       return;
     }
 
     setGettingLocation(true);
+    setLocationError(null);
+    
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setCurrentLocation({
@@ -149,14 +157,29 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
           lng: position.coords.longitude,
         });
         setGettingLocation(false);
+        setLocationError(null);
       },
-      () => {
+      (error) => {
         setGettingLocation(false);
         setUseCurrentLocation(false);
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setLocationError('Location permission denied. Please enable location access in your browser settings.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setLocationError('Location information unavailable. Please try again.');
+            break;
+          case error.TIMEOUT:
+            setLocationError('Location request timed out. Please try again.');
+            break;
+          default:
+            setLocationError('Unable to get your location. Please try again or use your home address.');
+        }
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
-  }, []);
+  }, [geolocationSupported]);
 
   useEffect(() => {
     if (useCurrentLocation && !currentLocation) {
@@ -174,6 +197,7 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
     setPreviewing(true);
     setPreviewError(null);
     setPreviewStores([]);
+    setPreviewComplete(false);
 
     try {
       const payload: NearbyStoreDiscoveryRequest = {
@@ -190,6 +214,7 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
 
       if (response.data.success) {
         setPreviewStores(response.data.stores || []);
+        setPreviewComplete(true);
       } else {
         setPreviewError(response.data.error || 'Preview failed');
       }
@@ -257,12 +282,17 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
         }
 
         if (data.status === 'completed') {
+          const storesAdded = data.result?.stores_added || 0;
           setDiscoveryResult({
-            stores_added: data.result?.stores_added || 0,
+            stores_found: data.result?.stores_found || 0,
+            stores_added: storesAdded,
             stores_configured: data.result?.stores_configured || 0,
           });
           setDiscovering(false);
-          onStoresAdded?.();
+          // Only trigger refresh callback if stores were actually added
+          if (storesAdded > 0) {
+            onStoresAdded?.();
+          }
         } else if (data.status === 'failed') {
           setDiscoveryError(data.error || 'Discovery job failed');
           setDiscovering(false);
@@ -310,12 +340,14 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
   const resetDialog = () => {
     setPreviewStores([]);
     setPreviewError(null);
+    setPreviewComplete(false);
     setDiscoveryResult(null);
     setDiscoveryError(null);
     setDiscoveryLogs([]);
     setDiscoveryProgress(0);
     setDiscoveryJobId(null);
     setDiscoveryStatus(null);
+    setLocationError(null);
   };
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -369,20 +401,46 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
             </div>
           </div>
         ) : discoveryResult ? (
-          // Success state
+          // Discovery complete state
           <div className="space-y-4 py-4">
-            <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-900">
-              <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-medium text-green-900 dark:text-green-100">Discovery Complete!</p>
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  Added {discoveryResult.stores_added} new stores to your registry.
-                  {discoveryResult.stores_configured > 0 && (
-                    <> {discoveryResult.stores_configured} were auto-configured for price search.</>
-                  )}
-                </p>
+            {discoveryResult.stores_found === 0 ? (
+              // No stores found in the area
+              <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
+                <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-medium text-amber-900 dark:text-amber-100">No Stores Found</p>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    No stores matching your criteria were found within {radiusMiles} miles.
+                    Try increasing the search radius or selecting different categories.
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : discoveryResult.stores_added === 0 ? (
+              // Stores found but all already exist
+              <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
+                <CheckCircle2 className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-medium text-blue-900 dark:text-blue-100">All Stores Already Added</p>
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    Found {discoveryResult.stores_found} stores nearby, but they are all already in your registry.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              // Stores were added successfully
+              <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-900">
+                <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-medium text-green-900 dark:text-green-100">Discovery Complete!</p>
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    Added {discoveryResult.stores_added} new stores to your registry.
+                    {discoveryResult.stores_configured > 0 && (
+                      <> {discoveryResult.stores_configured} were auto-configured for price search.</>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <DialogFooter>
               <Button onClick={() => handleOpenChange(false)}>Done</Button>
@@ -455,28 +513,44 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
             </div>
 
             {/* Location Toggle */}
-            {navigator.geolocation && (
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Use Current Location</Label>
-                  <p className="text-xs text-muted-foreground">
-                    {useCurrentLocation && currentLocation
-                      ? 'Using your current location'
-                      : 'Use your home address from Settings'}
-                  </p>
+            {geolocationSupported && (
+              <div className="space-y-2">
+                <div 
+                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/50 transition-colors cursor-pointer"
+                  onClick={() => !gettingLocation && setUseCurrentLocation(!useCurrentLocation)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Navigation className={`h-4 w-4 ${useCurrentLocation && currentLocation ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <div className="space-y-0.5">
+                      <Label className="cursor-pointer">Use Current Location</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {gettingLocation
+                          ? 'Getting your location...'
+                          : useCurrentLocation && currentLocation
+                            ? 'Using your current location'
+                            : 'Use your home address from Settings'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {gettingLocation && (
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    )}
+                    <Switch
+                      checked={useCurrentLocation}
+                      onCheckedChange={setUseCurrentLocation}
+                      disabled={gettingLocation}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
                 </div>
-                <Switch
-                  checked={useCurrentLocation}
-                  onCheckedChange={setUseCurrentLocation}
-                  disabled={gettingLocation}
-                />
-              </div>
-            )}
-
-            {gettingLocation && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Navigation className="h-4 w-4 animate-pulse" />
-                Getting your location...
+                
+                {locationError && (
+                  <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-950/20 rounded-md text-xs">
+                    <AlertCircle className="h-3 w-3 text-red-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-red-700 dark:text-red-300">{locationError}</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -508,50 +582,66 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
             </div>
 
             {/* Preview Results */}
-            {previewStores.length > 0 && (
+            {previewComplete && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label>Preview ({previewStores.length} stores found)</Label>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setPreviewStores([])}
+                    onClick={() => {
+                      setPreviewStores([]);
+                      setPreviewComplete(false);
+                    }}
                     className="h-6 px-2"
                   >
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
-                <div className="max-h-48 overflow-y-auto space-y-2 border rounded-lg p-2">
-                  {previewStores.slice(0, 20).map((store) => (
-                    <div
-                      key={store.place_id}
-                      className="flex items-center justify-between p-2 bg-muted/50 rounded"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{store.name}</p>
-                        <p className="text-xs text-muted-foreground truncate">{store.address}</p>
+                {previewStores.length > 0 ? (
+                  <div className="max-h-48 overflow-y-auto space-y-2 border rounded-lg p-2">
+                    {previewStores.slice(0, 20).map((store) => (
+                      <div
+                        key={store.place_id}
+                        className="flex items-center justify-between p-2 bg-muted/50 rounded"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{store.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{store.address}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Badge variant="outline" className="text-xs">
+                            {store.distance_miles} mi
+                          </Badge>
+                          {store.website && (
+                            <CheckCircle2 className="h-3 w-3 text-green-500" title="Has website" />
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Badge variant="outline" className="text-xs">
-                          {store.distance_miles} mi
-                        </Badge>
-                        {store.website && (
-                          <CheckCircle2 className="h-3 w-3 text-green-500" title="Has website" />
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {previewStores.length > 20 && (
-                    <p className="text-xs text-center text-muted-foreground py-2">
-                      +{previewStores.length - 20} more stores
+                    ))}
+                    {previewStores.length > 20 && (
+                      <p className="text-xs text-center text-muted-foreground py-2">
+                        +{previewStores.length - 20} more stores
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
+                    <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-800 dark:text-amber-200">
+                      No stores found within {radiusMiles} miles for the selected categories.
+                      Try increasing the radius or selecting different categories.
                     </p>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
             {previewError && (
-              <p className="text-sm text-red-500">{previewError}</p>
+              <div className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-900">
+                <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-700 dark:text-red-300">{previewError}</p>
+              </div>
             )}
 
             {/* Auto-configure notice */}

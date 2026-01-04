@@ -667,9 +667,10 @@ PROMPT;
                     relatedListId: $list->id,
                 );
 
-                // Dispatch the Firecrawl discovery job
+                // Dispatch the Firecrawl discovery job after response is sent
+                // This ensures the redirect happens immediately while price search runs in background
                 FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId)
-                    ->delay(now()->addSeconds(2)); // Small delay to let the redirect complete
+                    ->afterResponse();
             }
             // If Firecrawl is not configured, item is still added but no price search runs
             // User will see a message in the UI to configure Firecrawl in Settings
@@ -1122,7 +1123,7 @@ PROMPT;
             );
 
             FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId)
-                ->delay(now()->addSeconds(2));
+                ->afterResponse();
         }
 
         if ($request->wantsJson()) {

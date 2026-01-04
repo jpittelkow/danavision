@@ -86,7 +86,7 @@ class DatabaseSeeder extends Seeder
                         'list_item_id' => $item->id,
                         'retailer' => $itemData['current_retailer'],
                         'price' => $basePrice + (($i - 2) * 5), // Vary price slightly
-                        'recorded_at' => now()->subDays(5 - $i),
+                        'captured_at' => now()->subDays(5 - $i),
                     ]);
                 }
             }

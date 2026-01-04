@@ -83,6 +83,7 @@ Route::middleware('auth')->group(function () {
     Route::get('api/stores', [SettingController::class, 'getStores'])->name('stores.index');
     Route::patch('api/stores/{store}/preference', [SettingController::class, 'updateStorePreference'])->name('stores.preference');
     Route::post('api/stores/{store}/favorite', [SettingController::class, 'toggleStoreFavorite'])->name('stores.favorite');
+    Route::post('api/stores/{store}/local', [SettingController::class, 'toggleStoreLocal'])->name('stores.local');
     Route::patch('api/stores/priorities', [SettingController::class, 'updateStorePriorities'])->name('stores.priorities');
     Route::post('api/stores', [SettingController::class, 'addCustomStore'])->name('stores.store');
     Route::post('api/stores/reset', [SettingController::class, 'resetStorePreferences'])->name('stores.reset');
@@ -95,7 +96,7 @@ Route::middleware('auth')->group(function () {
     Route::get('api/stores/nearby/{aiJob}', [NearbyStoreController::class, 'getDiscoveryStatus'])->name('stores.nearby.status');
     Route::post('api/stores/nearby/{aiJob}/cancel', [NearbyStoreController::class, 'cancelDiscovery'])->name('stores.nearby.cancel');
 
-    // Address lookup (Nominatim proxy)
+    // Address lookup (Google Places/Geocoding API)
     Route::get('api/address/search', [AddressController::class, 'search'])->name('address.search');
     Route::get('api/address/reverse', [AddressController::class, 'reverse'])->name('address.reverse');
 

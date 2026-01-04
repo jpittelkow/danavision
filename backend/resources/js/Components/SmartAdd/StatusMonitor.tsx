@@ -186,22 +186,24 @@ export function StatusMonitor({ jobId, onComplete, onError, onCancel, className 
         if (!mounted) return;
 
         if (response.ok) {
-          const data = await response.json();
-          setJob(data);
+          const responseData = await response.json();
+          // API returns { job: {...} }, extract the job object
+          const jobData = responseData.job || responseData;
+          setJob(jobData);
 
           // Update steps from logs
-          if (data.output_data?.progress_logs) {
-            setSteps(parseStepsFromLogs(data.output_data.progress_logs));
+          if (jobData.output_data?.progress_logs) {
+            setSteps(parseStepsFromLogs(jobData.output_data.progress_logs));
           }
 
           // Handle completed/failed states
-          if (data.status === 'completed') {
+          if (jobData.status === 'completed') {
             // Mark all steps complete
             setSteps(prev => prev.map(s => ({ ...s, status: 'completed' as const })));
             
             // Extract results and providers
-            const results = data.output_data?.results || [];
-            const logs = data.output_data?.progress_logs || [];
+            const results = jobData.output_data?.results || [];
+            const logs = jobData.output_data?.progress_logs || [];
             const providersLog = logs.find((l: string) => l.toLowerCase().includes('provider'));
             const providers: string[] = [];
             if (providersLog) {
@@ -215,13 +217,13 @@ export function StatusMonitor({ jobId, onComplete, onError, onCancel, className 
               clearInterval(intervalId);
               intervalId = null;
             }
-          } else if (data.status === 'failed') {
-            onErrorRef.current(data.error_message || 'Product identification failed');
+          } else if (jobData.status === 'failed') {
+            onErrorRef.current(jobData.error_message || 'Product identification failed');
             if (intervalId) {
               clearInterval(intervalId);
               intervalId = null;
             }
-          } else if (data.status === 'cancelled') {
+          } else if (jobData.status === 'cancelled') {
             onErrorRef.current('Product identification was cancelled');
             if (intervalId) {
               clearInterval(intervalId);
