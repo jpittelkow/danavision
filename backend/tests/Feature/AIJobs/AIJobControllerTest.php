@@ -4,13 +4,10 @@ namespace Tests\Feature\AIJobs;
 
 use App\Models\AIJob;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class AIJobControllerTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected User $user;
 
     protected function setUp(): void

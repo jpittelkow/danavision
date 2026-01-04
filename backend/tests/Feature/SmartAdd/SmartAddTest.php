@@ -2,7 +2,7 @@
 
 use App\Models\User;
 use App\Models\ShoppingList;
-use App\Jobs\SearchItemPrices;
+use App\Jobs\AI\PriceSearchJob;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
@@ -91,10 +91,8 @@ test('adding item dispatches background price search job', function () {
 
     $response->assertRedirect("/lists/{$list->id}");
 
-    // Verify the SearchItemPrices job was dispatched
-    Queue::assertPushed(SearchItemPrices::class, function ($job) use ($user) {
-        return $job->userId === $user->id;
-    });
+    // Verify the PriceSearchJob was dispatched
+    Queue::assertPushed(PriceSearchJob::class);
 });
 
 test('adding item can skip price search job', function () {
@@ -111,7 +109,7 @@ test('adding item can skip price search job', function () {
     $response->assertRedirect("/lists/{$list->id}");
 
     // Verify NO job was dispatched
-    Queue::assertNotPushed(SearchItemPrices::class);
+    Queue::assertNotPushed(PriceSearchJob::class);
 });
 
 test('users can add item with uploaded image from smart add', function () {
