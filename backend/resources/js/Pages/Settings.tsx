@@ -1,10 +1,11 @@
 import { FormEvent, useState } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
-import { PageProps, Settings as SettingsType } from '@/types';
+import { PageProps, Settings as SettingsType, Store, StoreCategory } from '@/types';
 import AppLayout from '@/Layouts/AppLayout';
 import AddressTypeahead from '@/Components/AddressTypeahead';
 import { JobsTab } from '@/Components/JobsTab';
 import { AILogsTab } from '@/Components/AILogsTab';
+import { StorePreferences } from '@/Components/StorePreferences';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
@@ -104,6 +105,8 @@ interface Props extends PageProps {
     requires_api_key: boolean;
   }>;
   prompts: Record<string, PromptData>;
+  stores: Store[];
+  storeCategories: Record<StoreCategory, string>;
 }
 
 const providerIcons: Record<string, React.ReactNode> = {
@@ -660,7 +663,7 @@ function PromptEditor({ prompt, onUpdate }: { prompt: PromptData; onUpdate: () =
   );
 }
 
-export default function Settings({ auth, settings, providers, availableProviders, prompts, flash }: Props) {
+export default function Settings({ auth, settings, providers, availableProviders, prompts, stores, storeCategories, flash }: Props) {
   const [showMailPassword, setShowMailPassword] = useState(false);
   const [showFirecrawlKey, setShowFirecrawlKey] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
@@ -732,7 +735,7 @@ export default function Settings({ auth, settings, providers, availableProviders
         )}
 
         <Tabs defaultValue="general" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="general" className="gap-2">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">General</span>
@@ -740,6 +743,10 @@ export default function Settings({ auth, settings, providers, availableProviders
             <TabsTrigger value="configurations" className="gap-2">
               <SettingsIcon className="h-4 w-4" />
               <span className="hidden sm:inline">Config</span>
+            </TabsTrigger>
+            <TabsTrigger value="stores" className="gap-2">
+              <Store className="h-4 w-4" />
+              <span className="hidden sm:inline">Stores</span>
             </TabsTrigger>
             <TabsTrigger value="ai" className="gap-2">
               <Brain className="h-4 w-4" />
@@ -1275,6 +1282,15 @@ export default function Settings({ auth, settings, providers, availableProviders
                 {processing ? 'Saving...' : 'Save Configuration Settings'}
               </Button>
             </form>
+          </TabsContent>
+
+          {/* Stores Tab */}
+          <TabsContent value="stores">
+            <StorePreferences
+              stores={stores}
+              storeCategories={storeCategories}
+              onUpdate={() => router.reload({ only: ['stores'] })}
+            />
           </TabsContent>
 
           {/* AI Providers Tab */}

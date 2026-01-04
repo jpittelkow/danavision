@@ -338,6 +338,59 @@ export interface AILogStats {
   by_type: Record<AIRequestType, number>;
 }
 
+/**
+ * Store Registry types
+ */
+export type StoreCategory =
+  | 'general'
+  | 'electronics'
+  | 'grocery'
+  | 'home'
+  | 'clothing'
+  | 'pharmacy'
+  | 'warehouse'
+  | 'specialty';
+
+/**
+ * Store model with user preference data.
+ */
+export interface Store {
+  id: number;
+  name: string;
+  slug: string;
+  domain: string;
+  logo_url?: string;
+  category?: StoreCategory;
+  is_default: boolean;
+  is_local: boolean;
+  has_search_template: boolean;
+  default_priority: number;
+  // User-specific preferences (merged from user_store_preferences)
+  enabled: boolean;
+  is_favorite: boolean;
+  priority: number;
+}
+
+/**
+ * Store preference update payload.
+ */
+export interface StorePreferenceUpdate {
+  enabled?: boolean;
+  is_favorite?: boolean;
+  priority?: number;
+}
+
+/**
+ * Custom store creation payload.
+ */
+export interface CustomStorePayload {
+  name: string;
+  domain: string;
+  search_url_template?: string;
+  category?: StoreCategory;
+  is_local?: boolean;
+}
+
 export type PageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {
   auth: {
     user: User | null;

@@ -74,6 +74,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('settings', [SettingController::class, 'update']);
     Route::post('settings/test-email', [SettingController::class, 'testEmail'])->name('settings.test-email');
 
+    // Store Registry & Preferences
+    Route::get('api/stores', [SettingController::class, 'getStores'])->name('stores.index');
+    Route::patch('api/stores/{store}/preference', [SettingController::class, 'updateStorePreference'])->name('stores.preference');
+    Route::post('api/stores/{store}/favorite', [SettingController::class, 'toggleStoreFavorite'])->name('stores.favorite');
+    Route::patch('api/stores/priorities', [SettingController::class, 'updateStorePriorities'])->name('stores.priorities');
+    Route::post('api/stores', [SettingController::class, 'addCustomStore'])->name('stores.store');
+    Route::post('api/stores/reset', [SettingController::class, 'resetStorePreferences'])->name('stores.reset');
+
     // Address lookup (Nominatim proxy)
     Route::get('api/address/search', [AddressController::class, 'search'])->name('address.search');
     Route::get('api/address/reverse', [AddressController::class, 'reverse'])->name('address.reverse');

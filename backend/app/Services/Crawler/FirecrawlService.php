@@ -813,6 +813,325 @@ class FirecrawlService
     }
 
     /**
+     * Search for products using the Firecrawl Search API.
+     * 
+     * This is much more cost-effective than the Agent API for discovering
+     * product prices. It performs a web search and optionally scrapes
+     * the top results for price information.
+     *
+     * @param string $query The product search query
+     * @param int $limit Maximum number of results to return
+     * @param bool $scrapeResults Whether to scrape results for detailed pricing
+     * @return FirecrawlResult
+     */
+    public function searchProducts(string $query, int $limit = 10, bool $scrapeResults = true): FirecrawlResult
+    {
+        if (!$this->isAvailable()) {
+            Log::warning('FirecrawlService: API key not configured for search', ['user_id' => $this->userId]);
+            return FirecrawlResult::error('Firecrawl API key not configured');
+        }
+
+        Log::info('FirecrawlService: Starting product search', [
+            'user_id' => $this->userId,
+            'query' => $query,
+            'limit' => $limit,
+            'scrape' => $scrapeResults,
+        ]);
+
+        try {
+            // Build the search payload
+            $payload = [
+                'query' => "{$query} buy price",
+                'limit' => $limit,
+            ];
+
+            // If scraping is enabled, add scrape options for price extraction
+            if ($scrapeResults) {
+                $payload['scrapeOptions'] = [
+                    'formats' => ['json', 'markdown'],
+                    'onlyMainContent' => true,
+                    'jsonOptions' => [
+                        'schema' => $this->buildScrapeSchema(),
+                        'prompt' => 'Extract the product price, name, and availability from this page.',
+                    ],
+                ];
+            }
+
+            $response = Http::timeout($this->timeout)
+                ->withHeaders([
+                    'Authorization' => "Bearer {$this->apiKey}",
+                    'Content-Type' => 'application/json',
+                ])
+                ->post(self::BASE_URL_V1 . '/search', $payload);
+
+            Log::info('FirecrawlService: Search API response', [
+                'status' => $response->status(),
+                'body_preview' => substr($response->body(), 0, 500),
+            ]);
+
+            if (!$response->successful()) {
+                return $this->handleApiError($response, $query, 'Search');
+            }
+
+            $data = $response->json();
+            $results = $this->parseSearchResults($data, $scrapeResults);
+
+            Log::info('FirecrawlService: Search completed', [
+                'query' => $query,
+                'results_count' => count($results),
+            ]);
+
+            if (empty($results)) {
+                return FirecrawlResult::error("No search results found for '{$query}'");
+            }
+
+            return FirecrawlResult::success($results, 'search_discovery');
+
+        } catch (\Exception $e) {
+            Log::error('FirecrawlService: Search API exception', [
+                'query' => $query,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return FirecrawlResult::error("Search request failed: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Parse search results into normalized price data.
+     *
+     * @param array $data Raw API response data
+     * @param bool $includeScrapeData Whether to include scraped price data
+     * @return array Normalized results
+     */
+    protected function parseSearchResults(array $data, bool $includeScrapeData): array
+    {
+        $results = [];
+
+        // The search API returns results in 'data' array
+        $searchResults = $data['data'] ?? $data['results'] ?? $data;
+        
+        if (!is_array($searchResults)) {
+            return [];
+        }
+
+        foreach ($searchResults as $result) {
+            $url = $result['url'] ?? null;
+            if (!$url) {
+                continue;
+            }
+
+            $storeName = $this->extractStoreFromUrl($url);
+            $price = null;
+            $itemName = $result['title'] ?? null;
+            $stockStatus = 'in_stock';
+
+            // If we have scraped JSON data, extract price from it
+            if ($includeScrapeData) {
+                $jsonData = $result['json'] ?? $result['extract'] ?? $result['llm_extraction'] ?? null;
+                
+                if ($jsonData) {
+                    // Handle array responses
+                    if (isset($jsonData[0]) && is_array($jsonData[0])) {
+                        $jsonData = $jsonData[0];
+                    }
+
+                    $price = isset($jsonData['price']) ? (float) $jsonData['price'] : null;
+                    $itemName = $jsonData['item_name'] ?? $jsonData['title'] ?? $itemName;
+                    $stockStatus = $this->normalizeStockStatus($jsonData['stock_status'] ?? null);
+                }
+            }
+
+            // Try to extract price from title/description if not found in JSON
+            if ($price === null) {
+                $price = $this->extractPriceFromText(
+                    ($result['title'] ?? '') . ' ' . ($result['description'] ?? '')
+                );
+            }
+
+            // Only include results with a valid price
+            if ($price !== null && $price > 0) {
+                $results[] = [
+                    'store_name' => $storeName,
+                    'item_name' => $itemName,
+                    'price' => $price,
+                    'stock_status' => $stockStatus,
+                    'unit_of_measure' => null,
+                    'product_url' => $url,
+                ];
+            }
+        }
+
+        // Sort by price ascending
+        usort($results, fn($a, $b) => $a['price'] <=> $b['price']);
+
+        return $results;
+    }
+
+    /**
+     * Extract a price from text content.
+     * Looks for common price patterns like $XX.XX
+     *
+     * @param string $text
+     * @return float|null
+     */
+    protected function extractPriceFromText(string $text): ?float
+    {
+        // Match common price patterns: $99.99, $99, USD 99.99, etc.
+        if (preg_match('/\$\s*([\d,]+(?:\.\d{2})?)/i', $text, $matches)) {
+            $priceStr = str_replace(',', '', $matches[1]);
+            return (float) $priceStr;
+        }
+
+        // Match patterns like "99.99 USD" or "USD 99.99"
+        if (preg_match('/(?:USD|CAD|GBP|EUR)\s*([\d,]+(?:\.\d{2})?)/i', $text, $matches)) {
+            $priceStr = str_replace(',', '', $matches[1]);
+            return (float) $priceStr;
+        }
+
+        return null;
+    }
+
+    /**
+     * Scrape multiple URLs in parallel (batch scraping).
+     * More efficient than scraping one URL at a time.
+     *
+     * @param array $urls Array of URLs to scrape
+     * @param int $batchSize Number of URLs to scrape per batch request
+     * @return FirecrawlResult
+     */
+    public function scrapeUrlsBatch(array $urls, int $batchSize = 5): FirecrawlResult
+    {
+        if (!$this->isAvailable()) {
+            return FirecrawlResult::error('Firecrawl API key not configured');
+        }
+
+        if (empty($urls)) {
+            return FirecrawlResult::error('No URLs provided');
+        }
+
+        Log::info('FirecrawlService: Starting batch scrape', [
+            'urls_count' => count($urls),
+            'batch_size' => $batchSize,
+        ]);
+
+        $allResults = [];
+        $errors = [];
+        $batches = array_chunk($urls, $batchSize);
+
+        foreach ($batches as $batchIndex => $batchUrls) {
+            Log::info('FirecrawlService: Processing batch', [
+                'batch' => $batchIndex + 1,
+                'total_batches' => count($batches),
+                'urls_in_batch' => count($batchUrls),
+            ]);
+
+            try {
+                // Use the batch scrape endpoint
+                $response = Http::timeout($this->timeout * 2)
+                    ->withHeaders([
+                        'Authorization' => "Bearer {$this->apiKey}",
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post(self::BASE_URL_V1 . '/batch/scrape', [
+                        'urls' => $batchUrls,
+                        'formats' => ['json'],
+                        'jsonOptions' => [
+                            'schema' => $this->buildScrapeSchema(),
+                            'prompt' => 'Extract the product price, name, stock status, and store name from this page.',
+                        ],
+                        'onlyMainContent' => true,
+                    ]);
+
+                if ($response->successful()) {
+                    $batchData = $response->json();
+                    $batchResults = $batchData['data'] ?? $batchData['results'] ?? [];
+
+                    foreach ($batchResults as $result) {
+                        $parsed = $this->parseBatchScrapeResult($result);
+                        if ($parsed) {
+                            $allResults[] = $parsed;
+                        }
+                    }
+                } else {
+                    // If batch fails, fall back to individual scraping
+                    Log::warning('FirecrawlService: Batch scrape failed, falling back to individual', [
+                        'status' => $response->status(),
+                    ]);
+
+                    foreach ($batchUrls as $url) {
+                        try {
+                            $result = $this->scrapeSingleUrl($url);
+                            if ($result) {
+                                $allResults[] = $result;
+                            }
+                        } catch (\Exception $e) {
+                            $errors[] = "Failed to scrape {$url}: {$e->getMessage()}";
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('FirecrawlService: Batch scrape exception', [
+                    'batch' => $batchIndex + 1,
+                    'error' => $e->getMessage(),
+                ]);
+                $errors[] = "Batch {$batchIndex} failed: {$e->getMessage()}";
+            }
+        }
+
+        Log::info('FirecrawlService: Batch scrape completed', [
+            'total_urls' => count($urls),
+            'results_count' => count($allResults),
+            'errors_count' => count($errors),
+        ]);
+
+        if (empty($allResults)) {
+            $errorMsg = !empty($errors) 
+                ? implode('; ', array_slice($errors, 0, 3)) 
+                : 'No price data could be extracted';
+            return FirecrawlResult::error($errorMsg);
+        }
+
+        return FirecrawlResult::success($allResults, 'batch_scrape');
+    }
+
+    /**
+     * Parse a single result from batch scrape response.
+     *
+     * @param array $result Raw result from batch scrape
+     * @return array|null Normalized result or null
+     */
+    protected function parseBatchScrapeResult(array $result): ?array
+    {
+        $url = $result['url'] ?? $result['sourceURL'] ?? null;
+        $jsonData = $result['json'] ?? $result['data']['json'] ?? $result['extract'] ?? null;
+
+        if (!$url || !$jsonData) {
+            return null;
+        }
+
+        // Handle array responses
+        if (isset($jsonData[0]) && is_array($jsonData[0])) {
+            $jsonData = $jsonData[0];
+        }
+
+        $price = isset($jsonData['price']) ? (float) $jsonData['price'] : null;
+        
+        if ($price === null || $price <= 0) {
+            return null;
+        }
+
+        return [
+            'store_name' => $jsonData['store_name'] ?? $this->extractStoreFromUrl($url),
+            'item_name' => $jsonData['item_name'] ?? $jsonData['title'] ?? $jsonData['product_name'] ?? null,
+            'price' => $price,
+            'stock_status' => $this->normalizeStockStatus($jsonData['stock_status'] ?? null),
+            'unit_of_measure' => $jsonData['unit_of_measure'] ?? null,
+            'product_url' => $url,
+        ];
+    }
+
+    /**
      * Set the request timeout.
      *
      * @param int $seconds

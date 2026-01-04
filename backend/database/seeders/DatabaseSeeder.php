@@ -18,6 +18,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Seed default stores for the Store Registry
+        $this->call(StoreSeeder::class);
         // Create Dana's account (skip if already exists)
         $dana = User::firstOrCreate(
             ['email' => 'dana@danavision.app'],

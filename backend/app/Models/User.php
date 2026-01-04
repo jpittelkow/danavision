@@ -127,4 +127,33 @@ class User extends Authenticatable
                     ->whereNotNull('accepted_at');
             });
     }
+
+    /**
+     * Get the user's store preferences.
+     */
+    public function storePreferences(): HasMany
+    {
+        return $this->hasMany(UserStorePreference::class);
+    }
+
+    /**
+     * Get stores the user has configured (with preferences).
+     */
+    public function stores(): BelongsToMany
+    {
+        return $this->belongsToMany(Store::class, 'user_store_preferences')
+            ->withPivot(['priority', 'enabled', 'is_favorite'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the user's enabled stores ordered by priority.
+     *
+     * @param bool $favoritesOnly Only return favorite stores
+     * @return \Illuminate\Database\Eloquent\Collection<Store>
+     */
+    public function getEnabledStores(bool $favoritesOnly = false): \Illuminate\Database\Eloquent\Collection
+    {
+        return UserStorePreference::getAllStoresForUser($this->id, false);
+    }
 }

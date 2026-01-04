@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\AIPrompt;
 use App\Models\AIProvider;
 use App\Models\Setting;
+use App\Models\Store;
+use App\Models\UserStorePreference;
 use App\Services\AI\AIModelService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -95,6 +98,9 @@ class SettingController extends Controller
         // Get AI prompts
         $prompts = AIPrompt::getAllForUser($userId);
 
+        // Get stores with user preferences
+        $stores = $this->getStoresWithPreferences($userId);
+
         return Inertia::render('Settings', [
             'settings' => [
                 'ai_provider' => $settings[Setting::AI_PROVIDER] ?? 'claude',
@@ -131,6 +137,18 @@ class SettingController extends Controller
             'availableProviders' => $availableProviders,
             'providerInfo' => AIProvider::$providers,
             'prompts' => $prompts,
+            // Store Registry data
+            'stores' => $stores,
+            'storeCategories' => [
+                Store::CATEGORY_GENERAL => 'General Retailers',
+                Store::CATEGORY_ELECTRONICS => 'Electronics',
+                Store::CATEGORY_GROCERY => 'Grocery',
+                Store::CATEGORY_HOME => 'Home & Garden',
+                Store::CATEGORY_CLOTHING => 'Clothing',
+                Store::CATEGORY_PHARMACY => 'Pharmacy',
+                Store::CATEGORY_WAREHOUSE => 'Warehouse Clubs',
+                Store::CATEGORY_SPECIALTY => 'Specialty',
+            ],
         ]);
     }
 
@@ -339,5 +357,254 @@ class SettingController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to send test email: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Get stores with user preferences for the settings page.
+     *
+     * @param int $userId
+     * @return array
+     */
+    protected function getStoresWithPreferences(int $userId): array
+    {
+        // Get all active stores
+        $stores = Store::active()
+            ->orderByDesc('default_priority')
+            ->get();
+
+        // Get user preferences
+        $preferences = UserStorePreference::where('user_id', $userId)
+            ->get()
+            ->keyBy('store_id');
+
+        return $stores->map(function (Store $store) use ($preferences) {
+            $preference = $preferences->get($store->id);
+            
+            return [
+                'id' => $store->id,
+                'name' => $store->name,
+                'slug' => $store->slug,
+                'domain' => $store->domain,
+                'logo_url' => $store->logo_url,
+                'category' => $store->category,
+                'is_default' => $store->is_default,
+                'is_local' => $store->is_local,
+                'has_search_template' => !empty($store->search_url_template),
+                'default_priority' => $store->default_priority,
+                // User preferences (or defaults)
+                'enabled' => $preference ? $preference->enabled : true,
+                'is_favorite' => $preference ? $preference->is_favorite : false,
+                'priority' => $preference ? $preference->priority : $store->default_priority,
+            ];
+        })->values()->toArray();
+    }
+
+    /**
+     * Get all stores with user preferences (API endpoint).
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getStores(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+        $stores = $this->getStoresWithPreferences($userId);
+
+        return response()->json([
+            'success' => true,
+            'stores' => $stores,
+        ]);
+    }
+
+    /**
+     * Update a store preference for the current user.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateStorePreference(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['sometimes', 'boolean'],
+            'is_favorite' => ['sometimes', 'boolean'],
+            'priority' => ['sometimes', 'integer', 'min:0', 'max:1000'],
+        ]);
+
+        $userId = $request->user()->id;
+
+        // Verify store exists
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Store not found',
+            ], 404);
+        }
+
+        // Update or create preference
+        $preference = UserStorePreference::setPreference($userId, $storeId, $validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Store preference updated',
+            'preference' => [
+                'store_id' => $preference->store_id,
+                'enabled' => $preference->enabled,
+                'is_favorite' => $preference->is_favorite,
+                'priority' => $preference->priority,
+            ],
+        ]);
+    }
+
+    /**
+     * Toggle favorite status for a store.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function toggleStoreFavorite(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Verify store exists
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Store not found',
+            ], 404);
+        }
+
+        $preference = UserStorePreference::toggleFavorite($userId, $storeId);
+
+        return response()->json([
+            'success' => true,
+            'message' => $preference->is_favorite ? 'Store added to favorites' : 'Store removed from favorites',
+            'is_favorite' => $preference->is_favorite,
+        ]);
+    }
+
+    /**
+     * Bulk update store priorities (for drag-and-drop reordering).
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateStorePriorities(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'store_order' => ['required', 'array', 'min:1'],
+            'store_order.*' => ['integer', 'exists:stores,id'],
+        ]);
+
+        $userId = $request->user()->id;
+
+        UserStorePreference::updatePriorities($userId, $validated['store_order']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Store priorities updated',
+        ]);
+    }
+
+    /**
+     * Add a custom store to the registry.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function addCustomStore(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'domain' => ['required', 'string', 'max:255'],
+            'search_url_template' => ['nullable', 'string', 'max:1000'],
+            'category' => ['nullable', 'string', 'max:50'],
+            'is_local' => ['nullable', 'boolean'],
+        ]);
+
+        $userId = $request->user()->id;
+
+        // Clean up domain (remove http/https and trailing slashes)
+        $domain = preg_replace('/^(https?:\/\/)?(www\.)?/', '', $validated['domain']);
+        $domain = rtrim($domain, '/');
+
+        // Check if store already exists
+        $existingStore = Store::findByDomain($domain);
+        if ($existingStore) {
+            // If store exists, just enable it for the user
+            UserStorePreference::setPreference($userId, $existingStore->id, [
+                'enabled' => true,
+                'is_favorite' => true,
+                'priority' => 100, // High priority for user-added stores
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "'{$existingStore->name}' is already in the registry. It has been enabled for you.",
+                'store' => [
+                    'id' => $existingStore->id,
+                    'name' => $existingStore->name,
+                    'domain' => $existingStore->domain,
+                    'is_new' => false,
+                ],
+            ]);
+        }
+
+        // Create new store
+        $store = Store::create([
+            'name' => $validated['name'],
+            'slug' => Str::slug($validated['name']),
+            'domain' => $domain,
+            'search_url_template' => $validated['search_url_template'] ?? null,
+            'category' => $validated['category'] ?? Store::CATEGORY_SPECIALTY,
+            'is_default' => false,
+            'is_local' => $validated['is_local'] ?? false,
+            'is_active' => true,
+            'default_priority' => 50,
+        ]);
+
+        // Set user preference
+        UserStorePreference::setPreference($userId, $store->id, [
+            'enabled' => true,
+            'is_favorite' => true,
+            'priority' => 100,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "'{$store->name}' has been added to your stores.",
+            'store' => [
+                'id' => $store->id,
+                'name' => $store->name,
+                'slug' => $store->slug,
+                'domain' => $store->domain,
+                'category' => $store->category,
+                'is_local' => $store->is_local,
+                'has_search_template' => !empty($store->search_url_template),
+                'is_new' => true,
+            ],
+        ]);
+    }
+
+    /**
+     * Reset store preferences to defaults.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function resetStorePreferences(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Delete all user store preferences
+        UserStorePreference::where('user_id', $userId)->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Store preferences have been reset to defaults.',
+        ]);
     }
 }

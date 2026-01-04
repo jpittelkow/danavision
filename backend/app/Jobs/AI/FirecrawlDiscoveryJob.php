@@ -8,18 +8,22 @@ use App\Models\ListItem;
 use App\Models\PriceHistory;
 use App\Services\Crawler\FirecrawlResult;
 use App\Services\Crawler\FirecrawlService;
+use App\Services\Crawler\StoreDiscoveryService;
 use Illuminate\Support\Facades\Log;
 
 /**
  * FirecrawlDiscoveryJob
  * 
- * Background job for discovering product prices using Firecrawl Agent API.
- * Used for initial price discovery after product is added and for weekly
- * new site discovery.
+ * Background job for discovering product prices using the Store Registry system.
+ * Uses a tiered approach to minimize Firecrawl API costs:
+ * 
+ * - Tier 1: URL templates for known stores (cheapest - ~1 credit/store)
+ * - Tier 2: Firecrawl Search API for discovery (~5-10 credits)
+ * - Tier 3: Firecrawl Agent API for complex searches (expensive, fallback only)
  * 
  * This job:
- * 1. Uses Firecrawl to find all stores selling the product
- * 2. For local products, constrains search to user's geographic area
+ * 1. Uses StoreDiscoveryService to find prices across stores
+ * 2. For local products, prioritizes local store searches
  * 3. Saves results to item_vendor_prices table
  * 4. Optionally sends results to AI for analysis
  */
@@ -27,9 +31,9 @@ class FirecrawlDiscoveryJob extends BaseAIJob
 {
     /**
      * The number of seconds the job can run before timing out.
-     * Firecrawl Agent API can be slow for complex searches.
+     * Reduced from 10 minutes since tiered discovery is faster.
      */
-    public int $timeout = 600; // 10 minutes
+    public int $timeout = 300; // 5 minutes
 
     /**
      * Process the Firecrawl discovery job.
@@ -51,15 +55,15 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         $logs[] = "Starting price discovery for: {$productName}";
         $this->updateProgress($aiJob, 10, $logs);
 
-        // Create Firecrawl service
-        $firecrawlService = FirecrawlService::forUser($this->userId);
+        // Create StoreDiscoveryService (uses tiered approach)
+        $discoveryService = StoreDiscoveryService::forUser($this->userId);
 
-        // Check if Firecrawl is available
-        if (!$firecrawlService->isAvailable()) {
+        // Check if service is available
+        if (!$discoveryService->isAvailable()) {
             throw new \RuntimeException('Firecrawl API key not configured. Please set up Firecrawl in Settings.');
         }
 
-        $logs[] = "Firecrawl service initialized";
+        $logs[] = "Store Discovery service initialized (tiered mode)";
         $this->updateProgress($aiJob, 20, $logs);
 
         // Check for cancellation
@@ -67,20 +71,24 @@ class FirecrawlDiscoveryJob extends BaseAIJob
             return ['cancelled' => true, 'logs' => $logs];
         }
 
-        // Perform Firecrawl discovery
+        // Perform tiered price discovery
         $shopLocal = $inputData['shop_local'] ?? false;
-        $logs[] = "Sending request to Firecrawl Agent API...";
-        $logs[] = $shopLocal ? "Searching local stores first" : "Searching all online retailers";
+        $useAgentFallback = $inputData['use_agent_fallback'] ?? false;
+        
+        $logs[] = "Using tiered discovery (Store Registry + Search API)";
+        $logs[] = $shopLocal ? "Prioritizing local stores" : "Searching all online retailers";
         $this->updateProgress($aiJob, 30, $logs);
 
-        Log::info('FirecrawlDiscoveryJob: Starting discovery', [
+        Log::info('FirecrawlDiscoveryJob: Starting tiered discovery', [
             'ai_job_id' => $aiJob->id,
             'product_name' => $productName,
             'item_id' => $itemId,
             'shop_local' => $shopLocal,
+            'use_agent_fallback' => $useAgentFallback,
         ]);
 
-        $result = $firecrawlService->discoverProductPrices($productName, [
+        // Use the StoreDiscoveryService for tiered discovery
+        $result = $discoveryService->discoverPrices($productName, [
             'shop_local' => $shopLocal,
             'upc' => $inputData['upc'] ?? null,
             'brand' => $inputData['brand'] ?? null,
@@ -88,7 +96,22 @@ class FirecrawlDiscoveryJob extends BaseAIJob
             'unit_of_measure' => $inputData['unit_of_measure'] ?? null,
         ]);
 
-        $logs[] = "Firecrawl response received";
+        $logs[] = "Tiered discovery completed (source: {$result->source})";
+        $this->updateProgress($aiJob, 50, $logs);
+
+        // If tiered discovery returned few results and Agent fallback is enabled, use it
+        if ($useAgentFallback && $result->count() < 2) {
+            $logs[] = "Few results from tiered discovery, trying Agent API fallback...";
+            $this->updateProgress($aiJob, 55, $logs);
+            
+            $agentResult = $this->tryAgentFallback($productName, $inputData);
+            if ($agentResult && $agentResult->count() > $result->count()) {
+                $result = $agentResult;
+                $logs[] = "Agent API returned more results, using those instead";
+            }
+        }
+
+        $logs[] = "Discovery response received";
         $this->updateProgress($aiJob, 60, $logs);
 
         // Check for cancellation
@@ -327,6 +350,35 @@ PROMPT;
 
         } catch (\Exception $e) {
             Log::warning('FirecrawlDiscoveryJob: AI analysis failed', [
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Try Agent API as a fallback for complex searches.
+     * This is expensive but provides better results for some products.
+     *
+     * @param string $productName
+     * @param array $inputData
+     * @return FirecrawlResult|null
+     */
+    protected function tryAgentFallback(string $productName, array $inputData): ?FirecrawlResult
+    {
+        try {
+            $firecrawlService = FirecrawlService::forUser($this->userId);
+            
+            return $firecrawlService->discoverProductPrices($productName, [
+                'shop_local' => $inputData['shop_local'] ?? false,
+                'upc' => $inputData['upc'] ?? null,
+                'brand' => $inputData['brand'] ?? null,
+                'is_generic' => $inputData['is_generic'] ?? false,
+                'unit_of_measure' => $inputData['unit_of_measure'] ?? null,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('FirecrawlDiscoveryJob: Agent fallback failed', [
+                'product' => $productName,
                 'error' => $e->getMessage(),
             ]);
             return null;
