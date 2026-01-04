@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted (Updated 2026-01-03)
+Accepted (Updated 2026-01-04)
 
 ## Date
 
-2026-01-02 (Updated 2026-01-03)
+2026-01-02 (Updated 2026-01-04)
 
 ## Context
 
@@ -19,37 +19,58 @@ Users want to quickly add products to their shopping lists by:
 
 This needs to work across different AI providers and aggregate results for accuracy.
 
+**Update 2026-01-04**: Added status monitoring, review queue, and streamlined add-to-item flow.
+
 ## Decision
 
-We will implement a **Smart Add Feature** using a two-phase approach:
+We will implement a **Smart Add Feature** using a two-phase approach with persistent queue and real-time status monitoring:
 
-### Phase 1: Product Identification
+### Phase 1: Product Identification with Status Monitor
 
 The first phase focuses on identifying what product the user wants to add:
 
 1. User uploads image OR enters text search
-2. AI analyzes and returns up to 5 product suggestions
-3. Each suggestion includes: product name, brand, model, category, UPC, confidence score
-4. Product images are fetched for visual confirmation
-5. User selects which product is correct
+2. Identification runs as background job with real-time progress
+3. **StatusMonitor** component shows step-by-step progress:
+   - Initializing AI providers
+   - Analyzing input
+   - Querying AI providers (with provider count)
+   - Aggregating results
+   - Finding product images
+4. Results saved to **Review Queue** for persistence
+5. User can leave page and come back to review later
+6. AI returns up to 5 product suggestions with confidence scores
 
-### Phase 2: Add to List + Background Price Search
+### Review Queue
+
+Products identified by AI are stored in a review queue:
+
+1. **Persistence**: If user leaves page during identification, results are saved
+2. **Queue Display**: Shows pending items at top of Smart Add page
+3. **Actions**: User can Review (select product) or Dismiss
+4. **Expiration**: Queue items expire after 7 days
+5. **Database**: `smart_add_queue` table stores pending identifications
+
+### Phase 2: Add to List + Immediate Navigation
 
 Once the user selects a product:
 
 1. Inline form appears with pre-filled data (name, UPC, etc.)
 2. User selects target shopping list
 3. User can set target price, priority, notes
-4. On submit, item is added to list immediately
-5. Background job (`SearchItemPrices`) runs to find prices across retailers
-6. Price results are added to the item asynchronously
+4. On submit:
+   - Item is added to list immediately
+   - User is **redirected to the item page** (not list page)
+   - Background job (`FirecrawlDiscoveryJob`) runs to find prices
+5. Item page shows **PriceUpdateStatus** with real-time progress
+6. Price results appear as they're found
 
 ### AI Product Identification
 
 1. Support multiple AI providers (Claude, OpenAI, Gemini, Ollama)
 2. Use `MultiAIService` to query all configured providers
 3. Aggregate responses for higher confidence identification
-4. Extract: product name, brand, model, category, UPC, is_generic, unit_of_measure
+4. Extract: product name, brand, model, category, UPC, image_url, is_generic, unit_of_measure
 5. Return up to 5 ranked suggestions based on confidence
 
 ### Architecture
@@ -57,18 +78,19 @@ Once the user selects a product:
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    SmartAdd Page                         │
+│  • Review Queue (pending items)                         │
 │  • Text Search OR Image Upload                          │
 │  • Camera button (mobile)                               │
-│  • Gallery selection                                    │
+│  • StatusMonitor (during identification)                │
 └─────────────────────────────────────────────────────────┘
                           │
-                    POST /smart-add/identify
+                    POST /smart-add/identify (async=true)
                           │
 ┌─────────────────────────────────────────────────────────┐
-│                 SmartAddController                       │
-│  • Parse image data / text query                        │
-│  • Call MultiAIService for identification               │
-│  • Return up to 5 product suggestions                   │
+│           ProductIdentificationJob                       │
+│  • Emits detailed progress logs                         │
+│  • Queries AI providers                                 │
+│  • Saves results to smart_add_queue                     │
 └─────────────────────────────────────────────────────────┘
                           │
           ┌───────────────┼───────────────┐
@@ -82,27 +104,52 @@ Once the user selects a product:
                    (with images, confidence scores)
                           │
                           ▼
+         ┌────────────────────────────────────┐
+         │       smart_add_queue              │
+         │  • Stores pending identifications  │
+         │  • User can review later           │
+         │  • Auto-expires after 7 days       │
+         └────────────────────────────────────┘
+                          │
                User Selects Product
                           │
                     POST /smart-add/add
                           │
                Item Created in Database
                           │
-           ┌──────────────┴──────────────┐
-           │   SearchItemPrices Job      │
-           │   (Background Queue)        │
-           │   • Find prices at retailers │
-           │   • Update item with prices  │
-           └─────────────────────────────┘
+         ┌────────────────┴────────────────┐
+         │       Redirect to Item Page     │
+         │   (User sees item immediately)  │
+         └─────────────────────────────────┘
+                          │
+         ┌────────────────┴────────────────┐
+         │   FirecrawlDiscoveryJob         │
+         │   (Background Queue)            │
+         │   • Find prices at retailers    │
+         │   • Update item with prices     │
+         │   • PriceUpdateStatus shows     │
+         │     progress on item page       │
+         └─────────────────────────────────┘
 ```
 
 ### Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/smart-add` | GET | Smart Add page |
-| `/smart-add/identify` | POST | AI product identification (returns suggestions) |
-| `/smart-add/add` | POST | Add item to list (dispatches price search job) |
+| `/smart-add` | GET | Smart Add page with queue |
+| `/smart-add/identify` | POST | AI product identification (async, returns job_id) |
+| `/smart-add/add` | POST | Add item to list, redirect to item page |
+| `/smart-add/queue` | GET | List pending queue items (JSON) |
+| `/smart-add/queue/{id}` | DELETE | Dismiss queue item |
+| `/smart-add/queue/{id}/add` | POST | Add queue item to list |
+
+### Frontend Components
+
+| Component | Description |
+|-----------|-------------|
+| `StatusMonitor` | Real-time progress display during AI identification |
+| `ReviewQueue` | List of pending items awaiting user review |
+| `PriceUpdateStatus` | Shows price search progress on item page |
 
 ### Navigation
 
@@ -134,6 +181,9 @@ Generic items are identified by setting `is_generic: true` and include a `unit_o
 - Higher identification accuracy via AI aggregation
 - User confirms product before adding (reduces errors)
 - Non-blocking UX (price search runs in background)
+- **Real-time status monitoring** during identification
+- **Persistent queue** - results saved if user leaves page
+- **Immediate navigation to item page** - user sees item right away
 - Works across multiple AI providers
 - Mobile-optimized with camera support
 - Pre-filled data reduces user input
@@ -146,9 +196,34 @@ Generic items are identified by setting `is_generic: true` and include a `unit_o
 - Price data arrives asynchronously (not instant)
 - Accuracy depends on image quality
 - Multiple AI calls may have latency
+- Queue items need periodic cleanup
+
+## Database Schema
+
+### smart_add_queue table
+
+```sql
+CREATE TABLE smart_add_queue (
+    id BIGINT PRIMARY KEY,
+    user_id BIGINT REFERENCES users(id),
+    status VARCHAR(20) DEFAULT 'pending',  -- pending, reviewed, added, dismissed
+    product_data JSON,                      -- Array of product suggestions
+    source_type VARCHAR(20),                -- 'image' or 'text'
+    source_query TEXT,                      -- Text query (if text)
+    source_image_path VARCHAR(255),         -- Stored image path (if image)
+    ai_job_id BIGINT REFERENCES ai_jobs(id),
+    added_item_id BIGINT REFERENCES list_items(id),
+    selected_index TINYINT,                 -- 0-4, which product was selected
+    providers_used JSON,                    -- ['claude', 'openai', ...]
+    expires_at TIMESTAMP,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP
+);
+```
 
 ## Related Decisions
 
 - [ADR 002: AI Provider Abstraction](002-ai-provider-abstraction.md) - AI service architecture
 - [ADR 003: Price API Abstraction](003-price-api-abstraction.md) - Price search integration
 - [ADR 004: Mobile-First Architecture](004-mobile-first-architecture.md) - Camera integration
+- [ADR 009: AI Job System](009-ai-job-system.md) - Background job architecture

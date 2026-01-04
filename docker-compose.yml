@@ -22,6 +22,8 @@ services:
       - ./backend/database/seeders:/var/www/html/database/seeders
       - ./backend/database/factories:/var/www/html/database/factories
       - ./backend/tests:/var/www/html/tests
+      # Testing configuration
+      - ./backend/.env.testing:/var/www/html/.env.testing:ro
     environment:
       - APP_NAME=${APP_NAME:-DanaVision}
       - APP_KEY=${APP_KEY}

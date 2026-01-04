@@ -55,6 +55,7 @@ import {
   Activity,
   ScrollText,
   Globe,
+  MapPin,
 } from 'lucide-react';
 
 interface AIProviderData {
@@ -666,6 +667,7 @@ function PromptEditor({ prompt, onUpdate }: { prompt: PromptData; onUpdate: () =
 export default function Settings({ auth, settings, providers, availableProviders, prompts, stores, storeCategories, flash }: Props) {
   const [showMailPassword, setShowMailPassword] = useState(false);
   const [showFirecrawlKey, setShowFirecrawlKey] = useState(false);
+  const [showGooglePlacesKey, setShowGooglePlacesKey] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
 
   const { data, setData, patch, processing } = useForm({
@@ -694,6 +696,8 @@ export default function Settings({ auth, settings, providers, availableProviders
     suppressed_vendors: settings?.suppressed_vendors || [],
     // Firecrawl Web Crawler
     firecrawl_api_key: settings?.firecrawl_api_key || '',
+    // Google Places API
+    google_places_api_key: settings?.google_places_api_key || '',
   });
 
   // State for adding new suppressed vendor
@@ -1166,7 +1170,76 @@ export default function Settings({ auth, settings, providers, availableProviders
                 </CardContent>
               </Card>
 
-              {/* Daily Price Check Schedule */}
+              {/* Google Places API Configuration */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="h-5 w-5" />
+                    Nearby Store Discovery (Google Places)
+                  </CardTitle>
+                  <CardDescription>
+                    Configure Google Places API to discover stores near your location
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-purple-500/10 rounded-lg p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-5 w-5 text-purple-500" />
+                      <span className="font-medium text-foreground">Find Nearby Stores</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Use Google Places API to discover grocery stores, pharmacies, electronics shops, 
+                      and more near your location. Found stores are automatically added to your registry 
+                      for price tracking.
+                    </p>
+                    {settings?.has_google_places_api_key ? (
+                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span className="text-sm">Google Places API key configured</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                        <AlertCircle className="h-4 w-4" />
+                        <span className="text-sm">No Google Places API key configured</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="google_places_api_key">Google Places API Key</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        id="google_places_api_key"
+                        type={showGooglePlacesKey ? 'text' : 'password'}
+                        value={data.google_places_api_key}
+                        onChange={(e) => setData('google_places_api_key', e.target.value)}
+                        placeholder={settings?.has_google_places_api_key ? '••••••••' : 'AIza...'}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowGooglePlacesKey(!showGooglePlacesKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showGooglePlacesKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Get your API key from{' '}
+                      <a 
+                        href="https://console.cloud.google.com/apis/credentials" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        Google Cloud Console
+                      </a>
+                      . Enable the Places API (New) in your project.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Vendor Suppression */}
               <Card>
                 <CardHeader>

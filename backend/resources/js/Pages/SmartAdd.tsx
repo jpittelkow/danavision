@@ -1,4 +1,4 @@
-import { FormEvent, useState, useRef } from 'react';
+import { FormEvent, useState, useRef, useCallback } from 'react';
 import { Head, useForm, router } from '@inertiajs/react';
 import axios from 'axios';
 import { PageProps, ShoppingList } from '@/types';
@@ -35,24 +35,14 @@ import {
   Check,
   ExternalLink,
 } from 'lucide-react';
-
-/**
- * Product suggestion from AI identification
- */
-interface ProductSuggestion {
-  product_name: string;
-  brand: string | null;
-  model: string | null;
-  category: string | null;
-  upc: string | null;
-  is_generic: boolean;
-  unit_of_measure: string | null;
-  confidence: number;
-  image_url: string | null;
-}
+import { StatusMonitor } from '@/Components/SmartAdd/StatusMonitor';
+import { ReviewQueue } from '@/Components/SmartAdd/ReviewQueue';
+import { SmartAddQueueItem, ProductSuggestion } from '@/types';
 
 interface Props extends PageProps {
   lists: Pick<ShoppingList, 'id' | 'name'>[];
+  queue?: SmartAddQueueItem[];
+  queueCount?: number;
 }
 
 type AnalysisState = 'idle' | 'uploading' | 'analyzing' | 'results' | 'error';
@@ -92,7 +82,7 @@ function ConfidenceIndicator({ confidence }: { confidence: number }) {
   );
 }
 
-export default function SmartAdd({ auth, lists, flash }: Props) {
+export default function SmartAdd({ auth, lists, flash, queue = [], queueCount = 0 }: Props) {
   const [analysisState, setAnalysisState] = useState<AnalysisState>('idle');
   const [mode, setMode] = useState<'idle' | 'image' | 'text'>('idle');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -106,6 +96,12 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [providersUsed, setProvidersUsed] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // Track failed product images to show fallback
+  const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
+  
+  // Active job ID for async identification with status monitor
+  const [activeJobId, setActiveJobId] = useState<number | null>(null);
 
   // Add to list form
   const [selectedListId, setSelectedListId] = useState<string>(
@@ -189,7 +185,7 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
   };
 
   /**
-   * Submit image for AI product identification
+   * Submit image for AI product identification (async mode with status monitor)
    */
   const submitImageIdentification = async (e: FormEvent) => {
     e.preventDefault();
@@ -199,17 +195,25 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
     setSuggestions([]);
     setSelectedIndex(null);
     setErrorMessage(null);
+    setActiveJobId(null);
+    setFailedImages(new Set());
 
     try {
+      // Use async mode to get a job ID for the status monitor
       const { data } = await axios.post('/smart-add/identify', {
         image: uploadedImage,
         query: userPrompt || null,
+        async: true,
       });
 
-      if (data.error && (!data.results || data.results.length === 0)) {
+      if (data.job_id) {
+        // Async mode - show status monitor
+        setActiveJobId(data.job_id);
+      } else if (data.error && (!data.results || data.results.length === 0)) {
         setErrorMessage(data.error);
         setAnalysisState('error');
       } else if (data.results && data.results.length > 0) {
+        // Sync mode fallback - results returned immediately
         setSuggestions(data.results);
         setProvidersUsed(data.providers_used || []);
         setAnalysisState('results');
@@ -230,7 +234,7 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
   };
 
   /**
-   * Submit text search for AI product identification
+   * Submit text search for AI product identification (async mode with status monitor)
    */
   const submitTextIdentification = async (e: FormEvent) => {
     e.preventDefault();
@@ -240,16 +244,24 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
     setSuggestions([]);
     setSelectedIndex(null);
     setErrorMessage(null);
+    setActiveJobId(null);
+    setFailedImages(new Set());
 
     try {
+      // Use async mode to get a job ID for the status monitor
       const { data } = await axios.post('/smart-add/identify', {
         query: searchQuery,
+        async: true,
       });
 
-      if (data.error && (!data.results || data.results.length === 0)) {
+      if (data.job_id) {
+        // Async mode - show status monitor
+        setActiveJobId(data.job_id);
+      } else if (data.error && (!data.results || data.results.length === 0)) {
         setErrorMessage(data.error);
         setAnalysisState('error');
       } else if (data.results && data.results.length > 0) {
+        // Sync mode fallback - results returned immediately
         setSuggestions(data.results);
         setProvidersUsed(data.providers_used || []);
         setAnalysisState('results');
@@ -332,8 +344,74 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
     setSelectedIndex(null);
     setProvidersUsed([]);
     setErrorMessage(null);
+    setFailedImages(new Set());
+    setActiveJobId(null);
     addForm.reset();
   };
+
+  /**
+   * Handle StatusMonitor completion - job finished with results
+   */
+  const handleJobComplete = useCallback((results: unknown[], providers: string[]) => {
+    setActiveJobId(null);
+    if (results && results.length > 0) {
+      setSuggestions(results as ProductSuggestion[]);
+      setProvidersUsed(providers);
+      setAnalysisState('results');
+    } else {
+      setErrorMessage('Could not identify the product. Try a different image or search query.');
+      setAnalysisState('error');
+    }
+  }, []);
+
+  /**
+   * Handle StatusMonitor error - job failed
+   */
+  const handleJobError = useCallback((error: string) => {
+    setActiveJobId(null);
+    setErrorMessage(error);
+    setAnalysisState('error');
+  }, []);
+
+  /**
+   * Handle StatusMonitor cancel - user cancelled the job
+   */
+  const handleJobCancel = useCallback(async () => {
+    if (activeJobId) {
+      try {
+        await axios.post(`/api/ai-jobs/${activeJobId}/cancel`);
+      } catch {
+        // Ignore cancel errors
+      }
+    }
+    setActiveJobId(null);
+    setAnalysisState('idle');
+  }, [activeJobId]);
+
+  /**
+   * Handle reviewing a queue item - load its suggestions for selection
+   */
+  const handleReviewQueueItem = useCallback((item: SmartAddQueueItem) => {
+    // Load the queue item's suggestions into the current view
+    setSuggestions(item.product_data);
+    setProvidersUsed(item.providers_used || []);
+    setAnalysisState('results');
+    setSelectedIndex(null);
+    setFailedImages(new Set());
+    
+    // If it was a text search, show the query
+    if (item.source_type === 'text' && item.source_query) {
+      setSearchQuery(item.source_query);
+      setMode('text');
+      setImagePreview(null);
+      setUploadedImage(null);
+    } else if (item.source_type === 'image' && item.display_image) {
+      // If it was an image, show the image preview
+      setMode('image');
+      setImagePreview(item.display_image);
+      setSearchQuery('');
+    }
+  }, []);
 
   /**
    * Get proxy URL for external images
@@ -369,6 +447,11 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
             Upload an image or search for a product. AI will identify it and you can add it to your list.
           </p>
         </div>
+
+        {/* Review Queue - Show pending items when idle */}
+        {analysisState === 'idle' && queue.length > 0 && (
+          <ReviewQueue items={queue} onReview={handleReviewQueueItem} />
+        )}
 
         {/* Error Display */}
         {errorMessage && analysisState === 'error' && (
@@ -543,35 +626,69 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
           </Card>
         )}
 
-        {/* Analyzing State */}
+        {/* Analyzing State - Show StatusMonitor with detailed progress */}
         {analysisState === 'analyzing' && (
           <Card>
             <CardContent className="p-8">
-              <div className="flex flex-col items-center gap-6">
-                {imagePreview ? (
-                  <img
-                    src={imagePreview}
-                    alt="Analyzing"
-                    className="w-48 h-48 object-contain rounded-xl bg-muted shadow-lg"
-                  />
-                ) : (
-                  <div className="w-48 h-48 rounded-xl bg-muted flex items-center justify-center">
-                    <Search className="h-12 w-12 text-muted-foreground" />
+              {activeJobId ? (
+                /* Show detailed status monitor when we have an async job */
+                <div className="flex flex-col md:flex-row gap-8">
+                  {/* Image preview */}
+                  <div className="flex-shrink-0 flex justify-center">
+                    {imagePreview ? (
+                      <img
+                        src={imagePreview}
+                        alt="Analyzing"
+                        className="w-48 h-48 object-contain rounded-xl bg-muted shadow-lg"
+                      />
+                    ) : (
+                      <div className="w-48 h-48 rounded-xl bg-muted flex flex-col items-center justify-center p-4">
+                        <Search className="h-10 w-10 text-muted-foreground mb-2" />
+                        <p className="text-sm text-center text-muted-foreground break-words">
+                          "{searchQuery}"
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )}
-
-                <div className="text-center">
-                  <div className="flex items-center justify-center gap-3 mb-2">
-                    <Loader2 className="h-5 w-5 text-violet-500 animate-spin" />
-                    <span className="text-lg font-medium text-foreground">
-                      {imagePreview ? 'Analyzing image...' : 'Searching for products...'}
-                    </span>
+                  
+                  {/* Status monitor */}
+                  <div className="flex-1">
+                    <StatusMonitor
+                      jobId={activeJobId}
+                      onComplete={handleJobComplete}
+                      onError={handleJobError}
+                      onCancel={handleJobCancel}
+                    />
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    AI is identifying possible products
-                  </p>
                 </div>
-              </div>
+              ) : (
+                /* Fallback simple spinner for sync mode */
+                <div className="flex flex-col items-center gap-6">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Analyzing"
+                      className="w-48 h-48 object-contain rounded-xl bg-muted shadow-lg"
+                    />
+                  ) : (
+                    <div className="w-48 h-48 rounded-xl bg-muted flex items-center justify-center">
+                      <Search className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                  )}
+
+                  <div className="text-center">
+                    <div className="flex items-center justify-center gap-3 mb-2">
+                      <Loader2 className="h-5 w-5 text-violet-500 animate-spin" />
+                      <span className="text-lg font-medium text-foreground">
+                        {imagePreview ? 'Analyzing image...' : 'Searching for products...'}
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      AI is identifying possible products
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -639,14 +756,14 @@ export default function SmartAdd({ auth, lists, flash }: Props) {
                         <div className="flex items-start gap-3">
                           {/* Product Image */}
                           <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-muted relative">
-                            {product.image_url ? (
+                            {product.image_url && !failedImages.has(index) ? (
                               <img
                                 src={getProxiedImageUrl(product.image_url)}
                                 alt={product.product_name}
                                 className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = 'none';
+                                onError={() => {
+                                  // Track this image as failed so we show the fallback
+                                  setFailedImages(prev => new Set(prev).add(index));
                                 }}
                               />
                             ) : (

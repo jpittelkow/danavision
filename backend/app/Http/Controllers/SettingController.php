@@ -32,6 +32,7 @@ class SettingController extends Controller
             Setting::OPENAI_API_KEY,
             Setting::GEMINI_API_KEY,
             Setting::FIRECRAWL_API_KEY,
+            Setting::GOOGLE_PLACES_API_KEY,
             Setting::MAIL_DRIVER,
             Setting::MAIL_HOST,
             Setting::MAIL_PORT,
@@ -108,6 +109,9 @@ class SettingController extends Controller
                 // Firecrawl Web Crawler (primary price search provider)
                 'firecrawl_api_key' => $settings[Setting::FIRECRAWL_API_KEY] ? '********' : null,
                 'has_firecrawl_api_key' => !empty($settings[Setting::FIRECRAWL_API_KEY]),
+                // Google Places API (for nearby store discovery)
+                'google_places_api_key' => $settings[Setting::GOOGLE_PLACES_API_KEY] ? '********' : null,
+                'has_google_places_api_key' => !empty($settings[Setting::GOOGLE_PLACES_API_KEY]),
                 // Email settings
                 'mail_driver' => $settings[Setting::MAIL_DRIVER] ?? 'smtp',
                 'mail_host' => $settings[Setting::MAIL_HOST] ?? '',
@@ -147,6 +151,7 @@ class SettingController extends Controller
                 Store::CATEGORY_CLOTHING => 'Clothing',
                 Store::CATEGORY_PHARMACY => 'Pharmacy',
                 Store::CATEGORY_WAREHOUSE => 'Warehouse Clubs',
+                Store::CATEGORY_PET => 'Pet Stores',
                 Store::CATEGORY_SPECIALTY => 'Specialty',
             ],
         ]);
@@ -162,6 +167,8 @@ class SettingController extends Controller
             'ai_api_key' => ['nullable', 'string'],
             // Firecrawl Web Crawler (primary price search provider)
             'firecrawl_api_key' => ['nullable', 'string'],
+            // Google Places API (for nearby store discovery)
+            'google_places_api_key' => ['nullable', 'string'],
             // Email settings
             'mail_driver' => ['nullable', 'in:smtp,sendmail,mailgun,ses,postmark'],
             'mail_host' => ['nullable', 'string', 'max:255'],
@@ -211,6 +218,11 @@ class SettingController extends Controller
         // Firecrawl API Key (only if not masked)
         if (isset($validated['firecrawl_api_key']) && $validated['firecrawl_api_key'] !== '********') {
             Setting::set(Setting::FIRECRAWL_API_KEY, $validated['firecrawl_api_key'], $userId);
+        }
+
+        // Google Places API Key (only if not masked)
+        if (isset($validated['google_places_api_key']) && $validated['google_places_api_key'] !== '********') {
+            Setting::set(Setting::GOOGLE_PLACES_API_KEY, $validated['google_places_api_key'], $userId);
         }
 
         // Email Settings
@@ -390,6 +402,9 @@ class SettingController extends Controller
                 'is_default' => $store->is_default,
                 'is_local' => $store->is_local,
                 'has_search_template' => !empty($store->search_url_template),
+                'auto_configured' => $store->auto_configured ?? false,
+                'address' => $store->address,
+                'phone' => $store->phone,
                 'default_priority' => $store->default_priority,
                 // User preferences (or defaults)
                 'enabled' => $preference ? $preference->enabled : true,

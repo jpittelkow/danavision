@@ -145,6 +145,9 @@ export interface Settings {
   // Firecrawl Web Crawler (primary price search provider)
   firecrawl_api_key?: string;
   has_firecrawl_api_key?: boolean;
+  // Google Places API (for nearby store discovery)
+  google_places_api_key?: string;
+  has_google_places_api_key?: boolean;
   // Email configuration
   mail_driver: string;
   mail_host: string;
@@ -226,7 +229,8 @@ export type AIJobType =
   | 'smart_fill' 
   | 'price_refresh'
   | 'firecrawl_discovery'
-  | 'firecrawl_refresh';
+  | 'firecrawl_refresh'
+  | 'nearby_store_discovery';
 export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 /**
@@ -349,6 +353,7 @@ export type StoreCategory =
   | 'clothing'
   | 'pharmacy'
   | 'warehouse'
+  | 'pet'
   | 'specialty';
 
 /**
@@ -364,6 +369,9 @@ export interface Store {
   is_default: boolean;
   is_local: boolean;
   has_search_template: boolean;
+  auto_configured?: boolean;
+  address?: string;
+  phone?: string;
   default_priority: number;
   // User-specific preferences (merged from user_store_preferences)
   enabled: boolean;
@@ -389,6 +397,104 @@ export interface CustomStorePayload {
   search_url_template?: string;
   category?: StoreCategory;
   is_local?: boolean;
+}
+
+/**
+ * Nearby store discovery request payload.
+ */
+export interface NearbyStoreDiscoveryRequest {
+  radius_miles?: number;
+  categories?: StoreCategory[];
+  latitude?: number;
+  longitude?: number;
+}
+
+/**
+ * Nearby store discovery result from Google Places.
+ */
+export interface NearbyStoreResult {
+  place_id: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  website?: string;
+  phone?: string;
+  types: string[];
+  rating?: number;
+  review_count?: number;
+  distance_miles: number;
+  category: StoreCategory;
+}
+
+/**
+ * Nearby store discovery job result.
+ */
+export interface NearbyStoreDiscoveryResult {
+  stores_found: number;
+  stores_added: number;
+  stores_skipped: number;
+  stores_configured: number;
+  added_store_ids?: number[];
+}
+
+/**
+ * Feature availability check response.
+ */
+export interface NearbyStoreAvailability {
+  available: boolean;
+  has_google_places_key: boolean;
+  has_firecrawl_key: boolean;
+  has_location: boolean;
+  can_auto_configure: boolean;
+}
+
+/**
+ * Discovery category option for UI.
+ */
+export interface DiscoveryCategory {
+  id: StoreCategory;
+  label: string;
+  description?: string;
+}
+
+/**
+ * Smart Add queue item status.
+ */
+export type SmartAddQueueStatus = 'pending' | 'reviewed' | 'added' | 'dismissed';
+
+/**
+ * Product suggestion from AI identification.
+ */
+export interface ProductSuggestion {
+  product_name: string;
+  brand: string | null;
+  model: string | null;
+  category: string | null;
+  upc: string | null;
+  image_url: string | null;
+  is_generic: boolean;
+  unit_of_measure: string | null;
+  confidence: number;
+}
+
+/**
+ * Smart Add queue item - represents a pending product identification.
+ * Users can review the AI-identified products and add them to a list or dismiss.
+ */
+export interface SmartAddQueueItem {
+  id: number;
+  status: SmartAddQueueStatus;
+  status_label: string;
+  source_type: 'image' | 'text';
+  source_query: string | null;
+  display_title: string;
+  display_image: string | null;
+  suggestions_count: number;
+  product_data: ProductSuggestion[];
+  providers_used: string[] | null;
+  created_at: string;
+  expires_at: string;
 }
 
 export type PageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {

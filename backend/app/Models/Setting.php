@@ -53,6 +53,9 @@ class Setting extends Model
     // Firecrawl Web Crawler Settings
     public const FIRECRAWL_API_KEY = 'firecrawl_api_key';
 
+    // Google Places API Settings (for nearby store discovery)
+    public const GOOGLE_PLACES_API_KEY = 'google_places_api_key';
+
     // Email Settings
     public const MAIL_DRIVER = 'mail_driver';
     public const MAIL_HOST = 'mail_host';
@@ -90,6 +93,7 @@ class Setting extends Model
         self::SERPAPI_KEY,
         self::RAINFOREST_KEY,
         self::FIRECRAWL_API_KEY,
+        self::GOOGLE_PLACES_API_KEY,
         self::MAIL_PASSWORD,
     ];
 

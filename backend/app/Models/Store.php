@@ -19,12 +19,18 @@ use Illuminate\Support\Str;
  * @property string $name
  * @property string $slug
  * @property string $domain
+ * @property string|null $google_place_id
+ * @property float|null $latitude
+ * @property float|null $longitude
+ * @property string|null $address
+ * @property string|null $phone
  * @property string|null $search_url_template
  * @property string|null $product_url_pattern
  * @property array|null $scrape_instructions
  * @property bool $is_default
  * @property bool $is_local
  * @property bool $is_active
+ * @property bool $auto_configured
  * @property string|null $logo_url
  * @property string|null $category
  * @property int $default_priority
@@ -46,6 +52,7 @@ class Store extends Model
     public const CATEGORY_PHARMACY = 'pharmacy';
     public const CATEGORY_WAREHOUSE = 'warehouse';
     public const CATEGORY_SPECIALTY = 'specialty';
+    public const CATEGORY_PET = 'pet';
 
     /**
      * The attributes that are mass assignable.
@@ -56,12 +63,18 @@ class Store extends Model
         'name',
         'slug',
         'domain',
+        'google_place_id',
+        'latitude',
+        'longitude',
+        'address',
+        'phone',
         'search_url_template',
         'product_url_pattern',
         'scrape_instructions',
         'is_default',
         'is_local',
         'is_active',
+        'auto_configured',
         'logo_url',
         'category',
         'default_priority',
@@ -79,6 +92,9 @@ class Store extends Model
             'is_default' => 'boolean',
             'is_local' => 'boolean',
             'is_active' => 'boolean',
+            'auto_configured' => 'boolean',
+            'latitude' => 'decimal:7',
+            'longitude' => 'decimal:7',
             'default_priority' => 'integer',
         ];
     }
@@ -276,5 +292,59 @@ class Store extends Model
 
         // If user has a preference, use it; otherwise store is enabled by default
         return $preference ? $preference->enabled : true;
+    }
+
+    /**
+     * Scope to only auto-configured stores.
+     */
+    public function scopeAutoConfigured($query)
+    {
+        return $query->where('auto_configured', true);
+    }
+
+    /**
+     * Find a store by Google Place ID.
+     *
+     * @param string $placeId The Google Place ID
+     * @return Store|null
+     */
+    public static function findByGooglePlaceId(string $placeId): ?self
+    {
+        return self::where('google_place_id', $placeId)->first();
+    }
+
+    /**
+     * Calculate distance to a given coordinate in miles.
+     *
+     * @param float $lat Latitude
+     * @param float $lng Longitude
+     * @return float|null Distance in miles, or null if store has no coordinates
+     */
+    public function distanceTo(float $lat, float $lng): ?float
+    {
+        if ($this->latitude === null || $this->longitude === null) {
+            return null;
+        }
+
+        // Cast to float since decimal cast returns string
+        $storeLat = (float) $this->latitude;
+        $storeLng = (float) $this->longitude;
+
+        // Haversine formula
+        $earthRadiusMiles = 3959;
+        $latFrom = deg2rad($storeLat);
+        $lonFrom = deg2rad($storeLng);
+        $latTo = deg2rad($lat);
+        $lonTo = deg2rad($lng);
+
+        $latDelta = $latTo - $latFrom;
+        $lonDelta = $lonTo - $lonFrom;
+
+        $angle = 2 * asin(sqrt(
+            pow(sin($latDelta / 2), 2) +
+            cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)
+        ));
+
+        return $angle * $earthRadiusMiles;
     }
 }

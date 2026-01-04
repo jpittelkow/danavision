@@ -16,6 +16,12 @@ EOF
 echo "=== Starting DanaVision ==="
 echo "Environment: ${APP_ENV:-local}"
 
+# Create minimal .env file if it doesn't exist (needed for testing framework)
+if [ ! -f /var/www/html/.env ]; then
+    echo "Creating minimal .env file..."
+    echo "APP_ENV=${APP_ENV:-local}" > /var/www/html/.env
+fi
+
 # Derive database path from environment variable (with fallback for backwards compatibility)
 DB_FILE="${DB_DATABASE:-/var/www/html/data/database.sqlite}"
 DB_DIR=$(dirname "$DB_FILE")

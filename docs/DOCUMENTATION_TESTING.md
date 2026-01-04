@@ -451,6 +451,13 @@ php artisan migrate:fresh --env=testing
 ./vendor/bin/pest --parallel
 ```
 
+**Tests show .env file warnings:**
+The `.env.testing` file in `backend/` is required for tests. If running tests in Docker:
+```bash
+docker exec danavision ./vendor/bin/pest
+```
+The container automatically creates a minimal `.env` file if missing.
+
 ### E2E Tests
 
 **Auth fails:**

@@ -34,7 +34,9 @@ import {
   RotateCcw,
   Search,
   MapPin,
+  Dog,
 } from 'lucide-react';
+import { NearbyStoreDiscovery } from '@/Components/NearbyStoreDiscovery';
 
 interface StorePreferencesProps {
   stores: Store[];
@@ -50,6 +52,7 @@ const categoryIcons: Record<string, React.ReactNode> = {
   clothing: <Shirt className="h-4 w-4" />,
   pharmacy: <Pill className="h-4 w-4" />,
   warehouse: <Package className="h-4 w-4" />,
+  pet: <Dog className="h-4 w-4" />,
   specialty: <Sparkles className="h-4 w-4" />,
 };
 
@@ -267,6 +270,13 @@ export function StorePreferences({ stores: initialStores, storeCategories, onUpd
                 )}
                 <span className="ml-2 hidden sm:inline">Reset</span>
               </Button>
+
+              <NearbyStoreDiscovery
+                onStoresAdded={() => {
+                  // Refresh the stores list
+                  window.location.reload();
+                }}
+              />
 
               <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
                 <DialogTrigger asChild>

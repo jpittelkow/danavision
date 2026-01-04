@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AddressController;
 use App\Http\Controllers\AIJobController;
+use App\Http\Controllers\NearbyStoreController;
 use App\Http\Controllers\AIProviderController;
 use App\Http\Controllers\AIRequestLogController;
 use App\Http\Controllers\AuthController;
@@ -46,6 +47,10 @@ Route::middleware('auth')->group(function () {
     Route::get('smart-add', [SmartAddController::class, 'index'])->name('smart-add');
     Route::post('smart-add/identify', [SmartAddController::class, 'identify'])->name('smart-add.identify');
     Route::post('smart-add/add', [SmartAddController::class, 'addToList'])->name('smart-add.add');
+    // Queue endpoints - for managing pending product identifications
+    Route::get('smart-add/queue', [SmartAddController::class, 'queue'])->name('smart-add.queue');
+    Route::delete('smart-add/queue/{queueItem}', [SmartAddController::class, 'dismissQueueItem'])->name('smart-add.queue.dismiss');
+    Route::post('smart-add/queue/{queueItem}/add', [SmartAddController::class, 'addQueueItemToList'])->name('smart-add.queue.add');
     // Legacy endpoints (kept for backward compatibility)
     Route::post('smart-add/analyze', [SmartAddController::class, 'analyzeImage'])->name('smart-add.analyze');
     Route::post('smart-add/search', [SmartAddController::class, 'searchText'])->name('smart-add.search');
@@ -81,6 +86,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('api/stores/priorities', [SettingController::class, 'updateStorePriorities'])->name('stores.priorities');
     Route::post('api/stores', [SettingController::class, 'addCustomStore'])->name('stores.store');
     Route::post('api/stores/reset', [SettingController::class, 'resetStorePreferences'])->name('stores.reset');
+
+    // Nearby Store Discovery
+    Route::get('api/stores/nearby/availability', [NearbyStoreController::class, 'checkAvailability'])->name('stores.nearby.availability');
+    Route::get('api/stores/nearby/categories', [NearbyStoreController::class, 'getCategories'])->name('stores.nearby.categories');
+    Route::post('api/stores/nearby/preview', [NearbyStoreController::class, 'previewNearby'])->name('stores.nearby.preview');
+    Route::post('api/stores/nearby/discover', [NearbyStoreController::class, 'discoverNearby'])->name('stores.nearby.discover');
+    Route::get('api/stores/nearby/{aiJob}', [NearbyStoreController::class, 'getDiscoveryStatus'])->name('stores.nearby.status');
+    Route::post('api/stores/nearby/{aiJob}/cancel', [NearbyStoreController::class, 'cancelDiscovery'])->name('stores.nearby.cancel');
 
     // Address lookup (Nominatim proxy)
     Route::get('api/address/search', [AddressController::class, 'search'])->name('address.search');

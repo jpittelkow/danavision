@@ -6,6 +6,7 @@ use App\Jobs\AI\FirecrawlDiscoveryJob;
 use App\Jobs\AI\ProductIdentificationJob;
 use App\Models\AIJob;
 use App\Models\ShoppingList;
+use App\Models\SmartAddQueueItem;
 use App\Services\AI\AIService;
 use App\Services\AI\MultiAIService;
 use App\Services\Crawler\FirecrawlService;
@@ -27,8 +28,34 @@ class SmartAddController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        // Get pending queue items for this user
+        $queueItems = SmartAddQueueItem::forUser($request->user()->id)
+            ->readyForReview()
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Transform queue items for the frontend
+        $queue = $queueItems->map(function (SmartAddQueueItem $item) {
+            return [
+                'id' => $item->id,
+                'status' => $item->status,
+                'status_label' => $item->status_label,
+                'source_type' => $item->source_type,
+                'source_query' => $item->source_query,
+                'display_title' => $item->display_title,
+                'display_image' => $item->display_image,
+                'suggestions_count' => $item->suggestions_count,
+                'product_data' => $item->product_data,
+                'providers_used' => $item->providers_used,
+                'created_at' => $item->created_at->toIso8601String(),
+                'expires_at' => $item->expires_at->toIso8601String(),
+            ];
+        });
+
         return Inertia::render('SmartAdd', [
             'lists' => $lists,
+            'queue' => $queue,
+            'queueCount' => $queue->count(),
         ]);
     }
 
@@ -648,8 +675,9 @@ PROMPT;
             // User will see a message in the UI to configure Firecrawl in Settings
         }
 
-        return redirect()->route('lists.show', $list)
-            ->with('success', 'Item added to ' . $list->name . '! Price search running in background.');
+        // Redirect to the item page so user can see prices as they load
+        return redirect()->route('items.show', $item)
+            ->with('success', 'Item added to ' . $list->name . '! Searching for prices in background...');
     }
 
     /**
@@ -927,6 +955,187 @@ PROMPT;
         }
 
         return null;
+    }
+
+    // ==========================================
+    // Review Queue Methods
+    // ==========================================
+
+    /**
+     * Get the user's review queue (pending product identifications).
+     * Returns JSON for AJAX requests or renders the Smart Add page with queue data.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|Response
+     */
+    public function queue(Request $request)
+    {
+        $queueItems = SmartAddQueueItem::forUser($request->user()->id)
+            ->readyForReview()
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Transform queue items for the frontend
+        $transformed = $queueItems->map(function (SmartAddQueueItem $item) {
+            return [
+                'id' => $item->id,
+                'status' => $item->status,
+                'status_label' => $item->status_label,
+                'source_type' => $item->source_type,
+                'source_query' => $item->source_query,
+                'display_title' => $item->display_title,
+                'display_image' => $item->display_image,
+                'suggestions_count' => $item->suggestions_count,
+                'product_data' => $item->product_data,
+                'providers_used' => $item->providers_used,
+                'created_at' => $item->created_at->toIso8601String(),
+                'expires_at' => $item->expires_at->toIso8601String(),
+            ];
+        });
+
+        // If AJAX request, return JSON
+        if ($request->wantsJson()) {
+            return response()->json([
+                'queue' => $transformed,
+                'count' => $transformed->count(),
+            ]);
+        }
+
+        // Otherwise render the Smart Add page with queue data
+        $lists = $request->user()
+            ->shoppingLists()
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return Inertia::render('SmartAdd', [
+            'lists' => $lists,
+            'queue' => $transformed,
+            'queueCount' => $transformed->count(),
+        ]);
+    }
+
+    /**
+     * Dismiss a queue item (mark as dismissed).
+     *
+     * @param Request $request
+     * @param SmartAddQueueItem $queueItem
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+     */
+    public function dismissQueueItem(Request $request, SmartAddQueueItem $queueItem)
+    {
+        // Ensure the queue item belongs to the user
+        if ($queueItem->user_id !== $request->user()->id) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+            abort(403);
+        }
+
+        $queueItem->markAsDismissed();
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return back()->with('success', 'Item dismissed');
+    }
+
+    /**
+     * Add a queue item to a shopping list.
+     *
+     * @param Request $request
+     * @param SmartAddQueueItem $queueItem
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+     */
+    public function addQueueItemToList(Request $request, SmartAddQueueItem $queueItem)
+    {
+        // Ensure the queue item belongs to the user
+        if ($queueItem->user_id !== $request->user()->id) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'list_id' => ['required', 'exists:shopping_lists,id'],
+            'selected_index' => ['required', 'integer', 'min:0', 'max:4'],
+            'product_name' => ['nullable', 'string', 'max:255'],
+            'target_price' => ['nullable', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'priority' => ['nullable', 'in:low,medium,high'],
+        ]);
+
+        $list = ShoppingList::findOrFail($validated['list_id']);
+        $this->authorize('update', $list);
+
+        // Get the selected product from the queue item
+        $productData = $queueItem->product_data;
+        $selectedIndex = $validated['selected_index'];
+        
+        if (!isset($productData[$selectedIndex])) {
+            if ($request->wantsJson()) {
+                return response()->json(['error' => 'Invalid product selection'], 422);
+            }
+            return back()->with('error', 'Invalid product selection');
+        }
+
+        $product = $productData[$selectedIndex];
+
+        // Create the list item
+        $item = $list->items()->create([
+            'added_by_user_id' => $request->user()->id,
+            'product_name' => $validated['product_name'] ?? $product['product_name'],
+            'product_query' => $product['product_name'],
+            'product_image_url' => $product['image_url'] ?? null,
+            'uploaded_image_path' => $queueItem->source_image_path,
+            'upc' => $product['upc'] ?? null,
+            'target_price' => $validated['target_price'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'priority' => $validated['priority'] ?? 'medium',
+            'is_generic' => $product['is_generic'] ?? false,
+            'unit_of_measure' => $product['unit_of_measure'] ?? null,
+        ]);
+
+        // Mark the queue item as added
+        $queueItem->markAsAdded($item->id, $selectedIndex);
+
+        // Dispatch background job to search for prices
+        $userId = $request->user()->id;
+        $firecrawlService = FirecrawlService::forUser($userId);
+        
+        if ($firecrawlService->isAvailable()) {
+            $aiJob = AIJob::createJob(
+                userId: $userId,
+                type: AIJob::TYPE_FIRECRAWL_DISCOVERY,
+                inputData: [
+                    'product_name' => $item->product_name,
+                    'product_query' => $item->product_query ?? $item->product_name,
+                    'upc' => $item->upc ?? null,
+                    'is_generic' => $item->is_generic ?? false,
+                    'unit_of_measure' => $item->unit_of_measure ?? null,
+                    'shop_local' => $list->shop_local ?? false,
+                    'source' => 'queue_add',
+                ],
+                relatedItemId: $item->id,
+                relatedListId: $list->id,
+            );
+
+            FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId)
+                ->delay(now()->addSeconds(2));
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'item_id' => $item->id,
+                'message' => 'Item added to ' . $list->name,
+            ]);
+        }
+
+        // Redirect to the item page
+        return redirect()->route('items.show', $item)
+            ->with('success', 'Item added to ' . $list->name . '! Price search running in background.');
     }
 
 }
