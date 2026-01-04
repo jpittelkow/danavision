@@ -33,6 +33,11 @@ class AIJob extends Model
 {
     use HasFactory;
 
+    /**
+     * The table associated with the model.
+     */
+    protected $table = 'ai_jobs';
+
     // Job types
     public const TYPE_PRODUCT_IDENTIFICATION = 'product_identification';
     public const TYPE_IMAGE_ANALYSIS = 'image_analysis';

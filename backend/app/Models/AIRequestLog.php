@@ -34,6 +34,11 @@ class AIRequestLog extends Model
     use HasFactory;
 
     /**
+     * The table associated with the model.
+     */
+    protected $table = 'ai_request_logs';
+
+    /**
      * Disable updated_at since we only use created_at.
      */
     public const UPDATED_AT = null;
