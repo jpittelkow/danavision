@@ -42,7 +42,7 @@ COPY backend/ .
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Install Node dependencies and build frontend
-RUN npm install && npm run build
+RUN npm ci && npm run build
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
