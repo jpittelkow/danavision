@@ -47,6 +47,7 @@ class AIJob extends Model
     public const TYPE_FIRECRAWL_DISCOVERY = 'firecrawl_discovery';
     public const TYPE_FIRECRAWL_REFRESH = 'firecrawl_refresh';
     public const TYPE_NEARBY_STORE_DISCOVERY = 'nearby_store_discovery';
+    public const TYPE_STORE_AUTO_CONFIG = 'store_auto_config';
 
     // Job statuses
     public const STATUS_PENDING = 'pending';
@@ -67,6 +68,7 @@ class AIJob extends Model
         self::TYPE_FIRECRAWL_DISCOVERY => 'Firecrawl Price Discovery',
         self::TYPE_FIRECRAWL_REFRESH => 'Firecrawl Price Refresh',
         self::TYPE_NEARBY_STORE_DISCOVERY => 'Nearby Store Discovery',
+        self::TYPE_STORE_AUTO_CONFIG => 'Store URL Discovery',
     ];
 
     /**
@@ -361,6 +363,7 @@ class AIJob extends Model
             self::TYPE_FIRECRAWL_DISCOVERY => $this->input_data['product_name'] ?? 'Firecrawl discovery',
             self::TYPE_FIRECRAWL_REFRESH => $this->input_data['product_name'] ?? 'Firecrawl refresh',
             self::TYPE_NEARBY_STORE_DISCOVERY => ($this->input_data['radius_miles'] ?? '10') . ' mile radius - ' . implode(', ', $this->input_data['categories'] ?? ['all']),
+            self::TYPE_STORE_AUTO_CONFIG => $this->input_data['store_name'] ?? 'Store URL discovery',
             default => json_encode(array_slice($this->input_data, 0, 2)),
         };
     }

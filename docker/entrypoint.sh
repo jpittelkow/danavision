@@ -126,6 +126,11 @@ echo "Running database migrations..."
 php /var/www/html/artisan migrate --force --verbose
 echo "Migrations complete."
 
+# Seed default stores (idempotent - safe to run on every deploy)
+echo "Seeding default stores..."
+php /var/www/html/artisan db:seed --class=StoreSeeder --force
+echo "Store seeding complete."
+
 # Clear and cache config for production
 if [ "$APP_ENV" = "production" ]; then
     echo "Caching configuration for production..."

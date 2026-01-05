@@ -74,6 +74,7 @@ class Setting extends Model
 
     // Vendor Settings
     public const SUPPRESSED_VENDORS = 'suppressed_vendors';
+    public const SUPPRESSED_STORES = 'suppressed_stores';
 
     // Notification Preferences
     public const NOTIFY_PRICE_DROPS = 'notify_price_drops';

@@ -2,6 +2,7 @@
 
 namespace App\Jobs\AI;
 
+use App\Jobs\AI\StoreAutoConfigJob;
 use App\Models\AIJob;
 use App\Models\Setting;
 use App\Models\Store;
@@ -122,11 +123,13 @@ class NearbyStoreDiscoveryJob extends BaseAIJob
             return ['cancelled' => true, 'logs' => $logs];
         }
 
-        // Initialize auto-config service for search URL detection
+        // Check if Firecrawl is available for auto-config (will be done as separate jobs)
         $autoConfigService = StoreAutoConfigService::forUser($this->userId);
         $firecrawlAvailable = $autoConfigService->isAvailable();
 
-        if (!$firecrawlAvailable) {
+        if ($firecrawlAvailable) {
+            $logs[] = "Firecrawl configured - URL discovery will be queued for new stores";
+        } else {
             $logs[] = "Note: Firecrawl not configured - stores will be added without auto-configuration";
         }
 
@@ -224,23 +227,20 @@ class NearbyStoreDiscoveryJob extends BaseAIJob
                 // Create user preference (enabled and favorited)
                 $this->createUserPreference($store->id);
 
-                // Try to auto-configure search URL if we have website and Firecrawl
+                // Queue URL discovery as a separate background job (non-blocking)
                 if ($firecrawlAvailable && $website && $domain) {
-                    $logs[] = "  → Detecting search URL template...";
-                    $this->updateProgress($aiJob, $currentProgress, $logs);
-
-                    $configResult = $autoConfigService->detectSearchUrlTemplate($website);
-
-                    if ($configResult['success'] && !empty($configResult['template'])) {
-                        $store->update([
-                            'search_url_template' => $configResult['template'],
-                            'auto_configured' => true,
-                        ]);
-                        $storesConfigured++;
-                        $logs[] = "  → Search URL configured automatically";
-                    } else {
-                        $logs[] = "  → Could not auto-detect search URL";
-                    }
+                    $configJob = AIJob::createJob(
+                        userId: $this->userId,
+                        type: AIJob::TYPE_STORE_AUTO_CONFIG,
+                        inputData: [
+                            'store_id' => $store->id,
+                            'website_url' => $website,
+                            'store_name' => $storeName,
+                        ],
+                    );
+                    dispatch(new StoreAutoConfigJob($configJob->id, $this->userId));
+                    $storesConfigured++; // Count queued jobs
+                    $logs[] = "  → URL discovery queued";
                 }
 
             } catch (\Exception $e) {
@@ -257,7 +257,7 @@ class NearbyStoreDiscoveryJob extends BaseAIJob
         $logs[] = "  - Found: {$storeCount} stores";
         $logs[] = "  - Added: {$storesAdded} new stores";
         $logs[] = "  - Skipped: {$storesSkipped} (already in registry)";
-        $logs[] = "  - Auto-configured: {$storesConfigured} stores";
+        $logs[] = "  - URL discovery queued: {$storesConfigured} stores";
 
         $this->updateProgress($aiJob, 95, $logs);
 

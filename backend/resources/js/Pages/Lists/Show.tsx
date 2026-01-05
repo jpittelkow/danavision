@@ -9,6 +9,7 @@ import { Badge } from '@/Components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/Components/ui/switch';
 import { PriceUpdateStatus } from '@/Components/PriceUpdateStatus';
+import { ConfirmDialog } from '@/Components/ConfirmDialog';
 import {
   RefreshCw,
   Trash2,
@@ -394,6 +395,7 @@ function ItemCard({
 export default function ListsShow({ auth, list, can_edit, flash }: Props) {
   const [showAddItem, setShowAddItem] = useState(false);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
+  const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
   
   const { data, setData, post, processing, reset, errors } = useForm({
     product_name: '',
@@ -413,9 +415,10 @@ export default function ListsShow({ auth, list, can_edit, flash }: Props) {
     });
   };
 
-  const deleteItem = (itemId: number) => {
-    if (confirm('Delete this item?')) {
-      router.delete(`/items/${itemId}`);
+  const handleDeleteItem = () => {
+    if (deleteItemId) {
+      router.delete(`/items/${deleteItemId}`);
+      setDeleteItemId(null);
     }
   };
 
@@ -440,13 +443,6 @@ export default function ListsShow({ auth, list, can_edit, flash }: Props) {
             ← Back to Lists
           </Link>
         </div>
-
-        {/* Flash Messages */}
-        {flash?.success && (
-          <div className="bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-700 text-green-700 dark:text-green-300 px-4 py-3 rounded-xl mb-6">
-            {flash.success}
-          </div>
-        )}
 
         {/* List Header */}
         <Card className="mb-6">
@@ -587,7 +583,7 @@ export default function ListsShow({ auth, list, can_edit, flash }: Props) {
                 key={item.id}
                 item={item}
                 canEdit={can_edit}
-                onDelete={() => deleteItem(item.id)}
+                onDelete={() => setDeleteItemId(item.id)}
                 onMarkPurchased={() => markPurchased(item.id)}
                 onRefresh={() => {}}
               />
@@ -611,6 +607,17 @@ export default function ListsShow({ auth, list, can_edit, flash }: Props) {
           )}
         </div>
       </div>
+
+      {/* Delete Item Confirmation */}
+      <ConfirmDialog
+        open={deleteItemId !== null}
+        onOpenChange={(open) => !open && setDeleteItemId(null)}
+        title="Delete Item"
+        description="Are you sure you want to delete this item from your list?"
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={handleDeleteItem}
+      />
     </AppLayout>
   );
 }

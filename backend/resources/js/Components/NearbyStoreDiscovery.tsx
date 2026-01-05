@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import type {
   StoreCategory,
@@ -7,9 +7,9 @@ import type {
   NearbyStoreAvailability,
 } from '@/types';
 import { Button } from '@/Components/ui/button';
+import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
 import { Badge } from '@/Components/ui/badge';
-import { Switch } from '@/Components/ui/switch';
 import { Checkbox } from '@/Components/ui/checkbox';
 import {
   Dialog,
@@ -27,7 +27,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Search,
-  Navigation,
   ShoppingCart,
   Tv,
   Package,
@@ -81,17 +80,18 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
     'electronics',
     'pharmacy',
   ]);
-  const [useCurrentLocation, setUseCurrentLocation] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [gettingLocation, setGettingLocation] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [geolocationSupported] = useState(() => typeof navigator !== 'undefined' && 'geolocation' in navigator);
 
   // Preview state
   const [previewStores, setPreviewStores] = useState<NearbyStoreResult[]>([]);
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewComplete, setPreviewComplete] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter preview stores by search query
+  const filteredPreviewStores = previewStores.filter((store) =>
+    searchQuery === '' || store.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Store selection state
   const [selectedStoreIds, setSelectedStoreIds] = useState<Set<string>>(new Set());
@@ -135,53 +135,6 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
     }
   };
 
-  const getCurrentLocation = useCallback(() => {
-    if (!geolocationSupported) {
-      setLocationError('Geolocation is not supported by your browser');
-      setUseCurrentLocation(false);
-      return;
-    }
-
-    setGettingLocation(true);
-    setLocationError(null);
-    
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setCurrentLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setGettingLocation(false);
-        setLocationError(null);
-      },
-      (error) => {
-        setGettingLocation(false);
-        setUseCurrentLocation(false);
-        
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            setLocationError('Location permission denied. Please enable location access in your browser settings.');
-            break;
-          case error.POSITION_UNAVAILABLE:
-            setLocationError('Location information unavailable. Please try again.');
-            break;
-          case error.TIMEOUT:
-            setLocationError('Location request timed out. Please try again.');
-            break;
-          default:
-            setLocationError('Unable to get your location. Please try again or use your home address.');
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  }, [geolocationSupported]);
-
-  useEffect(() => {
-    if (useCurrentLocation && !currentLocation) {
-      getCurrentLocation();
-    }
-  }, [useCurrentLocation, currentLocation, getCurrentLocation]);
-
   const toggleCategory = (category: StoreCategory) => {
     setSelectedCategories((prev) =>
       prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
@@ -201,11 +154,6 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
         radius_miles: radiusMiles,
         categories: selectedCategories.length > 0 ? selectedCategories : undefined,
       };
-
-      if (useCurrentLocation && currentLocation) {
-        payload.latitude = currentLocation.lat;
-        payload.longitude = currentLocation.lng;
-      }
 
       const response = await axios.post('/api/stores/nearby/preview', payload);
 
@@ -308,7 +256,7 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
     setAddResult(null);
     setDiscoveryResult(null);
     setDiscoveryError(null);
-    setLocationError(null);
+    setSearchQuery('');
   };
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -446,48 +394,6 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
               </div>
             </div>
 
-            {/* Location Toggle */}
-            {geolocationSupported && (
-              <div className="space-y-2">
-                <div 
-                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/50 transition-colors cursor-pointer"
-                  onClick={() => !gettingLocation && setUseCurrentLocation(!useCurrentLocation)}
-                >
-                  <div className="flex items-center gap-3">
-                    <Navigation className={`h-4 w-4 ${useCurrentLocation && currentLocation ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <div className="space-y-0.5">
-                      <Label className="cursor-pointer">Use Current Location</Label>
-                      <p className="text-xs text-muted-foreground">
-                        {gettingLocation
-                          ? 'Getting your location...'
-                          : useCurrentLocation && currentLocation
-                            ? 'Using your current location'
-                            : 'Use your home address from Settings'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {gettingLocation && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    )}
-                    <Switch
-                      checked={useCurrentLocation}
-                      onCheckedChange={setUseCurrentLocation}
-                      disabled={gettingLocation}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                </div>
-                
-                {locationError && (
-                  <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-950/20 rounded-md text-xs">
-                    <AlertCircle className="h-3 w-3 text-red-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-red-700 dark:text-red-300">{locationError}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Category Selection */}
             <div className="space-y-3">
               <Label>Store Categories</Label>
@@ -557,6 +463,7 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
                         setPreviewStores([]);
                         setPreviewComplete(false);
                         setSelectedStoreIds(new Set());
+                        setSearchQuery('');
                       }}
                       className="h-6 px-2"
                     >
@@ -564,37 +471,60 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
                     </Button>
                   </div>
                 </div>
-                {previewStores.length > 0 ? (
-                  <div className="max-h-64 overflow-y-auto space-y-1 border rounded-lg p-2">
-                    {previewStores.map((store) => (
-                      <label
-                        key={store.place_id}
-                        className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
-                          selectedStoreIds.has(store.place_id)
-                            ? 'bg-primary/10 border border-primary/30'
-                            : 'bg-muted/50 hover:bg-muted'
-                        }`}
-                      >
-                        <Checkbox
-                          checked={selectedStoreIds.has(store.place_id)}
-                          onCheckedChange={() => toggleStoreSelection(store.place_id)}
-                          className="flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{store.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{store.address}</p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Badge variant="outline" className="text-xs">
-                            {store.distance_miles} mi
-                          </Badge>
-                          {store.website && (
-                            <CheckCircle2 className="h-3 w-3 text-green-500" title="Has website" />
-                          )}
-                        </div>
-                      </label>
-                    ))}
+
+                {/* Search filter */}
+                {previewStores.length > 0 && (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Search stores..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9"
+                    />
                   </div>
+                )}
+
+                {previewStores.length > 0 ? (
+                  filteredPreviewStores.length > 0 ? (
+                    <div className="max-h-64 overflow-y-auto space-y-1 border rounded-lg p-2">
+                      {filteredPreviewStores.map((store) => (
+                        <label
+                          key={store.place_id}
+                          className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                            selectedStoreIds.has(store.place_id)
+                              ? 'bg-primary/10 border border-primary/30'
+                              : 'bg-muted/50 hover:bg-muted'
+                          }`}
+                        >
+                          <Checkbox
+                            checked={selectedStoreIds.has(store.place_id)}
+                            onCheckedChange={() => toggleStoreSelection(store.place_id)}
+                            className="flex-shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{store.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{store.address}</p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Badge variant="outline" className="text-xs">
+                              {store.distance_miles} mi
+                            </Badge>
+                            {store.website && (
+                              <CheckCircle2 className="h-3 w-3 text-green-500" title="Has website" />
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2 p-3 bg-muted/50 rounded-lg border">
+                      <Search className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-muted-foreground">
+                        No stores match "{searchQuery}". Try a different search term.
+                      </p>
+                    </div>
+                  )
                 ) : (
                   <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-900">
                     <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
@@ -640,7 +570,7 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
               </Button>
               <Button 
                 onClick={handleAddSelected} 
-                disabled={addingStores || selectedStoreIds.size === 0 || (useCurrentLocation && !currentLocation)}
+                disabled={addingStores || selectedStoreIds.size === 0}
               >
                 {addingStores ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />

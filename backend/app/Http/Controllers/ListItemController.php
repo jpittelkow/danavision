@@ -20,6 +20,117 @@ use Inertia\Response;
 class ListItemController extends Controller
 {
     /**
+     * Display all items accessible to the user.
+     * 
+     * Shows items from owned lists and shared lists.
+     * Supports filtering by list, price status, and priority.
+     *
+     * @param Request $request
+     * @return Response
+     */
+    public function index(Request $request): Response
+    {
+        $user = $request->user();
+
+        // Get user's lists (owned + shared)
+        $ownedListIds = $user->shoppingLists()->pluck('id');
+        $sharedListIds = $user->sharedLists()->pluck('shopping_list_id');
+        $allListIds = $ownedListIds->merge($sharedListIds)->unique();
+
+        // Build query
+        $query = ListItem::whereIn('shopping_list_id', $allListIds)
+            ->with(['shoppingList:id,name']);
+
+        // Filter by list
+        if ($request->filled('list_id')) {
+            $query->where('shopping_list_id', $request->input('list_id'));
+        }
+
+        // Filter by price status
+        if ($request->filled('status')) {
+            switch ($request->input('status')) {
+                case 'drops':
+                    $query->whereNotNull('previous_price')
+                        ->whereColumn('current_price', '<', 'previous_price');
+                    break;
+                case 'all_time_lows':
+                    $query->whereNotNull('lowest_price')
+                        ->whereColumn('current_price', '<=', 'lowest_price');
+                    break;
+                case 'below_target':
+                    $query->whereNotNull('target_price')
+                        ->whereColumn('current_price', '<=', 'target_price');
+                    break;
+            }
+        }
+
+        // Filter by priority
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->input('priority'));
+        }
+
+        // Filter by purchased status
+        if ($request->filled('purchased')) {
+            $query->where('is_purchased', $request->boolean('purchased'));
+        }
+
+        // Sort
+        $sortField = $request->input('sort', 'updated_at');
+        $sortDir = $request->input('dir', 'desc');
+        $allowedSorts = ['product_name', 'current_price', 'updated_at', 'created_at', 'priority'];
+        if (in_array($sortField, $allowedSorts)) {
+            $query->orderBy($sortField, $sortDir === 'asc' ? 'asc' : 'desc');
+        } else {
+            $query->orderByDesc('updated_at');
+        }
+
+        $items = $query->paginate(50);
+
+        // Get lists for filter dropdown
+        $lists = $user->shoppingLists()
+            ->select('id', 'name')
+            ->withCount('items')
+            ->orderBy('name')
+            ->get();
+
+        // Add shared lists
+        $sharedLists = ShoppingList::whereIn('id', $sharedListIds)
+            ->select('id', 'name')
+            ->withCount('items')
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('Items/Index', [
+            'items' => $items->through(fn ($item) => [
+                'id' => $item->id,
+                'product_name' => $item->product_name,
+                'product_image_url' => $item->getDisplayImageUrl(),
+                'current_price' => $item->current_price,
+                'previous_price' => $item->previous_price,
+                'lowest_price' => $item->lowest_price,
+                'target_price' => $item->target_price,
+                'priority' => $item->priority,
+                'is_purchased' => $item->is_purchased,
+                'is_at_all_time_low' => $item->isAtAllTimeLow(),
+                'last_checked_at' => $item->last_checked_at?->toISOString(),
+                'list' => [
+                    'id' => $item->shoppingList->id,
+                    'name' => $item->shoppingList->name,
+                ],
+            ]),
+            'lists' => $lists->merge($sharedLists)->unique('id')->values(),
+            'filters' => [
+                'list_id' => $request->input('list_id'),
+                'status' => $request->input('status'),
+                'priority' => $request->input('priority'),
+                'purchased' => $request->input('purchased'),
+                'sort' => $sortField,
+                'dir' => $sortDir,
+            ],
+        ]);
+    }
+
+    /**
      * Display a single item with vendor prices and price history.
      */
     public function show(Request $request, ListItem $item): Response

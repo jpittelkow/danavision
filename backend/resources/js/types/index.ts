@@ -130,13 +130,66 @@ export interface SmartAddPriceResult {
   }[];
 }
 
-export interface DashboardData {
+export interface DashboardStats {
   lists_count: number;
   items_count: number;
   items_with_drops: number;
   total_potential_savings: number;
-  recent_drops: ListItem[];
-  all_time_lows: ListItem[];
+  all_time_lows_count: number;
+  items_below_target: number;
+}
+
+export interface DashboardItem {
+  id: number;
+  product_name: string;
+  product_image_url?: string;
+  current_price?: number;
+  previous_price?: number;
+  lowest_price?: number;
+  target_price?: number;
+  price_change_percent?: number;
+  is_at_all_time_low?: boolean;
+  last_checked_at?: string;
+  list?: {
+    id: number;
+    name: string;
+  };
+}
+
+export interface StoreStats {
+  vendor: string;
+  wins: number;
+  total_savings: number;
+}
+
+export interface ActiveJob {
+  id: number;
+  type: string;
+  type_label: string;
+  status: string;
+  progress: number;
+  input_summary: string;
+  created_at: string;
+}
+
+export interface PriceTrendPoint {
+  date: string;
+  avg_price: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  count: number;
+}
+
+export interface DashboardData {
+  stats: DashboardStats;
+  recent_drops: DashboardItem[];
+  all_time_lows: DashboardItem[];
+  store_stats: StoreStats[];
+  active_jobs_count: number;
+  active_jobs: ActiveJob[];
+  last_price_update: string | null;
+  price_trend: PriceTrendPoint[];
+  items_needing_attention: DashboardItem[];
 }
 
 export interface Settings {
@@ -230,7 +283,8 @@ export type AIJobType =
   | 'price_refresh'
   | 'firecrawl_discovery'
   | 'firecrawl_refresh'
-  | 'nearby_store_discovery';
+  | 'nearby_store_discovery'
+  | 'store_auto_config';
 export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 /**
@@ -369,14 +423,20 @@ export interface Store {
   is_default: boolean;
   is_local: boolean;
   has_search_template: boolean;
+  search_url_template?: string;
+  effective_search_url_template?: string;
   auto_configured?: boolean;
   address?: string;
   phone?: string;
   default_priority: number;
+  // Parent store relationship (for subsidiaries like Metro Market -> Kroger)
+  parent_store_id?: number;
+  parent_store_name?: string;
   // User-specific preferences (merged from user_store_preferences)
   enabled: boolean;
   is_favorite: boolean;
   priority: number;
+  location_id?: string; // Store-specific location ID for accurate local pricing
 }
 
 /**

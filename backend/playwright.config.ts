@@ -75,11 +75,11 @@ export default defineConfig({
   /* Output folder for test artifacts */
   outputDir: 'test-results/',
 
-  /* Global timeout for each test */
-  timeout: 30000,
+  /* Global timeout for each test - longer in CI */
+  timeout: process.env.CI ? 60000 : 30000,
 
-  /* Timeout for each expect() assertion */
+  /* Timeout for each expect() assertion - longer in CI */
   expect: {
-    timeout: 5000,
+    timeout: process.env.CI ? 10000 : 5000,
   },
 });

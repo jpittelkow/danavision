@@ -2,6 +2,7 @@
 
 namespace App\Services\Crawler;
 
+use App\Models\Setting;
 use App\Models\Store;
 use App\Models\UserStorePreference;
 use Illuminate\Support\Collection;
@@ -226,12 +227,30 @@ class StoreDiscoveryService
             return FirecrawlResult::success([], 'tier1_empty');
         }
 
+        // Get user's location settings for location-aware search URLs
+        $userLocationContext = $this->getUserLocationContext();
+
+        // Get user's store preferences (for store-specific location IDs)
+        $storePreferences = UserStorePreference::where('user_id', $this->userId)
+            ->whereNotNull('location_id')
+            ->get()
+            ->keyBy('store_id');
+
         // Generate search URLs from templates
         $urls = [];
         $storeMap = []; // Map URLs to stores for result attribution
 
         foreach ($stores as $store) {
-            $url = $store->generateSearchUrl($query);
+            // Build location context for this specific store
+            $context = $userLocationContext;
+            
+            // Add store-specific location ID if the user has set one
+            $preference = $storePreferences->get($store->id);
+            if ($preference && $preference->location_id) {
+                $context['store_id'] = $preference->location_id;
+            }
+
+            $url = $store->generateSearchUrl($query, $context);
             if ($url) {
                 $urls[] = $url;
                 $storeMap[$url] = $store;
@@ -270,6 +289,20 @@ class StoreDiscoveryService
         }
 
         return FirecrawlResult::success($attributedResults, 'tier1_template');
+    }
+
+    /**
+     * Get user's location context for URL template substitution.
+     *
+     * @return array Location context with zip, lat, lng
+     */
+    protected function getUserLocationContext(): array
+    {
+        return [
+            'zip' => Setting::get(Setting::HOME_ZIP_CODE, $this->userId) ?? '',
+            'lat' => Setting::get(Setting::HOME_LATITUDE, $this->userId) ?? '',
+            'lng' => Setting::get(Setting::HOME_LONGITUDE, $this->userId) ?? '',
+        ];
     }
 
     /**

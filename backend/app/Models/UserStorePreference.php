@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * UserStorePreference Model
  *
  * Represents a user's preference for a specific store.
- * Users can enable/disable stores, set priority, and mark favorites.
+ * Users can enable/disable stores, set priority, mark favorites,
+ * and set store-specific location IDs for accurate local pricing.
  *
  * @property int $id
  * @property int $user_id
@@ -18,6 +19,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $priority
  * @property bool $enabled
  * @property bool $is_favorite
+ * @property bool $is_local
+ * @property string|null $location_id Store-specific location ID (e.g., Kroger store number)
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  */
@@ -36,6 +39,8 @@ class UserStorePreference extends Model
         'priority',
         'enabled',
         'is_favorite',
+        'is_local',
+        'location_id',
     ];
 
     /**
@@ -49,6 +54,7 @@ class UserStorePreference extends Model
             'priority' => 'integer',
             'enabled' => 'boolean',
             'is_favorite' => 'boolean',
+            'is_local' => 'boolean',
         ];
     }
 

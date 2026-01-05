@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AI\StoreAutoConfigJob;
+use App\Models\AIJob;
 use App\Models\AIPrompt;
 use App\Models\AIProvider;
 use App\Models\Setting;
 use App\Models\Store;
 use App\Models\UserStorePreference;
 use App\Services\AI\AIModelService;
+use App\Services\Crawler\StoreAutoConfigService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -102,6 +105,9 @@ class SettingController extends Controller
         // Get stores with user preferences
         $stores = $this->getStoresWithPreferences($userId);
 
+        // Get suppressed stores
+        $suppressedStores = $this->getSuppressedStores($userId);
+
         return Inertia::render('Settings', [
             'settings' => [
                 'ai_provider' => $settings[Setting::AI_PROVIDER] ?? 'claude',
@@ -143,6 +149,7 @@ class SettingController extends Controller
             'prompts' => $prompts,
             // Store Registry data
             'stores' => $stores,
+            'suppressedStores' => $suppressedStores,
             'storeCategories' => [
                 Store::CATEGORY_GENERAL => 'General Retailers',
                 Store::CATEGORY_ELECTRONICS => 'Electronics',
@@ -324,6 +331,271 @@ class SettingController extends Controller
     }
 
     /**
+     * Suppress a store (hide from the user's store list).
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function suppressStore(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Verify store exists
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        // Get current suppressed stores
+        $suppressedJson = Setting::get(Setting::SUPPRESSED_STORES, $userId);
+        $suppressed = $suppressedJson ? json_decode($suppressedJson, true) ?: [] : [];
+
+        // Add store ID if not already in the list
+        if (!in_array($storeId, $suppressed)) {
+            $suppressed[] = $storeId;
+            Setting::set(Setting::SUPPRESSED_STORES, json_encode($suppressed), $userId);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "'{$store->name}' has been suppressed and will no longer appear in your store list.",
+        ]);
+    }
+
+    /**
+     * Restore a suppressed store (remove from suppression list).
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function restoreStore(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Verify store exists
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        // Get current suppressed stores
+        $suppressedJson = Setting::get(Setting::SUPPRESSED_STORES, $userId);
+        $suppressed = $suppressedJson ? json_decode($suppressedJson, true) ?: [] : [];
+
+        // Remove store ID from the list
+        $suppressed = array_values(array_filter($suppressed, fn($id) => $id !== $storeId));
+        Setting::set(Setting::SUPPRESSED_STORES, json_encode($suppressed), $userId);
+
+        return response()->json([
+            'success' => true,
+            'message' => "'{$store->name}' has been restored and will now appear in your store list.",
+        ]);
+    }
+
+    /**
+     * Set a store-specific location ID for more accurate local pricing.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function setStoreLocationId(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'location_id' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $userId = $request->user()->id;
+
+        // Verify store exists
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        // Update or create user preference with location ID
+        UserStorePreference::updateOrCreate(
+            ['user_id' => $userId, 'store_id' => $storeId],
+            ['location_id' => $validated['location_id']]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => $validated['location_id'] 
+                ? "Location ID set for {$store->name}"
+                : "Location ID cleared for {$store->name}",
+            'location_id' => $validated['location_id'],
+        ]);
+    }
+
+    /**
+     * Link a store to a parent store (for subsidiaries).
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function linkParentStore(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'parent_store_id' => ['required', 'integer', 'exists:stores,id'],
+        ]);
+
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        // Prevent circular references
+        if ($validated['parent_store_id'] == $storeId) {
+            return response()->json([
+                'success' => false,
+                'error' => 'A store cannot be its own parent',
+            ], 400);
+        }
+
+        $parentStore = Store::find($validated['parent_store_id']);
+        
+        // Prevent linking to a store that is itself a subsidiary
+        if ($parentStore->parent_store_id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Cannot link to a store that is already a subsidiary',
+            ], 400);
+        }
+
+        $store->update([
+            'parent_store_id' => $validated['parent_store_id'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "'{$store->name}' is now linked to '{$parentStore->name}' for search",
+            'parent_store' => [
+                'id' => $parentStore->id,
+                'name' => $parentStore->name,
+                'search_url_template' => $parentStore->search_url_template,
+            ],
+        ]);
+    }
+
+    /**
+     * Unlink a store from its parent store.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function unlinkParentStore(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        if (!$store->parent_store_id) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store is not linked to a parent store',
+            ], 400);
+        }
+
+        $parentName = $store->parent?->name ?? 'Unknown';
+
+        $store->update([
+            'parent_store_id' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "'{$store->name}' has been unlinked from '{$parentName}'",
+        ]);
+    }
+
+    /**
+     * Auto-detect and configure a store as a subsidiary if applicable.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function autoConfigureSubsidiary(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+        $store = Store::find($storeId);
+        
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        $service = StoreAutoConfigService::forUser($userId);
+        $result = $service->configureAsSubsidiary($store);
+
+        if ($result['success']) {
+            return response()->json([
+                'success' => true,
+                'message' => $result['message'],
+                'parent_store' => $result['parent_store'] ? [
+                    'id' => $result['parent_store']->id,
+                    'name' => $result['parent_store']->name,
+                    'search_url_template' => $result['parent_store']->search_url_template,
+                ] : null,
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'error' => $result['message'],
+        ], 400);
+    }
+
+    /**
+     * Get suppressed stores with their details.
+     *
+     * @param int $userId
+     * @return array
+     */
+    private function getSuppressedStores(int $userId): array
+    {
+        $suppressedJson = Setting::get(Setting::SUPPRESSED_STORES, $userId);
+        $suppressedIds = $suppressedJson ? json_decode($suppressedJson, true) ?: [] : [];
+
+        if (empty($suppressedIds)) {
+            return [];
+        }
+
+        return Store::whereIn('id', $suppressedIds)
+            ->get()
+            ->map(fn(Store $store) => [
+                'id' => $store->id,
+                'name' => $store->name,
+                'domain' => $store->domain,
+                'category' => $store->category,
+            ])
+            ->toArray();
+    }
+
+    /**
      * Test email configuration by sending a test email.
      */
     public function testEmail(Request $request): RedirectResponse
@@ -379,8 +651,13 @@ class SettingController extends Controller
      */
     protected function getStoresWithPreferences(int $userId): array
     {
-        // Get all active stores
+        // Get suppressed store IDs for this user
+        $suppressedJson = Setting::get(Setting::SUPPRESSED_STORES, $userId);
+        $suppressedStoreIds = $suppressedJson ? json_decode($suppressedJson, true) ?: [] : [];
+
+        // Get all active stores with their parent stores
         $stores = Store::active()
+            ->with('parent')
             ->orderByDesc('default_priority')
             ->get();
 
@@ -389,29 +666,40 @@ class SettingController extends Controller
             ->get()
             ->keyBy('store_id');
 
-        return $stores->map(function (Store $store) use ($preferences) {
-            $preference = $preferences->get($store->id);
-            
-            return [
-                'id' => $store->id,
-                'name' => $store->name,
-                'slug' => $store->slug,
-                'domain' => $store->domain,
-                'logo_url' => $store->logo_url,
-                'category' => $store->category,
-                'is_default' => $store->is_default,
-                'is_local' => $store->is_local,
-                'has_search_template' => !empty($store->search_url_template),
-                'auto_configured' => $store->auto_configured ?? false,
-                'address' => $store->address,
-                'phone' => $store->phone,
-                'default_priority' => $store->default_priority,
-                // User preferences (or defaults)
-                'enabled' => $preference ? $preference->enabled : true,
-                'is_favorite' => $preference ? $preference->is_favorite : false,
-                'priority' => $preference ? $preference->priority : $store->default_priority,
-            ];
-        })->values()->toArray();
+        return $stores
+            ->filter(fn (Store $store) => !in_array($store->id, $suppressedStoreIds))
+            ->map(function (Store $store) use ($preferences) {
+                $preference = $preferences->get($store->id);
+                
+                // Get effective search URL template (may come from parent store)
+                $effectiveTemplate = $store->getEffectiveSearchUrlTemplate();
+                
+                return [
+                    'id' => $store->id,
+                    'name' => $store->name,
+                    'slug' => $store->slug,
+                    'domain' => $store->domain,
+                    'logo_url' => $store->logo_url,
+                    'category' => $store->category,
+                    'is_default' => $store->is_default,
+                    'is_local' => $store->is_local,
+                    'has_search_template' => !empty($effectiveTemplate),
+                    'search_url_template' => $store->search_url_template,
+                    'effective_search_url_template' => $effectiveTemplate,
+                    'auto_configured' => $store->auto_configured ?? false,
+                    'address' => $store->address,
+                    'phone' => $store->phone,
+                    'default_priority' => $store->default_priority,
+                    // Parent store info (for subsidiaries)
+                    'parent_store_id' => $store->parent_store_id,
+                    'parent_store_name' => $store->parent?->name,
+                    // User preferences (or defaults)
+                    'enabled' => $preference ? $preference->enabled : true,
+                    'is_favorite' => $preference ? $preference->is_favorite : false,
+                    'priority' => $preference ? $preference->priority : $store->default_priority,
+                    'location_id' => $preference?->location_id,
+                ];
+            })->values()->toArray();
     }
 
     /**
@@ -745,5 +1033,164 @@ class SettingController extends Controller
             'success' => true,
             'message' => 'Store preferences have been reset to defaults.',
         ]);
+    }
+
+    /**
+     * Trigger search URL discovery for a store.
+     *
+     * Creates a background job to detect the store's search URL template
+     * using Firecrawl and AI analysis.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function findSearchUrl(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Find the store
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        // Check if store has a domain/website
+        if (empty($store->domain)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store does not have a website domain configured',
+            ], 400);
+        }
+
+        // Check if Firecrawl is available
+        $autoConfigService = StoreAutoConfigService::forUser($userId);
+        if (!$autoConfigService->isAvailable()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Firecrawl API key not configured. Please add your API key in Settings.',
+            ], 400);
+        }
+
+        // Build website URL from domain
+        $websiteUrl = 'https://' . preg_replace('/^www\./', '', $store->domain);
+
+        // Check for existing pending/processing job for this store
+        $existingJob = AIJob::where('user_id', $userId)
+            ->where('type', AIJob::TYPE_STORE_AUTO_CONFIG)
+            ->whereIn('status', [AIJob::STATUS_PENDING, AIJob::STATUS_PROCESSING])
+            ->whereJsonContains('input_data->store_id', $storeId)
+            ->first();
+
+        if ($existingJob) {
+            return response()->json([
+                'success' => true,
+                'ai_job_id' => $existingJob->id,
+                'message' => 'URL discovery already in progress',
+                'already_running' => true,
+            ]);
+        }
+
+        // Create the AI job
+        $aiJob = AIJob::createJob(
+            userId: $userId,
+            type: AIJob::TYPE_STORE_AUTO_CONFIG,
+            inputData: [
+                'store_id' => $store->id,
+                'website_url' => $websiteUrl,
+                'store_name' => $store->name,
+            ],
+        );
+
+        // Dispatch the job (afterResponse ensures HTTP response is sent first)
+        dispatch(new StoreAutoConfigJob($aiJob->id, $userId))->afterResponse();
+
+        return response()->json([
+            'success' => true,
+            'ai_job_id' => $aiJob->id,
+            'message' => 'Search URL discovery started',
+        ], 201);
+    }
+
+    /**
+     * Find search URL using the expensive Firecrawl Agent (Tier 4).
+     * This should only be used after regular detection has failed.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function findSearchUrlWithAgent(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Find the store
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        // Check if store has a domain/website
+        if (empty($store->domain)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store does not have a website domain configured',
+            ], 400);
+        }
+
+        // Check if Firecrawl is available
+        $autoConfigService = StoreAutoConfigService::forUser($userId);
+        if (!$autoConfigService->isAvailable()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Firecrawl API key not configured. Please add your API key in Settings.',
+            ], 400);
+        }
+
+        // Build website URL from domain
+        $websiteUrl = 'https://' . preg_replace('/^www\./', '', $store->domain);
+
+        // Check for existing pending/processing job for this store
+        $existingJob = AIJob::where('user_id', $userId)
+            ->where('type', AIJob::TYPE_STORE_AUTO_CONFIG)
+            ->whereIn('status', [AIJob::STATUS_PENDING, AIJob::STATUS_PROCESSING])
+            ->whereJsonContains('input_data->store_id', $storeId)
+            ->first();
+
+        if ($existingJob) {
+            return response()->json([
+                'success' => true,
+                'ai_job_id' => $existingJob->id,
+                'message' => 'URL discovery already in progress',
+                'already_running' => true,
+            ]);
+        }
+
+        // Create the AI job with agent flag
+        $aiJob = AIJob::createJob(
+            userId: $userId,
+            type: AIJob::TYPE_STORE_AUTO_CONFIG,
+            inputData: [
+                'store_id' => $store->id,
+                'website_url' => $websiteUrl,
+                'store_name' => $store->name,
+                'use_agent' => true, // Flag to use expensive agent detection
+            ],
+        );
+
+        // Dispatch the job (afterResponse ensures HTTP response is sent first)
+        dispatch(new StoreAutoConfigJob($aiJob->id, $userId))->afterResponse();
+
+        return response()->json([
+            'success' => true,
+            'ai_job_id' => $aiJob->id,
+            'message' => 'Advanced URL discovery started (using Firecrawl Agent)',
+        ], 201);
     }
 }

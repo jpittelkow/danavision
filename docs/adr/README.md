@@ -20,6 +20,11 @@ An ADR is a document that captures an important architectural decision made alon
 | [008](008-e2e-testing-strategy.md) | E2E Testing Strategy with Playwright | Accepted | 2026-01-02 |
 | [009](009-ai-job-system.md) | AI Background Job System | Accepted | 2026-01-04 |
 | [010](010-serp-ai-aggregation.md) | SERP API + AI Aggregation Architecture | Accepted | 2026-01-04 |
+| [011](011-firecrawl-price-discovery.md) | Firecrawl Web Crawler Integration | Accepted | 2026-01-04 |
+| [012](012-store-registry-architecture.md) | Store Registry Architecture | Accepted | 2026-01-04 |
+| [013](013-nearby-store-discovery.md) | Nearby Store Discovery | Accepted | 2026-01-04 |
+| [014](014-tiered-search-url-detection.md) | Tiered Search URL Detection System | Accepted | 2026-01-04 |
+| [015](015-dashboard-redesign.md) | Dashboard Redesign and Navigation Updates | Accepted | 2026-01-05 |
 
 ## When to Write an ADR
 

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\AI\NearbyStoreDiscoveryJob;
+use App\Jobs\AI\StoreAutoConfigJob;
 use App\Models\AIJob;
 use App\Models\Setting;
 use App\Models\Store;
 use App\Models\UserStorePreference;
+use App\Services\Crawler\StoreAutoConfigService;
 use App\Services\Search\GooglePlacesService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -405,11 +407,32 @@ class NearbyStoreController extends Controller
                     'priority' => 70,
                 ]);
 
+                // Queue URL discovery as a background job if store has website
+                $website = $storeData['website'] ?? null;
+                $urlDiscoveryQueued = false;
+                if ($website && $domain) {
+                    $autoConfigService = StoreAutoConfigService::forUser($userId);
+                    if ($autoConfigService->isAvailable()) {
+                        $configJob = AIJob::createJob(
+                            userId: $userId,
+                            type: AIJob::TYPE_STORE_AUTO_CONFIG,
+                            inputData: [
+                                'store_id' => $store->id,
+                                'website_url' => $website,
+                                'store_name' => $storeName,
+                            ],
+                        );
+                        dispatch(new StoreAutoConfigJob($configJob->id, $userId))->afterResponse();
+                        $urlDiscoveryQueued = true;
+                    }
+                }
+
                 $added[] = [
                     'place_id' => $placeId,
                     'name' => $storeName,
                     'store_id' => $store->id,
                     'domain' => $domain,
+                    'url_discovery_queued' => $urlDiscoveryQueued,
                 ];
             } catch (\Exception $e) {
                 $errors[] = [
@@ -419,6 +442,9 @@ class NearbyStoreController extends Controller
                 ];
             }
         }
+
+        // Count how many URL discovery jobs were queued
+        $urlDiscoveryQueued = count(array_filter($added, fn($s) => $s['url_discovery_queued'] ?? false));
 
         return response()->json([
             'success' => true,
@@ -430,6 +456,7 @@ class NearbyStoreController extends Controller
                 'added' => count($added),
                 'skipped' => count($skipped),
                 'errors' => count($errors),
+                'url_discovery_queued' => $urlDiscoveryQueued,
             ],
         ]);
     }

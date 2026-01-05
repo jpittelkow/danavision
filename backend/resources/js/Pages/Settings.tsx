@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/Components/ui/dialog';
+import { ConfirmDialog } from '@/Components/ConfirmDialog';
 import {
   User,
   Bell,
@@ -93,6 +94,13 @@ interface PromptData {
   default_text: string;
 }
 
+interface SuppressedStore {
+  id: number;
+  name: string;
+  domain: string;
+  category: string;
+}
+
 interface Props extends PageProps {
   settings: SettingsType | null;
   providers: AIProviderData[];
@@ -107,6 +115,7 @@ interface Props extends PageProps {
   }>;
   prompts: Record<string, PromptData>;
   stores: Store[];
+  suppressedStores: SuppressedStore[];
   storeCategories: Record<StoreCategory, string>;
 }
 
@@ -122,6 +131,7 @@ function ProviderCard({ provider, onUpdate }: { provider: AIProviderData; onUpda
   const [showKey, setShowKey] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data, setData, patch, processing } = useForm({
     api_key: '',
@@ -156,12 +166,11 @@ function ProviderCard({ provider, onUpdate }: { provider: AIProviderData; onUpda
   };
 
   const handleDelete = () => {
-    if (confirm(`Are you sure you want to remove ${provider.display_name}?`)) {
-      router.delete(`/ai-providers/${provider.id}`, {
-        preserveScroll: true,
-        onFinish: onUpdate,
-      });
-    }
+    router.delete(`/ai-providers/${provider.id}`, {
+      preserveScroll: true,
+      onFinish: onUpdate,
+    });
+    setShowDeleteConfirm(false);
   };
 
   const handleSave = (e: FormEvent) => {
@@ -373,7 +382,7 @@ function ProviderCard({ provider, onUpdate }: { provider: AIProviderData; onUpda
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                   className="text-destructive hover:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -383,6 +392,16 @@ function ProviderCard({ provider, onUpdate }: { provider: AIProviderData; onUpda
           </>
         )}
       </CardContent>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Remove AI Provider"
+        description={`Are you sure you want to remove ${provider.display_name}?`}
+        confirmLabel="Remove"
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
     </Card>
   );
 }
@@ -557,6 +576,7 @@ function PromptEditor({ prompt, onUpdate }: { prompt: PromptData; onUpdate: () =
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [editedText, setEditedText] = useState(prompt.prompt_text);
 
   const handleSave = () => {
@@ -575,9 +595,7 @@ function PromptEditor({ prompt, onUpdate }: { prompt: PromptData; onUpdate: () =
   };
 
   const handleReset = () => {
-    if (!confirm('Are you sure you want to reset this prompt to the default?')) {
-      return;
-    }
+    setShowResetConfirm(false);
     setIsResetting(true);
     router.post('/settings/ai/prompts/reset', {
       prompt_type: prompt.type,
@@ -624,7 +642,7 @@ function PromptEditor({ prompt, onUpdate }: { prompt: PromptData; onUpdate: () =
             <div className="flex justify-between">
               <Button
                 variant="outline"
-                onClick={handleReset}
+                onClick={() => setShowResetConfirm(true)}
                 disabled={isResetting || !prompt.is_customized}
                 className="gap-2"
               >
@@ -665,11 +683,21 @@ function PromptEditor({ prompt, onUpdate }: { prompt: PromptData; onUpdate: () =
           </div>
         )}
       </CardContent>
+
+      <ConfirmDialog
+        open={showResetConfirm}
+        onOpenChange={setShowResetConfirm}
+        title="Reset Prompt"
+        description="Are you sure you want to reset this prompt to the default? Your custom changes will be lost."
+        confirmLabel="Reset"
+        variant="destructive"
+        onConfirm={handleReset}
+      />
     </Card>
   );
 }
 
-export default function Settings({ auth, settings, providers, availableProviders, prompts, stores, storeCategories, flash }: Props) {
+export default function Settings({ auth, settings, providers, availableProviders, prompts, stores, suppressedStores, storeCategories, flash }: Props) {
   const [showMailPassword, setShowMailPassword] = useState(false);
   const [showFirecrawlKey, setShowFirecrawlKey] = useState(false);
   const [showGooglePlacesKey, setShowGooglePlacesKey] = useState(false);
@@ -705,8 +733,17 @@ export default function Settings({ auth, settings, providers, availableProviders
     google_places_api_key: settings?.google_places_api_key || '',
   });
 
-  // State for adding new suppressed vendor
-  const [newVendor, setNewVendor] = useState('');
+  // Tab navigation state - read initial value from URL hash
+  const [activeTab, setActiveTab] = useState(() => {
+    const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : '';
+    return ['general', 'configurations', 'stores', 'ai', 'jobs', 'logs'].includes(hash) 
+      ? hash : 'general';
+  });
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    window.location.hash = value;
+  };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -731,19 +768,7 @@ export default function Settings({ auth, settings, providers, availableProviders
         <h1 className="text-3xl font-bold text-foreground mb-2">Settings</h1>
         <p className="text-muted-foreground mb-8">Manage your account, configurations, and AI providers</p>
 
-        {/* Flash Messages */}
-        {flash?.success && (
-          <div className="bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-700 text-green-700 dark:text-green-300 px-4 py-3 rounded-xl mb-6">
-            {flash.success}
-          </div>
-        )}
-        {flash?.error && (
-          <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl mb-6">
-            {flash.error}
-          </div>
-        )}
-
-        <Tabs defaultValue="general" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="general" className="gap-2">
               <User className="h-4 w-4" />
@@ -927,31 +952,37 @@ export default function Settings({ auth, settings, providers, availableProviders
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="mail_driver">Mail Driver</Label>
-                      <select
-                        id="mail_driver"
+                      <Select
                         value={data.mail_driver}
-                        onChange={(e) => setData('mail_driver', e.target.value)}
-                        className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        onValueChange={(value) => setData('mail_driver', value)}
                       >
-                        <option value="smtp">SMTP</option>
-                        <option value="sendmail">Sendmail</option>
-                        <option value="mailgun">Mailgun</option>
-                        <option value="ses">Amazon SES</option>
-                        <option value="postmark">Postmark</option>
-                      </select>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select driver" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="smtp">SMTP</SelectItem>
+                          <SelectItem value="sendmail">Sendmail</SelectItem>
+                          <SelectItem value="mailgun">Mailgun</SelectItem>
+                          <SelectItem value="ses">Amazon SES</SelectItem>
+                          <SelectItem value="postmark">Postmark</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <Label htmlFor="mail_encryption">Encryption</Label>
-                      <select
-                        id="mail_encryption"
+                      <Select
                         value={data.mail_encryption}
-                        onChange={(e) => setData('mail_encryption', e.target.value)}
-                        className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        onValueChange={(value) => setData('mail_encryption', value)}
                       >
-                        <option value="tls">TLS</option>
-                        <option value="ssl">SSL</option>
-                        <option value="none">None</option>
-                      </select>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Select encryption" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="tls">TLS</SelectItem>
+                          <SelectItem value="ssl">SSL</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -1245,84 +1276,6 @@ export default function Settings({ auth, settings, providers, availableProviders
                 </CardContent>
               </Card>
 
-              {/* Vendor Suppression */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Ban className="h-5 w-5" />
-                    Suppressed Vendors
-                  </CardTitle>
-                  <CardDescription>
-                    Hide specific vendors from price results and comparisons
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex gap-2">
-                    <Input
-                      type="text"
-                      value={newVendor}
-                      onChange={(e) => setNewVendor(e.target.value)}
-                      placeholder="Enter vendor name (e.g., Amazon, eBay)"
-                      className="flex-1"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (newVendor.trim() && !data.suppressed_vendors.includes(newVendor.trim())) {
-                            setData('suppressed_vendors', [...data.suppressed_vendors, newVendor.trim()]);
-                            setNewVendor('');
-                          }
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        if (newVendor.trim() && !data.suppressed_vendors.includes(newVendor.trim())) {
-                          setData('suppressed_vendors', [...data.suppressed_vendors, newVendor.trim()]);
-                          setNewVendor('');
-                        }
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  
-                  {data.suppressed_vendors.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {data.suppressed_vendors.map((vendor, index) => (
-                        <Badge 
-                          key={index} 
-                          variant="secondary" 
-                          className="flex items-center gap-1 px-3 py-1"
-                        >
-                          <Store className="h-3 w-3" />
-                          {vendor}
-                          <button
-                            type="button"
-                            className="ml-1 hover:text-destructive"
-                            onClick={() => {
-                              setData('suppressed_vendors', data.suppressed_vendors.filter((_, i) => i !== index));
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No vendors suppressed. Add vendor names above to hide them from results.
-                    </p>
-                  )}
-                  
-                  <p className="text-xs text-muted-foreground">
-                    Suppressed vendors will be hidden from all price comparisons, search results, and price history.
-                    This is useful for excluding vendors you don't want to purchase from.
-                  </p>
-                </CardContent>
-              </Card>
-
               {/* Daily Price Check */}
               <Card>
                 <CardHeader>
@@ -1367,7 +1320,10 @@ export default function Settings({ auth, settings, providers, availableProviders
             <StorePreferences
               stores={stores}
               storeCategories={storeCategories}
-              onUpdate={() => router.reload({ only: ['stores'] })}
+              suppressedVendors={data.suppressed_vendors}
+              onSuppressedVendorsChange={(vendors) => setData('suppressed_vendors', vendors)}
+              suppressedStores={suppressedStores}
+              onUpdate={() => router.reload({ only: ['stores', 'suppressedStores'] })}
             />
           </TabsContent>
 

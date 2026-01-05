@@ -14,12 +14,15 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\ShoppingListController;
 use App\Http\Controllers\SmartAddController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
+|
+| Health check is handled by nginx directly at /health (see docker/default.conf)
+| This is faster and works even if PHP-FPM has issues.
+|
 */
 
 // Image proxy (public, no auth required)
@@ -60,6 +63,7 @@ Route::middleware('auth')->group(function () {
     Route::post('lists/{list}/refresh', [ShoppingListController::class, 'refresh'])->name('lists.refresh');
 
     // List Items
+    Route::get('items', [ListItemController::class, 'index'])->name('items.index');
     Route::post('lists/{list}/items', [ListItemController::class, 'store'])->name('lists.items.store');
     Route::get('items/{item}', [ListItemController::class, 'show'])->name('items.show');
     Route::patch('items/{item}', [ListItemController::class, 'update'])->name('items.update');
@@ -89,6 +93,14 @@ Route::middleware('auth')->group(function () {
     Route::put('api/stores/{store}', [SettingController::class, 'updateStore'])->name('stores.update');
     Route::delete('api/stores/{store}', [SettingController::class, 'deleteStore'])->name('stores.destroy');
     Route::post('api/stores/reset', [SettingController::class, 'resetStorePreferences'])->name('stores.reset');
+    Route::post('api/stores/{store}/find-search-url', [SettingController::class, 'findSearchUrl'])->name('stores.find-search-url');
+    Route::post('api/stores/{store}/find-search-url-agent', [SettingController::class, 'findSearchUrlWithAgent'])->name('stores.find-search-url-agent');
+    Route::post('api/stores/{store}/suppress', [SettingController::class, 'suppressStore'])->name('stores.suppress');
+    Route::post('api/stores/{store}/restore', [SettingController::class, 'restoreStore'])->name('stores.restore');
+    Route::post('api/stores/{store}/location', [SettingController::class, 'setStoreLocationId'])->name('stores.location');
+    Route::post('api/stores/{store}/parent', [SettingController::class, 'linkParentStore'])->name('stores.parent.link');
+    Route::delete('api/stores/{store}/parent', [SettingController::class, 'unlinkParentStore'])->name('stores.parent.unlink');
+    Route::post('api/stores/{store}/auto-configure-subsidiary', [SettingController::class, 'autoConfigureSubsidiary'])->name('stores.auto-configure-subsidiary');
 
     // Nearby Store Discovery
     Route::get('api/stores/nearby/availability', [NearbyStoreController::class, 'checkAvailability'])->name('stores.nearby.availability');

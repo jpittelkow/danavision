@@ -4,6 +4,7 @@ import { PageProps } from '@/types';
 import { Button } from '@/Components/ui/button';
 import { Input } from '@/Components/ui/input';
 import { Label } from '@/Components/ui/label';
+import { Checkbox } from '@/Components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Eye, EyeOff } from 'lucide-react';
 
@@ -98,13 +99,10 @@ export default function Login({}: PageProps) {
 
                 {/* Remember Me */}
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     id="remember"
-                    name="remember"
                     checked={data.remember}
-                    onChange={(e) => setData('remember', e.target.checked)}
-                    className="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                    onCheckedChange={(checked) => setData('remember', !!checked)}
                   />
                   <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
                     Remember me

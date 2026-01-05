@@ -17,6 +17,17 @@
             <directory>app</directory>
         </include>
     </source>
+    <!--
+        CRITICAL: Database Safety Configuration
+        
+        DB_DATABASE=":memory:" ensures tests use an in-memory SQLite database,
+        NOT the production database file. This prevents accidental data loss.
+        
+        Additional safeguards are in tests/TestCase.php:
+        - Blocks tests in production environment
+        - Blocks tests if database contains user data
+        - Requires :memory: or 'test' in database filename
+    -->
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>

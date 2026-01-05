@@ -53,10 +53,12 @@ jobs:
           php artisan key:generate
           touch database/database.sqlite
           sed -i 's|DB_DATABASE=.*|DB_DATABASE=database/database.sqlite|' .env
+          sed -i 's|APP_URL=.*|APP_URL=http://127.0.0.1:8080|' .env
+          sed -i 's|APP_ENV=.*|APP_ENV=production|' .env
           mkdir -p tests/Unit
           php artisan migrate --force
           php artisan db:seed --force
-          # Create .env.testing for test environment
+          # Create .env.testing for PHP unit tests (uses in-memory SQLite)
           cp .env .env.testing
           sed -i 's|APP_ENV=.*|APP_ENV=testing|' .env.testing
           sed -i 's|DB_DATABASE=.*|DB_DATABASE=:memory:|' .env.testing
@@ -69,13 +71,16 @@ jobs:
 
       - name: Start Laravel server for E2E tests
         run: |
-          php artisan serve --host=127.0.0.1 --port=8080 &
-          sleep 5
+          php artisan serve --host=127.0.0.1 --port=8080 > /dev/null 2>&1 &
+          echo "Waiting for server to start..."
+          timeout 30 bash -c 'until curl -sf http://127.0.0.1:8080/login > /dev/null; do sleep 1; done'
+          echo "Server is ready!"
 
       - name: Run E2E tests
         run: npm run test:e2e -- --project=chromium
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:8080
+          CI: true
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

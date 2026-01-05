@@ -9,10 +9,70 @@ DanaVision uses two testing frameworks:
 
 All new features MUST have both backend and E2E tests before being considered complete.
 
+---
+
+## ⚠️ CRITICAL: Database Safety
+
+Tests use `RefreshDatabase` which **wipes and recreates all database tables**. Multiple safeguards prevent tests from accidentally running against the production database:
+
+### Safeguards in Place
+
+1. **phpunit.xml**: Sets `DB_DATABASE=:memory:` to use in-memory SQLite
+2. **TestCase.php**: Runtime checks that block tests **BEFORE** migrations run if:
+   - Environment is `production`
+   - Database is not `:memory:` or a test-specific file
+3. **Safe test runner script**: `./scripts/run-tests.sh` ensures correct environment variables
+
+### Running Tests in Docker (REQUIRED METHOD)
+
+**ALWAYS use the safe test runner when running tests in Docker:**
+
+```bash
+# ✅ CORRECT - Use the safe test runner
+docker compose exec danavision ./scripts/run-tests.sh
+
+# ✅ Run specific tests
+docker compose exec danavision ./scripts/run-tests.sh tests/Feature/DashboardTest.php
+
+# ✅ Run with filter
+docker compose exec danavision ./scripts/run-tests.sh --filter="dashboard"
+
+# ❌ WRONG - May use production database!
+docker compose exec danavision ./vendor/bin/pest
+```
+
+The safe test runner explicitly sets `DB_DATABASE=:memory:` to override Docker environment variables.
+
+### If Tests Fail with "SAFETY STOP"
+
+This means the safeguards detected tests attempting to use the production database:
+
+```
+SAFETY STOP: Tests attempted to use database '/var/www/html/data/database.sqlite'.
+Tests MUST use DB_DATABASE=:memory: to prevent data loss.
+```
+
+**Solution**: Use the safe test runner:
+```bash
+docker compose exec danavision ./scripts/run-tests.sh
+```
+
+### Best Practices
+
+1. **Always use `./scripts/run-tests.sh`** when running tests in Docker
+2. **Never modify phpunit.xml** to point to the production database
+3. **Use the backup script** regularly: `./scripts/db-backup.sh`
+4. **Backup before testing** in a new environment
+
+---
+
 ## Quick Start
 
 ```bash
-# Run backend tests
+# Run backend tests (in Docker - RECOMMENDED)
+docker compose exec danavision ./scripts/run-tests.sh
+
+# Run backend tests (outside Docker)
 cd backend && ./vendor/bin/pest
 
 # Run E2E tests (requires running app at localhost:8080)
@@ -424,14 +484,21 @@ After a CI run, download artifacts from the GitHub Actions run page:
 ### Running Tests Locally (Docker)
 
 ```bash
-# Run PHP tests in Docker
-docker exec danavision php artisan test
+# Run PHP tests in Docker - ALWAYS use the safe test runner!
+docker compose exec danavision ./scripts/run-tests.sh
+
+# Run specific test file
+docker compose exec danavision ./scripts/run-tests.sh tests/Feature/DashboardTest.php
 
 # For E2E tests, you need:
 # 1. Vite dev server running (npm run dev)
 # 2. App accessible at localhost:8080
 cd backend && npm run test:e2e
 ```
+
+**WARNING**: Do NOT run `docker compose exec danavision ./vendor/bin/pest` directly!
+The Docker environment variables set `DB_DATABASE` to the production database path.
+Always use `./scripts/run-tests.sh` which overrides these with safe values.
 
 ### Test Environment Setup
 
@@ -461,9 +528,16 @@ php artisan migrate:fresh --env=testing
 **Tests show .env file warnings:**
 The `.env.testing` file in `backend/` is required for tests. If running tests in Docker:
 ```bash
-docker exec danavision ./vendor/bin/pest
+docker compose exec danavision ./scripts/run-tests.sh
 ```
-The container automatically creates a minimal `.env` file if missing.
+The safe test runner exports the correct environment variables. The container automatically creates a minimal `.env` file if missing.
+
+**Tests fail with SAFETY STOP:**
+The tests detected an attempt to use the production database. Always use the safe test runner:
+```bash
+docker compose exec danavision ./scripts/run-tests.sh
+```
+Never run `./vendor/bin/pest` directly in Docker - the Docker environment variables override phpunit.xml settings.
 
 ### E2E Tests
 

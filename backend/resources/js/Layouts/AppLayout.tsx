@@ -3,10 +3,13 @@ import { Link, router } from '@inertiajs/react';
 import { PageProps } from '@/types';
 import { ThemeToggle } from '@/Components/ThemeToggle';
 import { JobNotifications } from '@/Components/JobNotifications';
+import { Avatar, AvatarFallback } from '@/Components/ui/avatar';
+import { Button } from '@/Components/ui/button';
+import { useFlashToast } from '@/hooks/useFlashToast';
 import {
   LayoutDashboard,
   ListTodo,
-  Search,
+  Package,
   Settings,
   LogOut,
   Menu,
@@ -22,12 +25,14 @@ const navigation = [
   { name: 'Smart Add', href: '/smart-add', icon: Sparkles, primary: true },
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Lists', href: '/lists', icon: ListTodo },
-  { name: 'Search', href: '/search', icon: Search },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Items', href: '/items', icon: Package },
 ];
 
-export default function AppLayout({ children, auth, flash }: LayoutProps) {
+export default function AppLayout({ children, auth }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  // Show flash messages as toasts
+  useFlashToast();
 
   const handleLogout = () => {
     router.post('/logout');
@@ -114,24 +119,45 @@ export default function AppLayout({ children, auth, flash }: LayoutProps) {
           })}
         </nav>
 
-        {/* User section */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
-          <div className="flex items-center gap-3 px-2 mb-3">
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-primary-foreground font-bold">
-              {auth.user?.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-primary-foreground font-medium truncate">{auth.user?.name}</p>
-              <p className="text-primary-foreground/60 text-sm truncate">{auth.user?.email}</p>
-            </div>
+        {/* Bottom section: Settings + User */}
+        <div className="absolute bottom-0 left-0 right-0">
+          {/* Settings */}
+          <div className="px-3 pb-2">
+            <Link
+              href="/settings"
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-primary-foreground/90 transition-colors ${
+                isActive('/settings')
+                  ? 'bg-white/20 text-primary-foreground'
+                  : 'hover:bg-white/10'
+              }`}
+            >
+              <Settings className="w-5 h-5" />
+              <span className="font-medium">Settings</span>
+            </Link>
           </div>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-4 py-2 text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Sign Out</span>
-          </button>
+
+          {/* User section */}
+          <div className="p-4 border-t border-white/10">
+            <div className="flex items-center gap-3 px-2 mb-3">
+              <Avatar className="bg-white/20">
+                <AvatarFallback className="bg-white/20 text-primary-foreground font-bold">
+                  {auth.user?.name.charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-primary-foreground font-medium truncate">{auth.user?.name}</p>
+                <p className="text-primary-foreground/60 text-sm truncate">{auth.user?.email}</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              className="w-full justify-start gap-2 text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sign Out</span>
+            </Button>
+          </div>
         </div>
       </aside>
 
@@ -161,15 +187,6 @@ export default function AppLayout({ children, auth, flash }: LayoutProps) {
             </div>
           </div>
         </header>
-
-        {/* Flash Messages */}
-        {flash?.message && (
-          <div className="mx-4 mt-4">
-            <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-300 px-4 py-3 rounded-xl">
-              {flash.message}
-            </div>
-          </div>
-        )}
 
         {/* Page content */}
         <main>{children}</main>

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
@@ -63,6 +64,7 @@ class Store extends Model
         'name',
         'slug',
         'domain',
+        'parent_store_id',
         'google_place_id',
         'latitude',
         'longitude',
@@ -132,6 +134,38 @@ class Store extends Model
     }
 
     /**
+     * Get the parent store (for subsidiary stores).
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Store::class, 'parent_store_id');
+    }
+
+    /**
+     * Get subsidiary stores that use this store's search functionality.
+     */
+    public function subsidiaries(): HasMany
+    {
+        return $this->hasMany(Store::class, 'parent_store_id');
+    }
+
+    /**
+     * Check if this store is a subsidiary of another store.
+     */
+    public function isSubsidiary(): bool
+    {
+        return $this->parent_store_id !== null;
+    }
+
+    /**
+     * Check if this store has subsidiaries.
+     */
+    public function hasSubsidiaries(): bool
+    {
+        return $this->subsidiaries()->exists();
+    }
+
+    /**
      * Scope to only active stores.
      */
     public function scopeActive($query)
@@ -166,24 +200,53 @@ class Store extends Model
     /**
      * Generate a search URL for the given product query.
      *
+     * Supports the following placeholders in templates:
+     * - {query} / {QUERY} - The search query (URL encoded)
+     * - {zip} / {ZIP} - User's zip code
+     * - {store_id} / {STORE_ID} - Store-specific location ID
+     * - {lat} / {lng} - User's coordinates
+     *
      * @param string $query The product search query
+     * @param array $context Optional location context with keys: zip, store_id, lat, lng
      * @return string|null The generated search URL or null if no template
      */
-    public function generateSearchUrl(string $query): ?string
+    public function generateSearchUrl(string $query, array $context = []): ?string
     {
-        if (empty($this->search_url_template)) {
+        // Use parent store's template if this store doesn't have one (for subsidiaries)
+        $template = $this->search_url_template ?? $this->parent?->search_url_template;
+
+        if (empty($template)) {
             return null;
         }
 
         // URL encode the query
         $encodedQuery = urlencode($query);
 
-        // Replace placeholders in the template
-        return str_replace(
-            ['{query}', '{QUERY}'],
-            [$encodedQuery, $encodedQuery],
-            $this->search_url_template
-        );
+        // Build replacement map for all supported placeholders
+        $replacements = [
+            '{query}' => $encodedQuery,
+            '{QUERY}' => $encodedQuery,
+            '{zip}' => $context['zip'] ?? '',
+            '{ZIP}' => $context['zip'] ?? '',
+            '{store_id}' => $context['store_id'] ?? '',
+            '{STORE_ID}' => $context['store_id'] ?? '',
+            '{lat}' => $context['lat'] ?? '',
+            '{LAT}' => $context['lat'] ?? '',
+            '{lng}' => $context['lng'] ?? '',
+            '{LNG}' => $context['lng'] ?? '',
+        ];
+
+        return str_replace(array_keys($replacements), array_values($replacements), $template);
+    }
+
+    /**
+     * Get the effective search URL template (may come from parent store).
+     *
+     * @return string|null
+     */
+    public function getEffectiveSearchUrlTemplate(): ?string
+    {
+        return $this->search_url_template ?? $this->parent?->search_url_template;
     }
 
     /**
