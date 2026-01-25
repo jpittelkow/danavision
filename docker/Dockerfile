@@ -1,58 +1,66 @@
 # docker/Dockerfile
-FROM php:8.3-fpm-alpine
+FROM php:8.3-fpm
 
 # Install dependencies including Node.js, Python, and Chromium for Crawl4AI
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
     supervisor \
-    sqlite \
-    sqlite-dev \
+    sqlite3 \
+    libsqlite3-dev \
     libzip-dev \
     zip \
     unzip \
     git \
     curl \
-    nodejs \
-    npm \
     # Python for Crawl4AI service
     python3 \
-    py3-pip \
-    # Chromium for Playwright/Crawl4AI web scraping
-    chromium \
-    chromium-chromedriver \
-    # Chromium dependencies
-    nss \
-    freetype \
-    harfbuzz \
+    python3-pip \
+    python3-venv \
+    # Chromium dependencies for Playwright
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
     ca-certificates \
-    ttf-freefont \
-    && docker-php-ext-install pdo pdo_sqlite zip bcmath
+    fonts-freefont-ttf \
+    && docker-php-ext-install pdo pdo_sqlite zip bcmath \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set Playwright/Crawl4AI to use system Chromium
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
-ENV CHROMIUM_PATH=/usr/bin/chromium-browser
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Skip Playwright browser download - we'll install it separately
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Install Crawl4AI Python service
-# Note: We skip crawl4ai-setup as it tries to download Playwright browsers.
-# We use system Chromium instead (already installed above).
-# Install build dependencies for Python packages, then clean up after install
 COPY docker/crawl4ai/requirements.txt /opt/crawl4ai/requirements.txt
-RUN apk add --no-cache --virtual .build-deps \
-        gcc \
-        musl-dev \
-        python3-dev \
-        libffi-dev \
-    && pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt \
-    && apk del .build-deps
+RUN pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt \
+    && playwright install chromium \
+    && playwright install-deps chromium
 COPY docker/crawl4ai/ /opt/crawl4ai/
 
-# Configure Nginx
+# Configure Nginx (Debian uses conf.d instead of http.d)
 COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/default.conf /etc/nginx/http.d/default.conf
+COPY docker/default.conf /etc/nginx/conf.d/default.conf
+RUN rm -f /etc/nginx/sites-enabled/default
 
 # Configure Supervisor
 COPY docker/supervisord.conf /etc/supervisord.conf
