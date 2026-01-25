@@ -44,18 +44,19 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Skip Playwright browser download - we'll install it separately
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Install Crawl4AI Python service
+# Install Crawl4AI Python service in a virtual environment
 COPY docker/crawl4ai/requirements.txt /opt/crawl4ai/requirements.txt
-RUN pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt \
-    && playwright install chromium \
-    && playwright install-deps chromium
+RUN python3 -m venv /opt/crawl4ai/venv \
+    && /opt/crawl4ai/venv/bin/pip install --no-cache-dir -r /opt/crawl4ai/requirements.txt \
+    && /opt/crawl4ai/venv/bin/playwright install chromium \
+    && /opt/crawl4ai/venv/bin/playwright install-deps chromium
 COPY docker/crawl4ai/ /opt/crawl4ai/
+
+# Set up crawl4ai venv path for the service
+ENV CRAWL4AI_PYTHON=/opt/crawl4ai/venv/bin/python
 
 # Configure Nginx (Debian uses conf.d instead of http.d)
 COPY docker/nginx.conf /etc/nginx/nginx.conf
