@@ -25,6 +25,21 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 logger = logging.getLogger("crawl4ai.service")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
+
+def _markdown_str(md) -> str | None:
+    """Normalize Crawl4AI markdown to string. Can be str or MarkdownGenerationResult (has raw_markdown)."""
+    if md is None:
+        return None
+    if isinstance(md, str):
+        return md
+    return getattr(md, "raw_markdown", None)
+
+
+def _title_from_result(result) -> str | None:
+    """CrawlResult has no .title; page title is in result.metadata['title']."""
+    return (getattr(result, "metadata", None) or {}).get("title")
+
+
 # Configuration from environment
 MAX_CONCURRENT_SCRAPES = int(environ.get('CRAWL4AI_MAX_CONCURRENT', '3'))
 
@@ -135,7 +150,9 @@ async def scrape_url(request: ScrapeRequest):
             )
 
         duration_ms = int((time.perf_counter() - start) * 1000)
-        md_len = len(result.markdown) if result.markdown else 0
+        md = _markdown_str(result.markdown)
+        md_len = len(md) if md else 0
+        title = _title_from_result(result)
 
         if not result.success:
             logger.warning(
@@ -149,13 +166,13 @@ async def scrape_url(request: ScrapeRequest):
 
         logger.info(
             "Scrape completed: url=%s success=true markdown_len=%d title=%s duration_ms=%d",
-            request.url, md_len, result.title or "(none)", duration_ms
+            request.url, md_len, title or "(none)", duration_ms
         )
         return ScrapeResponse(
             success=True,
-            markdown=result.markdown,
+            markdown=md,
             html=result.html,
-            title=result.title
+            title=title
         )
     except Exception as e:
         duration_ms = int((time.perf_counter() - start) * 1000)
@@ -204,7 +221,8 @@ async def batch_scrape(request: BatchScrapeRequest):
                 logger.info("Batch scraping URL: %s", url)
                 result = await crawler.arun(url=url, config=run_config)
                 duration_ms = int((time.perf_counter() - start) * 1000)
-                md_len = len(result.markdown) if result.markdown else 0
+                md = _markdown_str(result.markdown)
+                md_len = len(md) if md else 0
 
                 if not result.success:
                     logger.warning(
@@ -222,9 +240,9 @@ async def batch_scrape(request: BatchScrapeRequest):
                 )
                 return ScrapeResponse(
                     success=True,
-                    markdown=result.markdown,
+                    markdown=md,
                     html=result.html,
-                    title=result.title
+                    title=_title_from_result(result)
                 )
             except Exception as e:
                 duration_ms = int((time.perf_counter() - start) * 1000)
