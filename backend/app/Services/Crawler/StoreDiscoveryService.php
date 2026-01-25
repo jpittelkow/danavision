@@ -18,7 +18,10 @@ use Illuminate\Support\Facades\Log;
  *
  * Tiers:
  * 1. Tier 1: URL templates for known stores + Crawl4AI scraping (free scraping)
- * 2. Tier 2: Web search + Crawl4AI scraping for discovery (free scraping)
+ * 2. Tier 2: Two-step discovery for major retailers:
+ *    - Step 1: Scrape search pages, AI extracts product URLs only
+ *    - Step 2: Scrape product pages, AI extracts prices
+ *    Product URLs are always stored for later refresh (refresh uses stored URLs only, no search).
  *
  * Cost: Only LLM API calls for price extraction (~$0.002/extraction with gpt-4o-mini)
  *
@@ -581,20 +584,21 @@ PROMPT;
 
         $logger?->info("Searching " . count($storeNames) . " major retailers: " . implode(', ', $storeNames));
 
-        // Scrape all retailer search pages
+        // Scrape all retailer search pages (step 1a)
         $scrapedPages = $this->crawl4aiService->scrapeUrls($urls, ['debug' => $debug]);
 
-        $results = [];
+        // Step 1b: Extract product URLs from each search results page
+        $toScrape = [];
         foreach ($scrapedPages as $index => $page) {
             $storeName = $storeNames[$index] ?? 'Unknown';
-            $url = $urls[$index] ?? null;
+            $searchUrl = $urls[$index] ?? '';
 
             if (!($page['success'] ?? false)) {
-                Log::warning('StoreDiscoveryService: Tier 2 scrape failed', [
+                Log::warning('StoreDiscoveryService: Tier 2 search scrape failed', [
                     'store' => $storeName,
                     'error' => $page['error'] ?? 'Unknown error',
                 ]);
-                $logger?->logUrlScrape($url ?? $storeName, false, $page['error'] ?? 'Unknown error');
+                $logger?->logUrlScrape($searchUrl ?: $storeName, false, $page['error'] ?? 'Unknown error');
                 continue;
             }
 
@@ -604,29 +608,83 @@ PROMPT;
                 continue;
             }
 
-            $logger?->logUrlScrape($url ?? $storeName, true);
-            $logger?->debug("Extracting best match from {$storeName} search results...");
+            $logger?->logUrlScrape($searchUrl ?: $storeName, true);
+            $logger?->debug("Extracting product URLs from {$storeName} search results...");
 
-            // Extract price from search results page
-            $priceData = $this->extractPriceFromSearchResults($markdown, $productName, $storeName, $debug);
-            
+            $products = $this->extractProductUrlsFromSearchResults($markdown, $productName, $storeName, $debug);
+            $first = $products[0] ?? null;
+
+            if ($first && !empty($first['url'])) {
+                $resolvedUrl = $this->resolveProductUrl($first['url'], $searchUrl);
+                $toScrape[] = ['url' => $resolvedUrl, 'store_name' => $storeName, 'item_name' => $first['name']];
+                $logger?->debug("Found product URL at {$storeName}, will scrape product page");
+            } else {
+                $logger?->warning("No matching product URL found at {$storeName}");
+            }
+        }
+
+        if (empty($toScrape)) {
+            Log::info('StoreDiscoveryService: Tier 2 no product URLs extracted');
+            $successCount = count(array_filter($scrapedPages, fn($p) => $p['success'] ?? false));
+            $logger?->info("Tier 2: {$successCount}/" . count($storeNames) . " retailers scraped, 0 prices found");
+            return CrawlResult::success([], 'tier2_crawl4ai');
+        }
+
+        // Step 2a: Batch scrape product pages
+        $productUrls = array_column($toScrape, 'url');
+        $logger?->info("Scraping " . count($productUrls) . " product pages...");
+        $productPages = $this->crawl4aiService->scrapeUrls($productUrls, ['debug' => $debug]);
+
+        // Step 2b: Extract prices from product pages (always set product_url for refresh)
+        $results = [];
+        foreach ($productPages as $idx => $page) {
+            $entry = $toScrape[$idx] ?? null;
+            if (!$entry) {
+                continue;
+            }
+
+            $productUrl = $entry['url'];
+            $storeName = $entry['store_name'];
+
+            if (!($page['success'] ?? false)) {
+                Log::warning('StoreDiscoveryService: Tier 2 product page scrape failed', [
+                    'store' => $storeName,
+                    'url' => $productUrl,
+                    'error' => $page['error'] ?? 'Unknown error',
+                ]);
+                $logger?->logUrlScrape($productUrl, false, $page['error'] ?? 'Unknown error');
+                continue;
+            }
+
+            $markdown = $page['markdown'] ?? '';
+            if (empty($markdown)) {
+                $logger?->warning("Empty content from product page at {$storeName}");
+                continue;
+            }
+
+            $logger?->logUrlScrape($productUrl, true);
+            $logger?->debug("Extracting price from {$storeName} product page...");
+
+            $priceData = $this->extractPriceFromMarkdown($markdown, $productName, $storeName, $debug);
+
             if ($priceData && isset($priceData['price']) && $priceData['price'] > 0) {
                 $results[] = [
                     'store_name' => $storeName,
-                    'item_name' => $priceData['item_name'] ?? $productName,
+                    'item_name' => $priceData['item_name'] ?? $entry['item_name'] ?? $productName,
                     'price' => (float) $priceData['price'],
                     'stock_status' => $priceData['stock_status'] ?? 'in_stock',
                     'unit_of_measure' => $priceData['unit_of_measure'] ?? null,
-                    'product_url' => $priceData['product_url'] ?? $url,
+                    'product_url' => $productUrl,
                 ];
                 $logger?->success("Found match at {$storeName}: \${$priceData['price']}");
             } else {
-                $logger?->warning("No matching product found at {$storeName}");
+                $logger?->warning("No price extracted from {$storeName} product page");
             }
         }
 
         Log::info('StoreDiscoveryService: Tier 2 discovery complete', [
             'retailers_scraped' => count($scrapedPages),
+            'product_pages_scraped' => count($productPages),
             'prices_found' => count($results),
         ]);
 
@@ -637,57 +695,58 @@ PROMPT;
     }
 
     /**
-     * Extract the best matching price from search results using AI.
+     * Extract product page URLs from search results using AI.
+     * Simpler than extracting prices directly; used as step 1 of two-step discovery.
      *
      * @param string $markdown The search results page as markdown
      * @param string $productName The product being searched for
      * @param string $storeName The store name
      * @param bool $debug When true, verbose logs (prompt, response, parse details) use info level; otherwise debug
-     * @return array|null Extracted price data
+     * @return array<array{name: string, url: string}> Up to 3 matching products with name and URL
      */
-    protected function extractPriceFromSearchResults(string $markdown, string $productName, string $storeName, bool $debug = false): ?array
+    protected function extractProductUrlsFromSearchResults(string $markdown, string $productName, string $storeName, bool $debug = false): array
     {
         $verboseLevel = $debug ? 'info' : 'debug';
         $aiService = $this->getAIService();
         if (!$aiService) {
-            return null;
+            return [];
         }
 
         // Truncate markdown to avoid token limits
         $truncatedMarkdown = mb_substr($markdown, 0, 6000);
 
         $prompt = <<<PROMPT
-Find the best matching product and price for "{$productName}" from these {$storeName} search results.
+Find product URLs that match "{$productName}" from these {$storeName} search results.
 
 Search results:
 {$truncatedMarkdown}
 
-Return ONLY a JSON object with the best matching product (no other text):
+Return ONLY a JSON object (no other text):
 {
-    "item_name": "The exact product name",
-    "price": 99.99,
-    "stock_status": "in_stock" or "out_of_stock",
-    "product_url": "URL to the product page if available, or null"
+    "products": [
+        {"name": "Product name from the page", "url": "https://..."},
+        ...
+    ]
 }
 
 Rules:
-- Find the product that best matches "{$productName}"
-- price must be a number (no currency symbols)
-- If no matching product found, return {"price": null}
-- Only include items that are clearly the right product
-- Prefer exact matches over similar products
+- Extract URLs to actual product pages (not search or category pages)
+- Match core product identity, be flexible with naming (e.g. "3rd Generation" = "Gen 3" = "Pro 3")
+- Prefer main products over accessories, cases, or chargers
+- Return up to 3 best matches; use empty array if no relevant products found
+- Each url must be a full URL (https://...) when possible
 PROMPT;
 
         try {
-            Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction request (extractPriceFromSearchResults)', [
+            Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction request (extractProductUrlsFromSearchResults)', [
                 'product' => $productName,
                 'store' => $storeName,
                 'prompt_preview' => mb_substr($prompt, 0, 800) . (strlen($prompt) > 800 ? '...' : ''),
             ]);
 
-            $response = $aiService->complete($prompt, ['max_tokens' => 300]);
+            $response = $aiService->complete($prompt, ['max_tokens' => 400]);
 
-            Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction response (extractPriceFromSearchResults)', [
+            Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction response (extractProductUrlsFromSearchResults)', [
                 'product' => $productName,
                 'store' => $storeName,
                 'raw_response' => $response,
@@ -695,40 +754,68 @@ PROMPT;
 
             if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
                 $parsed = json_decode($matches[0], true);
-                if (json_last_error() === JSON_ERROR_NONE && isset($parsed['price'])) {
-                    return $parsed;
+                if (json_last_error() === JSON_ERROR_NONE && isset($parsed['products']) && is_array($parsed['products'])) {
+                    $valid = [];
+                    foreach (array_slice($parsed['products'], 0, 3) as $p) {
+                        if (!empty($p['url']) && !empty($p['name'])) {
+                            $valid[] = ['name' => (string) $p['name'], 'url' => (string) $p['url']];
+                        }
+                    }
+                    return $valid;
                 }
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    Log::log($verboseLevel, 'StoreDiscoveryService: Tier 2 AI extraction parse - invalid JSON', [
-                        'product' => $productName,
-                        'store' => $storeName,
-                        'json_error' => json_last_error_msg(),
-                        'extracted_match' => mb_substr($matches[0] ?? '', 0, 500),
-                    ]);
-                } else {
-                    Log::log($verboseLevel, 'StoreDiscoveryService: Tier 2 AI extraction parse - price key missing from JSON', [
-                        'product' => $productName,
-                        'store' => $storeName,
-                        'parsed' => $parsed,
-                    ]);
-                }
+                Log::log($verboseLevel, 'StoreDiscoveryService: extractProductUrlsFromSearchResults - invalid or missing products', [
+                    'product' => $productName,
+                    'store' => $storeName,
+                    'parsed' => $parsed,
+                ]);
             } else {
-                Log::log($verboseLevel, 'StoreDiscoveryService: Tier 2 AI extraction parse - no JSON object found in response', [
+                Log::log($verboseLevel, 'StoreDiscoveryService: extractProductUrlsFromSearchResults - no JSON found in response', [
                     'product' => $productName,
                     'store' => $storeName,
                     'response_length' => strlen($response),
+                    'response_preview' => mb_substr($response, 0, 200),
                 ]);
             }
-
-            return null;
         } catch (\Exception $e) {
-            Log::warning('StoreDiscoveryService: Tier 2 AI extraction failed', [
+            Log::warning('StoreDiscoveryService: extractProductUrlsFromSearchResults failed', [
                 'product' => $productName,
                 'store' => $storeName,
                 'error' => $e->getMessage(),
             ]);
-            return null;
         }
+
+        return [];
+    }
+
+    /**
+     * Resolve a possibly-relative product URL against a search page base URL.
+     *
+     * @param string $productUrl URL from extraction (may be relative)
+     * @param string $basePageUrl Full URL of the search page
+     * @return string Absolute product URL
+     */
+    protected function resolveProductUrl(string $productUrl, string $basePageUrl): string
+    {
+        // Already absolute
+        if (str_starts_with($productUrl, 'http://') || str_starts_with($productUrl, 'https://')) {
+            return $productUrl;
+        }
+
+        // Extract host from base URL
+        $host = parse_url($basePageUrl, PHP_URL_HOST);
+        if (empty($host)) {
+            // Can't resolve without a valid base; return as-is (will likely fail later)
+            Log::warning('StoreDiscoveryService: resolveProductUrl - invalid base URL', [
+                'productUrl' => $productUrl,
+                'basePageUrl' => $basePageUrl,
+            ]);
+            return $productUrl;
+        }
+
+        $scheme = parse_url($basePageUrl, PHP_URL_SCHEME) ?: 'https';
+        $path = str_starts_with($productUrl, '/') ? $productUrl : '/' . $productUrl;
+
+        return $scheme . '://' . $host . $path;
     }
 
     /**

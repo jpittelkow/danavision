@@ -217,31 +217,143 @@ test('store discovery service prioritizes favorite stores', function () {
 test('store discovery service triggers tier 2 when few results', function () {
     $user = setupUserWithAI();
 
-    // Return no results from tier 1 to trigger tier 2
+    // Tier 1: 3 stores, all fail -> triggers tier 2
+    // Tier 2 search: 4 retailers, 1 success with markdown
+    // Tier 2 product: 1 product page, success
+    // AI: 1st = product URLs, 2nd = price from product page
     Http::fake([
         '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-        '127.0.0.1:5000/batch' => Http::response([
-            'results' => [
-                ['success' => false, 'error' => 'Page not found'],
-                ['success' => false, 'error' => 'Page not found'],
-            ],
-        ], 200),
-        // Mock OpenAI for price extraction
+        '127.0.0.1:5000/batch' => Http::sequence()
+            ->push(Http::response([
+                'results' => [
+                    ['success' => false, 'error' => 'Page not found'],
+                    ['success' => false, 'error' => 'Page not found'],
+                    ['success' => false, 'error' => 'Page not found'],
+                ],
+            ], 200))
+            ->push(Http::response([
+                'results' => [
+                    ['success' => true, 'markdown' => 'Amazon search results. Product: Test Product link /dp/ABC123'],
+                    ['success' => false, 'error' => 'Timeout'],
+                    ['success' => false, 'error' => 'Timeout'],
+                    ['success' => false, 'error' => 'Timeout'],
+                ],
+            ], 200))
+            ->push(Http::response([
+                'results' => [
+                    ['success' => true, 'markdown' => 'Test Product - $24.99 - In Stock'],
+                ],
+            ], 200)),
+        'api.openai.com/*' => Http::sequence()
+            ->push(Http::response([
+                'choices' => [['message' => ['content' => '{"products":[{"name":"Test Product","url":"https://www.amazon.com/dp/ABC123"}]}']]],
+            ], 200))
+            ->push(Http::response([
+                'choices' => [['message' => ['content' => '{"item_name":"Test Product","price":24.99,"stock_status":"in_stock"}']]],
+            ], 200)),
+    ]);
+
+    $service = StoreDiscoveryService::forUser($user->id);
+    $service->setMinResultsThreshold(5);
+    $result = $service->discoverPrices('test product');
+
+    expect($result->hasResults())->toBeTrue();
+    expect($result->results[0]['product_url'] ?? null)->toBe('https://www.amazon.com/dp/ABC123');
+    Http::assertSent(fn ($r) => str_contains($r->url(), '127.0.0.1:5000/batch'));
+});
+
+test('tier 2 two-step flow always sets product_url for refresh', function () {
+    $user = setupUserWithAI();
+
+    Http::fake([
+        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
+        '127.0.0.1:5000/batch' => Http::sequence()
+            ->push(Http::response(['results' => [['success' => false], ['success' => false], ['success' => false]]], 200))
+            ->push(Http::response([
+                'results' => [
+                    ['success' => true, 'markdown' => 'Target search. Item /p/12345'],
+                    ['success' => false], ['success' => false], ['success' => false],
+                ],
+            ], 200))
+            ->push(Http::response([
+                'results' => [['success' => true, 'markdown' => 'Product page $99.99']],
+            ], 200)),
+        'api.openai.com/*' => Http::sequence()
+            ->push(Http::response([
+                'choices' => [['message' => ['content' => '{"products":[{"name":"Item","url":"https://www.target.com/p/12345"}]}']]],
+            ], 200))
+            ->push(Http::response([
+                'choices' => [['message' => ['content' => '{"item_name":"Item","price":99.99,"stock_status":"in_stock"}']]],
+            ], 200)),
+    ]);
+
+    $service = StoreDiscoveryService::forUser($user->id);
+    $service->setMinResultsThreshold(10);
+    $result = $service->discoverPrices('test');
+
+    expect($result->hasResults())->toBeTrue();
+    expect($result->results[0])->toHaveKey('product_url');
+    expect($result->results[0]['product_url'])->toBe('https://www.target.com/p/12345');
+});
+
+test('tier 2 returns empty when no product URLs extracted from search', function () {
+    $user = setupUserWithAI();
+
+    Http::fake([
+        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
+        '127.0.0.1:5000/batch' => Http::sequence()
+            ->push(Http::response(['results' => [['success' => false], ['success' => false], ['success' => false]]], 200))
+            ->push(Http::response([
+                'results' => [
+                    ['success' => true, 'markdown' => 'No relevant products here.'],
+                    ['success' => true, 'markdown' => 'Also nothing.'],
+                    ['success' => false], ['success' => false],
+                ],
+            ], 200)),
         'api.openai.com/*' => Http::response([
-            'choices' => [
-                ['message' => ['content' => '{"item_name": "Test Product", "price": 24.99, "stock_status": "in_stock"}']],
-            ],
+            'choices' => [['message' => ['content' => '{"products":[]}']]],
         ], 200),
     ]);
 
     $service = StoreDiscoveryService::forUser($user->id);
-    $service->setMinResultsThreshold(5); // Set high threshold to trigger tier 2
-    $result = $service->discoverPrices('test product');
+    $service->setMinResultsThreshold(10);
+    $result = $service->discoverPrices('obscure product');
 
-    // Should have called batch endpoint multiple times (tier 1 + tier 2)
-    Http::assertSent(function ($request) {
-        return str_contains($request->url(), '127.0.0.1:5000/batch');
-    });
+    expect($result->hasResults())->toBeFalse();
+    expect($result->results)->toHaveCount(0);
+});
+
+test('resolveProductUrl makes relative product URLs absolute', function () {
+    $user = setupUserWithAI();
+
+    Http::fake([
+        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
+        '127.0.0.1:5000/batch' => Http::sequence()
+            ->push(Http::response(['results' => [['success' => false], ['success' => false], ['success' => false]]], 200))
+            ->push(Http::response([
+                'results' => [
+                    ['success' => true, 'markdown' => 'Amazon /dp/B0REL'],
+                    ['success' => false], ['success' => false], ['success' => false],
+                ],
+            ], 200))
+            ->push(Http::response([
+                'results' => [['success' => true, 'markdown' => 'Price $49.00']],
+            ], 200)),
+        'api.openai.com/*' => Http::sequence()
+            ->push(Http::response([
+                'choices' => [['message' => ['content' => '{"products":[{"name":"X","url":"/dp/B0REL"}]}']]],
+            ], 200))
+            ->push(Http::response([
+                'choices' => [['message' => ['content' => '{"item_name":"X","price":49,"stock_status":"in_stock"}']]],
+            ], 200)),
+    ]);
+
+    $service = StoreDiscoveryService::forUser($user->id);
+    $service->setMinResultsThreshold(10);
+    $result = $service->discoverPrices('x');
+
+    expect($result->hasResults())->toBeTrue();
+    expect($result->results[0]['product_url'])->toBe('https://www.amazon.com/dp/B0REL');
 });
 
 test('store can generate search url from template', function () {
