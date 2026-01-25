@@ -39,8 +39,15 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Install Crawl4AI Python service
 # Note: We skip crawl4ai-setup as it tries to download Playwright browsers.
 # We use system Chromium instead (already installed above).
+# Install build dependencies for Python packages, then clean up after install
 COPY docker/crawl4ai/requirements.txt /opt/crawl4ai/requirements.txt
-RUN pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt
+RUN apk add --no-cache --virtual .build-deps \
+        gcc \
+        musl-dev \
+        python3-dev \
+        libffi-dev \
+    && pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt \
+    && apk del .build-deps
 COPY docker/crawl4ai/ /opt/crawl4ai/
 
 # Configure Nginx
