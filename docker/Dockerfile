@@ -37,10 +37,10 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Install Crawl4AI Python service
+# Note: We skip crawl4ai-setup as it tries to download Playwright browsers.
+# We use system Chromium instead (already installed above).
 COPY docker/crawl4ai/requirements.txt /opt/crawl4ai/requirements.txt
-RUN pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt \
-    # Run crawl4ai setup to configure playwright (uses system chromium)
-    && crawl4ai-setup || echo "crawl4ai-setup not available, skipping"
+RUN pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt
 COPY docker/crawl4ai/ /opt/crawl4ai/
 
 # Configure Nginx
