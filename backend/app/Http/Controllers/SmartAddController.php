@@ -9,7 +9,7 @@ use App\Models\ShoppingList;
 use App\Models\SmartAddQueueItem;
 use App\Services\AI\AIService;
 use App\Services\AI\MultiAIService;
-use App\Services\Crawler\FirecrawlService;
+use App\Services\Crawler\StoreDiscoveryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -644,13 +644,13 @@ PROMPT;
             'last_checked_at' => ($validated['current_price'] ?? null) ? now() : null,
         ]);
 
-        // Dispatch background job to search for prices using Firecrawl
+        // Dispatch background job to search for prices using Crawl4AI
         // This runs asynchronously after the item is added
         if (!($validated['skip_price_search'] ?? false)) {
             $userId = $request->user()->id;
-            $firecrawlService = FirecrawlService::forUser($userId);
-            
-            if ($firecrawlService->isAvailable()) {
+            $discoveryService = StoreDiscoveryService::forUser($userId);
+
+            if ($discoveryService->isAvailable()) {
                 $aiJob = AIJob::createJob(
                     userId: $userId,
                     type: AIJob::TYPE_FIRECRAWL_DISCOVERY,
@@ -667,13 +667,13 @@ PROMPT;
                     relatedListId: $list->id,
                 );
 
-                // Dispatch the Firecrawl discovery job after response is sent
+                // Dispatch the discovery job after response is sent
                 // This ensures the redirect happens immediately while price search runs in background
                 FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId)
                     ->afterResponse();
             }
-            // If Firecrawl is not configured, item is still added but no price search runs
-            // User will see a message in the UI to configure Firecrawl in Settings
+            // If AI provider is not configured, item is still added but no price search runs
+            // User will see a message in the UI to configure AI in Settings
         }
 
         // Redirect to the item page so user can see prices as they load
@@ -1101,11 +1101,11 @@ PROMPT;
         // Mark the queue item as added
         $queueItem->markAsAdded($item->id, $selectedIndex);
 
-        // Dispatch background job to search for prices
+        // Dispatch background job to search for prices using Crawl4AI
         $userId = $request->user()->id;
-        $firecrawlService = FirecrawlService::forUser($userId);
-        
-        if ($firecrawlService->isAvailable()) {
+        $discoveryService = StoreDiscoveryService::forUser($userId);
+
+        if ($discoveryService->isAvailable()) {
             $aiJob = AIJob::createJob(
                 userId: $userId,
                 type: AIJob::TYPE_FIRECRAWL_DISCOVERY,

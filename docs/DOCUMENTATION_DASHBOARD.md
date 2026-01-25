@@ -22,7 +22,7 @@ Four clickable stat cards at the top of the dashboard:
 ### Active Jobs Widget
 
 Shows currently running AI jobs with:
-- Job type label (e.g., "Firecrawl Price Discovery")
+- Job type label (e.g., "Price Discovery")
 - Progress percentage and bar
 - Up to 5 most recent active jobs
 

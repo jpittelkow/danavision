@@ -296,7 +296,7 @@ Triggers automatic detection of search URL template.
 POST /api/stores/{id}/find-search-url-agent
 ```
 
-Uses expensive Firecrawl Agent for complex stores.
+Uses Crawl4AI with AI analysis for complex stores that don't match known patterns.
 
 ## Store Categories
 

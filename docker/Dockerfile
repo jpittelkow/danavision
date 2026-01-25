@@ -1,7 +1,7 @@
 # docker/Dockerfile
 FROM php:8.3-fpm-alpine
 
-# Install dependencies including Node.js
+# Install dependencies including Node.js, Python, and Chromium for Crawl4AI
 RUN apk add --no-cache \
     nginx \
     supervisor \
@@ -14,10 +14,34 @@ RUN apk add --no-cache \
     curl \
     nodejs \
     npm \
+    # Python for Crawl4AI service
+    python3 \
+    py3-pip \
+    # Chromium for Playwright/Crawl4AI web scraping
+    chromium \
+    chromium-chromedriver \
+    # Chromium dependencies
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
     && docker-php-ext-install pdo pdo_sqlite zip bcmath
+
+# Set Playwright/Crawl4AI to use system Chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Install Crawl4AI Python service
+COPY docker/crawl4ai/requirements.txt /opt/crawl4ai/requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt \
+    # Run crawl4ai setup to configure playwright (uses system chromium)
+    && crawl4ai-setup || echo "crawl4ai-setup not available, skipping"
+COPY docker/crawl4ai/ /opt/crawl4ai/
 
 # Configure Nginx
 COPY docker/nginx.conf /etc/nginx/nginx.conf

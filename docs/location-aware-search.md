@@ -270,7 +270,7 @@ protected function getUserLocationContext(): array
    - Template: https://www.kroger.com/search?query={query}&locationId={store_id}
    - Context: { query: "milk", store_id: "00123", zip: "53202" }
    - URL: https://www.kroger.com/search?query=milk&locationId=00123
-5. Firecrawl scrapes the URL
+5. Crawl4AI scrapes the URL, AI extracts price data
 6. Results show prices at user's preferred Kroger location
 ```
 
@@ -327,7 +327,7 @@ Content-Type: application/json
 The location context is automatically included when:
 
 - Calling `StoreDiscoveryService->discoverPrices()`
-- Running `FirecrawlDiscoveryJob`
+- Running `FirecrawlDiscoveryJob` (now uses Crawl4AI internally)
 
 ### Store Response Fields
 

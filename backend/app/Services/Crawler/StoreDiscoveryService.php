@@ -5,6 +5,7 @@ namespace App\Services\Crawler;
 use App\Models\Setting;
 use App\Models\Store;
 use App\Models\UserStorePreference;
+use App\Services\AI\AIService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -12,20 +13,20 @@ use Illuminate\Support\Facades\Log;
  * StoreDiscoveryService
  *
  * Implements tiered price discovery using the Store Registry system.
- * This service significantly reduces Firecrawl API costs by:
- * 
- * 1. Tier 1: Using pre-defined URL templates for known stores (cheapest)
- * 2. Tier 2: Using Firecrawl Search API for discovery (medium cost)
- * 3. Tier 3: Falling back to Agent API only when necessary (most expensive)
+ * Uses Crawl4AI for local web scraping (free) with AI-based price extraction.
  *
- * Cost comparison:
- * - Agent API: ~50-100 credits per search
- * - Search API: ~5-10 credits per search
- * - Scrape API: ~1 credit per URL
+ * Tiers:
+ * 1. Tier 1: URL templates for known stores + Crawl4AI scraping (free scraping)
+ * 2. Tier 2: Web search + Crawl4AI scraping for discovery (free scraping)
+ *
+ * Cost: Only LLM API calls for price extraction (~$0.002/extraction with gpt-4o-mini)
+ *
+ * @see docs/adr/016-crawl4ai-integration.md
  */
 class StoreDiscoveryService
 {
-    protected FirecrawlService $firecrawlService;
+    protected Crawl4AIService $crawl4aiService;
+    protected ?AIService $aiService = null;
     protected int $userId;
 
     /**
@@ -46,7 +47,7 @@ class StoreDiscoveryService
     public function __construct(int $userId)
     {
         $this->userId = $userId;
-        $this->firecrawlService = FirecrawlService::forUser($userId);
+        $this->crawl4aiService = new Crawl4AIService();
     }
 
     /**
@@ -62,12 +63,28 @@ class StoreDiscoveryService
 
     /**
      * Check if the service is available.
+     * Crawl4AI runs locally in the container, so it's always available if the service is up.
+     * Also requires an AI service for price extraction.
      *
      * @return bool
      */
     public function isAvailable(): bool
     {
-        return $this->firecrawlService->isAvailable();
+        // Crawl4AI must be running and AI service must be configured
+        return $this->crawl4aiService->isAvailable() && $this->getAIService() !== null;
+    }
+
+    /**
+     * Get the AI service for price extraction.
+     *
+     * @return AIService|null
+     */
+    protected function getAIService(): ?AIService
+    {
+        if ($this->aiService === null) {
+            $this->aiService = AIService::forUser($this->userId);
+        }
+        return $this->aiService;
     }
 
     /**
@@ -88,8 +105,8 @@ class StoreDiscoveryService
     public function discoverPrices(string $productName, array $options = []): FirecrawlResult
     {
         if (!$this->isAvailable()) {
-            Log::warning('StoreDiscoveryService: Firecrawl not available', ['user_id' => $this->userId]);
-            return FirecrawlResult::error('Firecrawl API key not configured');
+            Log::warning('StoreDiscoveryService: Service not available', ['user_id' => $this->userId]);
+            return FirecrawlResult::error('Crawl4AI service not running or AI provider not configured');
         }
 
         $shopLocal = $options['shop_local'] ?? false;
@@ -214,7 +231,7 @@ class StoreDiscoveryService
 
     /**
      * Tier 1: Search using URL templates from known stores.
-     * This is the most cost-effective method.
+     * Uses Crawl4AI for free scraping + AI for price extraction.
      *
      * @param string $query The search query
      * @param Collection $stores The stores to search
@@ -262,33 +279,159 @@ class StoreDiscoveryService
             return FirecrawlResult::success([], 'tier1_no_urls');
         }
 
-        Log::info('StoreDiscoveryService: Tier 1 scraping URLs', [
+        Log::info('StoreDiscoveryService: Tier 1 scraping URLs with Crawl4AI', [
             'urls_count' => count($urls),
             'urls' => array_slice($urls, 0, 5),
         ]);
 
-        // Use batch scraping for efficiency
-        $result = $this->firecrawlService->scrapeUrlsBatch($urls);
+        // Use Crawl4AI for batch scraping (free - no API costs)
+        $scrapedPages = $this->crawl4aiService->scrapeUrls($urls);
 
-        // Attribute results to stores (copy array since FirecrawlResult::$results is readonly)
+        // Extract prices from scraped pages using AI
         $attributedResults = [];
-        if ($result->hasResults()) {
-            foreach ($result->results as $priceResult) {
-                $url = $priceResult['product_url'] ?? null;
-                if ($url) {
-                    // Try to match URL to a store
-                    foreach ($storeMap as $searchUrl => $store) {
-                        if ($store->matchesUrl($url)) {
-                            $priceResult['store_name'] = $store->name;
-                            break;
-                        }
-                    }
-                }
-                $attributedResults[] = $priceResult;
+        foreach ($scrapedPages as $index => $page) {
+            $url = $urls[$index] ?? null;
+            if (!$url || !($page['success'] ?? false)) {
+                Log::warning('StoreDiscoveryService: Scrape failed for URL', [
+                    'url' => $url,
+                    'error' => $page['error'] ?? 'Unknown error',
+                ]);
+                continue;
+            }
+
+            $markdown = $page['markdown'] ?? '';
+            if (empty($markdown)) {
+                continue;
+            }
+
+            // Find the store for this URL
+            $store = $storeMap[$url] ?? null;
+            $storeName = $store?->name ?? $this->extractStoreFromUrl($url);
+
+            // Use AI to extract price from markdown
+            $priceData = $this->extractPriceFromMarkdown($markdown, $query, $storeName);
+            
+            if ($priceData && isset($priceData['price']) && $priceData['price'] > 0) {
+                $attributedResults[] = [
+                    'store_name' => $storeName,
+                    'item_name' => $priceData['item_name'] ?? $query,
+                    'price' => (float) $priceData['price'],
+                    'stock_status' => $priceData['stock_status'] ?? 'in_stock',
+                    'unit_of_measure' => $priceData['unit_of_measure'] ?? null,
+                    'product_url' => $url,
+                ];
             }
         }
 
-        return FirecrawlResult::success($attributedResults, 'tier1_template');
+        Log::info('StoreDiscoveryService: Tier 1 extraction complete', [
+            'urls_scraped' => count($scrapedPages),
+            'prices_extracted' => count($attributedResults),
+        ]);
+
+        return FirecrawlResult::success($attributedResults, 'tier1_crawl4ai');
+    }
+
+    /**
+     * Extract price data from markdown content using AI.
+     *
+     * @param string $markdown The page content as markdown
+     * @param string $productName The product being searched for
+     * @param string $storeName The store name for context
+     * @return array|null Extracted price data or null if extraction fails
+     */
+    protected function extractPriceFromMarkdown(string $markdown, string $productName, string $storeName): ?array
+    {
+        $aiService = $this->getAIService();
+        if (!$aiService) {
+            return null;
+        }
+
+        // Truncate markdown to avoid token limits (keep first ~4000 chars)
+        $truncatedMarkdown = mb_substr($markdown, 0, 4000);
+
+        $prompt = <<<PROMPT
+Extract price information for "{$productName}" from this {$storeName} page content.
+
+Page content:
+{$truncatedMarkdown}
+
+Return ONLY a JSON object with these fields (no other text):
+{
+    "item_name": "The exact product name shown on the page",
+    "price": 99.99,
+    "stock_status": "in_stock" or "out_of_stock" or "limited_stock",
+    "unit_of_measure": "lb" or "oz" or "each" or null
+}
+
+Rules:
+- price must be a number (no currency symbols)
+- If no price is found, return {"price": null}
+- Only extract the price for the specific product, not related items
+- Ignore shipping costs, only report item price
+PROMPT;
+
+        try {
+            $response = $aiService->complete($prompt, ['max_tokens' => 200]);
+            
+            // Parse JSON from response
+            if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
+                $parsed = json_decode($matches[0], true);
+                if (json_last_error() === JSON_ERROR_NONE && isset($parsed['price'])) {
+                    return $parsed;
+                }
+            }
+            
+            return null;
+        } catch (\Exception $e) {
+            Log::warning('StoreDiscoveryService: AI extraction failed', [
+                'product' => $productName,
+                'store' => $storeName,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Extract store name from a URL.
+     *
+     * @param string $url
+     * @return string
+     */
+    protected function extractStoreFromUrl(string $url): string
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!$host) {
+            return 'Unknown';
+        }
+
+        // Remove www. prefix
+        $host = preg_replace('/^www\./', '', $host);
+
+        // Map common domains to store names
+        $storeMap = [
+            'amazon.com' => 'Amazon',
+            'walmart.com' => 'Walmart',
+            'target.com' => 'Target',
+            'bestbuy.com' => 'Best Buy',
+            'costco.com' => 'Costco',
+            'kroger.com' => 'Kroger',
+            'publix.com' => 'Publix',
+            'safeway.com' => 'Safeway',
+            'wholefoodsmarket.com' => 'Whole Foods',
+            'homedepot.com' => 'Home Depot',
+            'lowes.com' => "Lowe's",
+        ];
+
+        foreach ($storeMap as $domain => $name) {
+            if (str_contains($host, $domain)) {
+                return $name;
+            }
+        }
+
+        // Return the domain with first letter capitalized
+        $parts = explode('.', $host);
+        return ucfirst($parts[0]);
     }
 
     /**
@@ -306,8 +449,8 @@ class StoreDiscoveryService
     }
 
     /**
-     * Tier 2: Use Firecrawl Search API for discovery.
-     * More expensive than Tier 1 but still much cheaper than Agent.
+     * Tier 2: Search major online retailers directly.
+     * Uses Crawl4AI to scrape search results from major retailers.
      *
      * @param string $query The search query
      * @param string $productName Original product name for logging
@@ -315,12 +458,129 @@ class StoreDiscoveryService
      */
     protected function tier2SearchDiscovery(string $query, string $productName): FirecrawlResult
     {
-        Log::info('StoreDiscoveryService: Starting Tier 2 search discovery', [
+        Log::info('StoreDiscoveryService: Starting Tier 2 discovery with major retailers', [
             'query' => $query,
             'product' => $productName,
         ]);
 
-        return $this->firecrawlService->searchProducts($query, 10, true);
+        // Major online retailers with search URL patterns
+        $retailerSearchUrls = [
+            'Amazon' => 'https://www.amazon.com/s?k=' . urlencode($query),
+            'Walmart' => 'https://www.walmart.com/search?q=' . urlencode($query),
+            'Target' => 'https://www.target.com/s?searchTerm=' . urlencode($query),
+            'Best Buy' => 'https://www.bestbuy.com/site/searchpage.jsp?st=' . urlencode($query),
+        ];
+
+        $urls = array_values($retailerSearchUrls);
+        $storeNames = array_keys($retailerSearchUrls);
+
+        Log::info('StoreDiscoveryService: Tier 2 scraping major retailers', [
+            'retailers' => $storeNames,
+        ]);
+
+        // Scrape all retailer search pages
+        $scrapedPages = $this->crawl4aiService->scrapeUrls($urls);
+
+        $results = [];
+        foreach ($scrapedPages as $index => $page) {
+            $storeName = $storeNames[$index] ?? 'Unknown';
+            $url = $urls[$index] ?? null;
+
+            if (!($page['success'] ?? false)) {
+                Log::warning('StoreDiscoveryService: Tier 2 scrape failed', [
+                    'store' => $storeName,
+                    'error' => $page['error'] ?? 'Unknown error',
+                ]);
+                continue;
+            }
+
+            $markdown = $page['markdown'] ?? '';
+            if (empty($markdown)) {
+                continue;
+            }
+
+            // Extract price from search results page
+            $priceData = $this->extractPriceFromSearchResults($markdown, $productName, $storeName);
+            
+            if ($priceData && isset($priceData['price']) && $priceData['price'] > 0) {
+                $results[] = [
+                    'store_name' => $storeName,
+                    'item_name' => $priceData['item_name'] ?? $productName,
+                    'price' => (float) $priceData['price'],
+                    'stock_status' => $priceData['stock_status'] ?? 'in_stock',
+                    'unit_of_measure' => $priceData['unit_of_measure'] ?? null,
+                    'product_url' => $priceData['product_url'] ?? $url,
+                ];
+            }
+        }
+
+        Log::info('StoreDiscoveryService: Tier 2 discovery complete', [
+            'retailers_scraped' => count($scrapedPages),
+            'prices_found' => count($results),
+        ]);
+
+        return FirecrawlResult::success($results, 'tier2_crawl4ai');
+    }
+
+    /**
+     * Extract the best matching price from search results using AI.
+     *
+     * @param string $markdown The search results page as markdown
+     * @param string $productName The product being searched for
+     * @param string $storeName The store name
+     * @return array|null Extracted price data
+     */
+    protected function extractPriceFromSearchResults(string $markdown, string $productName, string $storeName): ?array
+    {
+        $aiService = $this->getAIService();
+        if (!$aiService) {
+            return null;
+        }
+
+        // Truncate markdown to avoid token limits
+        $truncatedMarkdown = mb_substr($markdown, 0, 6000);
+
+        $prompt = <<<PROMPT
+Find the best matching product and price for "{$productName}" from these {$storeName} search results.
+
+Search results:
+{$truncatedMarkdown}
+
+Return ONLY a JSON object with the best matching product (no other text):
+{
+    "item_name": "The exact product name",
+    "price": 99.99,
+    "stock_status": "in_stock" or "out_of_stock",
+    "product_url": "URL to the product page if available, or null"
+}
+
+Rules:
+- Find the product that best matches "{$productName}"
+- price must be a number (no currency symbols)
+- If no matching product found, return {"price": null}
+- Only include items that are clearly the right product
+- Prefer exact matches over similar products
+PROMPT;
+
+        try {
+            $response = $aiService->complete($prompt, ['max_tokens' => 300]);
+            
+            if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
+                $parsed = json_decode($matches[0], true);
+                if (json_last_error() === JSON_ERROR_NONE && isset($parsed['price'])) {
+                    return $parsed;
+                }
+            }
+            
+            return null;
+        } catch (\Exception $e) {
+            Log::warning('StoreDiscoveryService: Tier 2 AI extraction failed', [
+                'product' => $productName,
+                'store' => $storeName,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     /**
@@ -416,22 +676,70 @@ class StoreDiscoveryService
 
     /**
      * Refresh prices for a product using only known store URLs.
-     * Used for daily price updates - most cost-effective.
+     * Uses Crawl4AI for free scraping + AI for price extraction.
      *
      * @param array $urls Known product URLs to scrape
+     * @param string|null $productName Product name for context (optional)
      * @return FirecrawlResult
      */
-    public function refreshPrices(array $urls): FirecrawlResult
+    public function refreshPrices(array $urls, ?string $productName = null): FirecrawlResult
     {
         if (empty($urls)) {
             return FirecrawlResult::error('No URLs provided for refresh');
         }
 
-        Log::info('StoreDiscoveryService: Refreshing prices from known URLs', [
+        Log::info('StoreDiscoveryService: Refreshing prices with Crawl4AI', [
             'urls_count' => count($urls),
         ]);
 
-        return $this->firecrawlService->scrapeProductUrls($urls);
+        // Scrape all URLs with Crawl4AI
+        $scrapedPages = $this->crawl4aiService->scrapeUrls($urls);
+
+        $results = [];
+        foreach ($scrapedPages as $index => $page) {
+            $url = $urls[$index] ?? null;
+            
+            if (!$url || !($page['success'] ?? false)) {
+                Log::warning('StoreDiscoveryService: Refresh scrape failed', [
+                    'url' => $url,
+                    'error' => $page['error'] ?? 'Unknown error',
+                ]);
+                continue;
+            }
+
+            $markdown = $page['markdown'] ?? '';
+            if (empty($markdown)) {
+                continue;
+            }
+
+            $storeName = $this->extractStoreFromUrl($url);
+            $searchQuery = $productName ?? 'product';
+
+            // Extract price from product page
+            $priceData = $this->extractPriceFromMarkdown($markdown, $searchQuery, $storeName);
+            
+            if ($priceData && isset($priceData['price']) && $priceData['price'] > 0) {
+                $results[] = [
+                    'store_name' => $storeName,
+                    'item_name' => $priceData['item_name'] ?? $searchQuery,
+                    'price' => (float) $priceData['price'],
+                    'stock_status' => $priceData['stock_status'] ?? 'in_stock',
+                    'unit_of_measure' => $priceData['unit_of_measure'] ?? null,
+                    'product_url' => $url,
+                ];
+            }
+        }
+
+        Log::info('StoreDiscoveryService: Price refresh complete', [
+            'urls_scraped' => count($scrapedPages),
+            'prices_extracted' => count($results),
+        ]);
+
+        if (empty($results)) {
+            return FirecrawlResult::error('No prices could be extracted from the provided URLs');
+        }
+
+        return FirecrawlResult::success($results, 'refresh_crawl4ai');
     }
 
     /**

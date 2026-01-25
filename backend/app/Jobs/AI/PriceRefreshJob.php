@@ -6,7 +6,7 @@ use App\Models\AIJob;
 use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
-use App\Services\Crawler\FirecrawlService;
+use App\Services\Crawler\StoreDiscoveryService;
 use App\Services\Crawler\FirecrawlResult;
 use Illuminate\Support\Facades\Log;
 
@@ -14,10 +14,11 @@ use Illuminate\Support\Facades\Log;
  * PriceRefreshJob
  * 
  * Background job for refreshing prices for a single item.
- * Uses Firecrawl for real-time web crawling.
+ * Now uses Crawl4AI (via StoreDiscoveryService) for free local web crawling.
  * 
  * @deprecated Use FirecrawlDiscoveryJob or FirecrawlRefreshJob instead. 
- * This job is kept for backward compatibility with existing queued jobs.
+ * This job is kept for backward compatibility with existing queued jobs
+ * and has been updated to use the new Crawl4AI backend.
  */
 class PriceRefreshJob extends BaseAIJob
 {
@@ -43,12 +44,12 @@ class PriceRefreshJob extends BaseAIJob
 
         $this->updateProgress($aiJob, 10);
 
-        // Create Firecrawl service
-        $firecrawlService = FirecrawlService::forUser($this->userId);
+        // Use StoreDiscoveryService (Crawl4AI backend) instead of old FirecrawlService
+        $discoveryService = StoreDiscoveryService::forUser($this->userId);
 
-        // Check if Firecrawl is available
-        if (!$firecrawlService->isAvailable()) {
-            throw new \RuntimeException('Firecrawl is not configured. Please set up a Firecrawl API key in Settings.');
+        // Check if service is available (Crawl4AI + AI provider)
+        if (!$discoveryService->isAvailable()) {
+            throw new \RuntimeException('Price discovery not available. Please configure an AI provider in Settings.');
         }
 
         $this->updateProgress($aiJob, 20);
@@ -64,14 +65,14 @@ class PriceRefreshJob extends BaseAIJob
         // Build search query
         $searchQuery = $item->product_query ?? $item->product_name;
 
-        Log::info('PriceRefreshJob: Starting Firecrawl discovery', [
+        Log::info('PriceRefreshJob: Starting Crawl4AI discovery', [
             'item_id' => $itemId,
             'query' => $searchQuery,
             'shop_local' => $shopLocal,
         ]);
 
-        // Perform price search using Firecrawl
-        $result = $firecrawlService->discoverProductPrices($searchQuery, [
+        // Perform price search using StoreDiscoveryService (Crawl4AI)
+        $result = $discoveryService->discoverPrices($searchQuery, [
             'shop_local' => $shopLocal,
             'is_generic' => $item->is_generic ?? false,
             'unit_of_measure' => $item->unit_of_measure ?? null,
@@ -89,7 +90,7 @@ class PriceRefreshJob extends BaseAIJob
             return [
                 'success' => false,
                 'error' => $result->error,
-                'providers_used' => ['firecrawl'],
+                'providers_used' => ['crawl4ai'],
             ];
         }
 
@@ -97,7 +98,7 @@ class PriceRefreshJob extends BaseAIJob
             return [
                 'success' => false,
                 'error' => 'No prices found for this item.',
-                'providers_used' => ['firecrawl'],
+                'providers_used' => ['crawl4ai'],
             ];
         }
 
@@ -192,7 +193,7 @@ class PriceRefreshJob extends BaseAIJob
             'price_change' => $priceChange,
             'price_change_percent' => $priceChangePercent,
             'results_count' => $resultsProcessed,
-            'providers_used' => ['firecrawl'],
+            'providers_used' => ['crawl4ai'],
             'source' => $result->source,
         ];
     }

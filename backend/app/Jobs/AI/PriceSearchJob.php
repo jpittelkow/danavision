@@ -6,18 +6,19 @@ use App\Models\AIJob;
 use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
-use App\Services\Crawler\FirecrawlService;
+use App\Services\Crawler\StoreDiscoveryService;
 use App\Services\Crawler\FirecrawlResult;
 use Illuminate\Support\Facades\Log;
 
 /**
  * PriceSearchJob
  * 
- * Background job for searching prices using Firecrawl.
- * This job uses real-time web crawling for accurate pricing data.
+ * Background job for searching prices.
+ * Now uses Crawl4AI (via StoreDiscoveryService) for free local web crawling.
  * 
  * @deprecated Use FirecrawlDiscoveryJob instead. This job is kept
- * for backward compatibility with existing queued jobs.
+ * for backward compatibility with existing queued jobs and has been
+ * updated to use the new Crawl4AI backend.
  */
 class PriceSearchJob extends BaseAIJob
 {
@@ -39,12 +40,12 @@ class PriceSearchJob extends BaseAIJob
 
         $this->updateProgress($aiJob, 10);
 
-        // Create Firecrawl service
-        $firecrawlService = FirecrawlService::forUser($this->userId);
+        // Use StoreDiscoveryService (Crawl4AI backend) instead of old FirecrawlService
+        $discoveryService = StoreDiscoveryService::forUser($this->userId);
 
-        // Check if Firecrawl is available
-        if (!$firecrawlService->isAvailable()) {
-            throw new \RuntimeException('Firecrawl is not configured. Please set up a Firecrawl API key in Settings.');
+        // Check if service is available (Crawl4AI + AI provider)
+        if (!$discoveryService->isAvailable()) {
+            throw new \RuntimeException('Price discovery not available. Please configure an AI provider in Settings.');
         }
 
         $this->updateProgress($aiJob, 20);
@@ -54,14 +55,14 @@ class PriceSearchJob extends BaseAIJob
             return ['cancelled' => true];
         }
 
-        Log::info('PriceSearchJob: Starting Firecrawl discovery', [
+        Log::info('PriceSearchJob: Starting Crawl4AI discovery', [
             'query' => $query,
             'item_id' => $itemId,
             'shop_local' => $inputData['shop_local'] ?? false,
         ]);
 
-        // Perform price search using Firecrawl
-        $result = $firecrawlService->discoverProductPrices($query, [
+        // Perform price search using StoreDiscoveryService (Crawl4AI)
+        $result = $discoveryService->discoverPrices($query, [
             'shop_local' => $inputData['shop_local'] ?? false,
             'is_generic' => $inputData['is_generic'] ?? false,
             'unit_of_measure' => $inputData['unit_of_measure'] ?? null,
@@ -75,7 +76,7 @@ class PriceSearchJob extends BaseAIJob
         }
 
         if (!$result->isSuccess()) {
-            throw new \RuntimeException($result->error ?? 'Firecrawl discovery failed');
+            throw new \RuntimeException($result->error ?? 'Crawl4AI discovery failed');
         }
 
         // If we have a related item, update its prices
@@ -90,7 +91,7 @@ class PriceSearchJob extends BaseAIJob
             'results' => $result->results,
             'lowest_price' => $result->getLowestPrice(),
             'highest_price' => $result->getHighestPrice(),
-            'providers_used' => ['firecrawl'],
+            'providers_used' => ['crawl4ai'],
             'results_count' => $result->count(),
             'source' => $result->source,
         ];

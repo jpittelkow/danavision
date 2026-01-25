@@ -38,6 +38,8 @@ The application uses a modern monolithic architecture with Laravel Inertia.js:
 - Docker (single container deployment)
 - Nginx (web server)
 - PHP-FPM (PHP processor)
+- Python 3.11 + Crawl4AI (web scraping)
+- Chromium (headless browser for scraping)
 - Supervisor (process management)
 
 ## Project Structure
@@ -53,6 +55,7 @@ danavision/
 │   │   ├── Policies/           # Authorization policies
 │   │   └── Services/           # Business logic
 │   │       ├── AI/             # AI providers and agents
+│   │       ├── Crawler/        # Web scraping (Crawl4AI integration)
 │   │       ├── Mail/           # Email services
 │   │       └── PriceApi/       # Price lookup services
 │   ├── database/
@@ -123,7 +126,8 @@ npm run dev
 - **Shopping Lists**: Organize items into lists
 - **Price Alerts**: Get notified when prices drop
 - **Multi-Provider AI**: Support for Claude, OpenAI, Gemini, and local Ollama
-- **Price APIs**: Integration with SerpAPI and Rainforest API
+- **Crawl4AI Integration**: Self-hosted web scraping for price discovery (no external API costs)
+- **Price APIs**: Optional integration with SerpAPI and Rainforest API
 - **Mobile-First**: Responsive design with camera support
 
 ## Documentation Index
@@ -207,5 +211,9 @@ DanaVision is deployed as a single Docker container with everything included:
 - PHP-FPM 8.3
 - SQLite database (embedded)
 - React frontend (pre-built)
+- Python + Crawl4AI (web scraping)
+- Chromium browser (headless)
+
+**Recommended Resources**: 2GB RAM, 2 CPU cores
 
 See [DOCUMENTATION_DOCKER.md](DOCUMENTATION_DOCKER.md) for detailed deployment information.
