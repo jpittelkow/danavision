@@ -94,7 +94,6 @@ Route::middleware('auth')->group(function () {
     Route::delete('api/stores/{store}', [SettingController::class, 'deleteStore'])->name('stores.destroy');
     Route::post('api/stores/reset', [SettingController::class, 'resetStorePreferences'])->name('stores.reset');
     Route::post('api/stores/{store}/find-search-url', [SettingController::class, 'findSearchUrl'])->name('stores.find-search-url');
-    Route::post('api/stores/{store}/find-search-url-agent', [SettingController::class, 'findSearchUrlWithAgent'])->name('stores.find-search-url-agent');
     Route::post('api/stores/{store}/suppress', [SettingController::class, 'suppressStore'])->name('stores.suppress');
     Route::post('api/stores/{store}/restore', [SettingController::class, 'restoreStore'])->name('stores.restore');
     Route::post('api/stores/{store}/location', [SettingController::class, 'setStoreLocationId'])->name('stores.location');

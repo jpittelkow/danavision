@@ -56,11 +56,25 @@ test.describe('Shopping Lists', () => {
     // Wait for lists to load
     await page.waitForLoadState('networkidle');
 
-    // Click on first list if any exist (exclude /lists/create link)
-    const listLink = page.locator('a[href^="/lists/"]').filter({ hasNotText: 'Create' }).first();
-    const hasLists = await listLink.count() > 0;
+    // Look specifically for list detail links (numeric IDs), excluding /lists/create
+    const listDetailLinks = page.locator('a[href^="/lists/"]').filter({ 
+      has: page.locator(':scope'),
+    });
     
-    if (hasLists) {
+    // Filter to only links that have numeric IDs
+    const allLinks = await listDetailLinks.all();
+    let listLink = null;
+    
+    for (const link of allLinks) {
+      const href = await link.getAttribute('href');
+      // Match links like /lists/123 but not /lists/create
+      if (href && /\/lists\/\d+/.test(href)) {
+        listLink = link;
+        break;
+      }
+    }
+    
+    if (listLink) {
       await listLink.click();
 
       // Verify list detail page
@@ -69,6 +83,7 @@ test.describe('Shopping Lists', () => {
       // Verify Add Item button exists
       await expect(page.locator('text=Add Item')).toBeVisible();
     }
+    // If no lists exist, test passes silently
   });
 
   test('should add item to a list', async ({ page }) => {
@@ -77,23 +92,36 @@ test.describe('Shopping Lists', () => {
     // Wait for lists to load
     await page.waitForLoadState('networkidle');
 
-    // Click on first list (exclude /lists/create link)
-    const listLink = page.locator('a[href^="/lists/"]').filter({ hasNotText: 'Create' }).first();
-    const hasLists = await listLink.count() > 0;
+    // Look specifically for list detail links (numeric IDs), excluding /lists/create
+    const listDetailLinks = page.locator('a[href^="/lists/"]');
+    const allLinks = await listDetailLinks.all();
+    let listLink = null;
     
-    if (hasLists) {
+    for (const link of allLinks) {
+      const href = await link.getAttribute('href');
+      // Match links like /lists/123 but not /lists/create
+      if (href && /\/lists\/\d+/.test(href)) {
+        listLink = link;
+        break;
+      }
+    }
+    
+    if (listLink) {
       await listLink.click();
       await page.waitForLoadState('networkidle');
 
+      // Verify we're on a list detail page
+      await expect(page).toHaveURL(/\/lists\/\d+/);
+
       // Click Add Item button
-      const addItemButton = page.locator('button:has-text("Add Item")').or(page.locator('text=Add Item'));
+      const addItemButton = page.locator('button:has-text("Add Item")').or(page.locator('a:has-text("Add Item")'));
       await addItemButton.first().click();
 
       // Wait for form to appear
-      await page.waitForTimeout(500);
+      const productNameInput = page.locator('input[type="text"]').first();
+      await expect(productNameInput).toBeVisible();
 
       // Fill in item details - the input field inside the Add Item form
-      const productNameInput = page.locator('input[type="text"]').filter({ hasText: '' }).first();
       await productNameInput.fill(`Test Item ${Date.now()}`);
 
       // Submit
@@ -102,6 +130,7 @@ test.describe('Shopping Lists', () => {
       // Wait for item to be added
       await page.waitForLoadState('networkidle');
     }
+    // If no lists exist, test passes silently
   });
 
   test('should refresh prices for a list', async ({ page }) => {

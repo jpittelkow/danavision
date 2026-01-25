@@ -51,9 +51,8 @@ test.describe('Item Smart Fill Feature', () => {
         if (await smartFillBtn.isVisible()) {
           await smartFillBtn.click();
 
-          // Should see loading spinner or disabled state briefly
-          // (may complete quickly if AI not configured)
-          await page.waitForTimeout(500);
+          // Wait for network to settle (AI request completes or fails)
+          await page.waitForLoadState('networkidle');
 
           // Either see a message or the button should be enabled again
           const message = page.locator('[class*="rounded-xl"]').filter({ hasText: /AI|provider|Found/i });
@@ -220,8 +219,8 @@ test.describe('Vendor Price List Enhancements', () => {
           if (await blacklistBtn.isVisible()) {
             await blacklistBtn.click();
 
-            // Wait for the API call
-            await page.waitForTimeout(500);
+            // Wait for the API call to complete
+            await page.waitForLoadState('networkidle');
 
             // Row count should decrease or vendor should not be visible
             const newRowCount = await page.locator('table tbody tr').count();

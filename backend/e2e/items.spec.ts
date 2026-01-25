@@ -33,9 +33,6 @@ test.describe('Items Page', () => {
 
     // Click filter button
     await page.locator('button:has-text("Filters")').click();
-    
-    // Wait for filter panel to appear
-    await page.waitForTimeout(300);
 
     // Filter panel should appear with options - look for the label elements
     await expect(page.locator('label:has-text("List")').first()).toBeVisible();
@@ -110,17 +107,23 @@ test.describe('Items Page', () => {
 
     // Open filters
     await page.locator('button:has-text("Filters")').click();
-    await page.waitForTimeout(300);
+
+    // Wait for filter panel to be visible
+    await expect(page.locator('label:has-text("Sort By")')).toBeVisible();
 
     // Find the Sort By select trigger and click it
     const sortBySection = page.locator('label:has-text("Sort By")').locator('..');
-    await sortBySection.locator('button[role="combobox"]').click();
-    
-    // Wait for dropdown and select "Name (A-Z)"
-    await page.locator('[role="option"]:has-text("Name (A-Z)")').click();
+    const selectTrigger = sortBySection.locator('button[role="combobox"]');
+    await selectTrigger.click();
 
-    // URL should update with sort
-    await expect(page).toHaveURL(/sort=product_name/);
+    // Wait for dropdown and select "Name (A-Z)"
+    const nameOption = page.locator('[role="option"]:has-text("Name (A-Z)")');
+    await expect(nameOption).toBeVisible();
+    await nameOption.click();
+
+    // Wait for URL to update - use a more flexible pattern
+    await expect(page).toHaveURL(/sort=product_name/, { timeout: 10000 });
+    await expect(page).toHaveURL(/dir=asc/);
   });
 
   test('should show filter badge when filters are active', async ({ page }) => {

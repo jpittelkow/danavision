@@ -102,23 +102,21 @@ test.describe('Dashboard', () => {
 });
 
 test.describe('Dashboard - Empty State', () => {
-  test('should show empty state when no items', async ({ page }) => {
+  test('should show action buttons on dashboard', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // Check if total items is 0
+    // Check if total items stat card is visible
     const totalItemsCard = page.locator('text=Total Items').first();
     await expect(totalItemsCard).toBeVisible();
-    
-    // Look for the number after "Total Items" - if it's 0, we should see empty state
-    const itemsCount = await page.locator('text=Total Items').locator('xpath=ancestor::div[contains(@class,"CardContent")]//p[contains(@class,"text-3xl")]').textContent().catch(() => '0');
-    
-    if (itemsCount === '0') {
-      // Should show empty state messaging with call-to-action buttons
-      await expect(
-        page.locator('text=Create Your First List').or(page.locator('text=Quick Add with AI'))
-      ).toBeVisible();
-    }
+
+    // Dashboard should always have action buttons (either empty state or header buttons)
+    const actionButtons = page
+      .locator('a:has-text("New List")')
+      .or(page.locator('a:has-text("Smart Add")'))
+      .or(page.locator('text=Create Your First List'));
+
+    await expect(actionButtons.first()).toBeVisible();
   });
 });
 

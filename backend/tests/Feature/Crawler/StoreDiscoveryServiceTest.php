@@ -5,7 +5,7 @@ use App\Models\Setting;
 use App\Models\Store;
 use App\Models\User;
 use App\Models\UserStorePreference;
-use App\Services\Crawler\FirecrawlResult;
+use App\Services\Crawler\CrawlResult;
 use App\Services\Crawler\StoreDiscoveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -146,7 +146,7 @@ test('store discovery service uses crawl4ai for scraping', function () {
     $service = StoreDiscoveryService::forUser($user->id);
     $result = $service->discoverPrices('test product', ['skip_discovery' => true]);
 
-    expect($result)->toBeInstanceOf(FirecrawlResult::class);
+    expect($result)->toBeInstanceOf(CrawlResult::class);
     
     // Should have called Crawl4AI batch endpoint
     Http::assertSent(function ($request) {

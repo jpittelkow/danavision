@@ -1,5 +1,6 @@
 {
     "name": "danavision/backend",
+    "version": "1.0.0",
     "type": "project",
     "description": "DanaVision - Smart shopping and price tracking API",
     "keywords": ["laravel", "api", "shopping", "price-tracking"],

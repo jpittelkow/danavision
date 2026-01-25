@@ -255,7 +255,10 @@ export default function ItemsIndex({ auth, items, lists, filters, flash }: Props
                   <Select
                     value={`${filters.sort}_${filters.dir}`}
                     onValueChange={(v) => {
-                      const [sort, dir] = v.split('_');
+                      // Split on last underscore to handle field names with underscores (e.g., product_name_asc)
+                      const lastUnderscoreIdx = v.lastIndexOf('_');
+                      const sort = v.substring(0, lastUnderscoreIdx);
+                      const dir = v.substring(lastUnderscoreIdx + 1);
                       router.get('/items', { ...filters, sort, dir }, { preserveState: true });
                     }}
                   >

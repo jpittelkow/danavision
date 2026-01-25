@@ -10,22 +10,24 @@ test.describe('Vendor Suppression Settings', () => {
   });
 
   test('can view suppressed vendors section in stores tab', async ({ page }) => {
-    await page.goto('/settings');
+    // Navigate directly to stores tab using URL hash
+    await page.goto('/settings#stores');
     
-    // Click on Stores tab (Suppressed Vendors is in Stores tab via StorePreferences)
-    await page.getByRole('tab', { name: /Stores/i }).click();
+    // Wait for the tab content to load
+    await page.waitForLoadState('networkidle');
     
-    // Should see the suppressed vendors section
-    await expect(page.getByText('Suppressed Vendors')).toBeVisible();
+    // Should see the suppressed vendors section - use heading role to be specific
+    await expect(page.getByRole('heading', { name: 'Suppressed Vendors' })).toBeVisible();
     await expect(page.getByText('Hide specific vendors from price results')).toBeVisible();
   });
 
   test('can add a vendor to suppression list', async ({ page }) => {
-    await page.goto('/settings');
-    await page.getByRole('tab', { name: /Stores/i }).click();
+    // Navigate directly to stores tab using URL hash
+    await page.goto('/settings#stores');
+    await page.waitForLoadState('networkidle');
     
-    // Scroll to suppressed vendors section
-    await page.locator('text=Suppressed Vendors').scrollIntoViewIfNeeded();
+    // Scroll to suppressed vendors section - use heading to be specific
+    await page.getByRole('heading', { name: 'Suppressed Vendors' }).scrollIntoViewIfNeeded();
     
     // Find the vendor input and add a vendor
     const vendorInput = page.getByPlaceholder(/Enter vendor name/i);
@@ -37,11 +39,12 @@ test.describe('Vendor Suppression Settings', () => {
   });
 
   test('can remove a vendor from suppression list', async ({ page }) => {
-    await page.goto('/settings');
-    await page.getByRole('tab', { name: /Stores/i }).click();
+    // Navigate directly to stores tab using URL hash
+    await page.goto('/settings#stores');
+    await page.waitForLoadState('networkidle');
     
-    // Scroll to suppressed vendors section
-    await page.locator('text=Suppressed Vendors').scrollIntoViewIfNeeded();
+    // Scroll to suppressed vendors section - use heading to be specific
+    await page.getByRole('heading', { name: 'Suppressed Vendors' }).scrollIntoViewIfNeeded();
     
     // First add a vendor
     const vendorInput = page.getByPlaceholder(/Enter vendor name/i);
@@ -60,11 +63,12 @@ test.describe('Vendor Suppression Settings', () => {
   });
 
   test('can save suppressed vendors', async ({ page }) => {
-    await page.goto('/settings');
-    await page.getByRole('tab', { name: /Stores/i }).click();
+    // Navigate directly to stores tab using URL hash
+    await page.goto('/settings#stores');
+    await page.waitForLoadState('networkidle');
     
-    // Scroll to suppressed vendors section
-    await page.locator('text=Suppressed Vendors').scrollIntoViewIfNeeded();
+    // Scroll to suppressed vendors section - use heading to be specific
+    await page.getByRole('heading', { name: 'Suppressed Vendors' }).scrollIntoViewIfNeeded();
     
     // Add a vendor
     const vendorInput = page.getByPlaceholder(/Enter vendor name/i);

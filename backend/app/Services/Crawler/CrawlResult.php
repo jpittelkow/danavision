@@ -3,15 +3,15 @@
 namespace App\Services\Crawler;
 
 /**
- * FirecrawlResult
- * 
- * Value object representing the result of a Firecrawl API call.
+ * CrawlResult
+ *
+ * Value object representing the result of a web crawl (Crawl4AI or similar).
  * Contains the crawled price data and metadata about the operation.
  */
-class FirecrawlResult
+class CrawlResult
 {
     /**
-     * Create a new FirecrawlResult instance.
+     * Create a new CrawlResult instance.
      *
      * @param bool $success Whether the operation was successful
      * @param array $results The crawled results

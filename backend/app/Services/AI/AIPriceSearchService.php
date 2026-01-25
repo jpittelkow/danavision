@@ -768,24 +768,24 @@ PROMPT;
     }
 
     /**
-     * Analyze Firecrawl price results with AI.
-     * 
-     * This method takes price results from Firecrawl and uses AI to provide
+     * Analyze price results with AI.
+     *
+     * This method takes price results from web crawling and uses AI to provide
      * intelligent analysis: best deals, price comparisons, buying advice.
      *
      * @param string $productName The product being analyzed
-     * @param array $priceResults Array of price results from Firecrawl
+     * @param array $priceResults Array of price results from crawling
      * @param int|null $aiJobId Optional AI job ID for logging
      * @return array|null Analysis results or null on failure
      */
-    public function analyzeFirecrawlResults(string $productName, array $priceResults, ?int $aiJobId = null): ?array
+    public function analyzePriceResults(string $productName, array $priceResults, ?int $aiJobId = null): ?array
     {
         if (empty($priceResults)) {
             return null;
         }
 
         if (!$this->isAvailable()) {
-            Log::info('AIPriceSearchService: No AI provider available for Firecrawl analysis');
+            Log::info('AIPriceSearchService: No AI provider available for price analysis');
             return null;
         }
 
@@ -798,7 +798,7 @@ PROMPT;
             // Format results for AI analysis (limit to 15 results for token efficiency)
             $resultsJson = json_encode(array_slice($priceResults, 0, 15), JSON_PRETTY_PRINT);
 
-            $prompt = $this->buildFirecrawlAnalysisPrompt($productName, $resultsJson);
+            $prompt = $this->buildPriceAnalysisPrompt($productName, $resultsJson);
 
             if ($loggingService) {
                 $response = $loggingService->complete($prompt);
@@ -816,7 +816,7 @@ PROMPT;
             if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
                 $parsed = json_decode($matches[0], true);
                 if (json_last_error() === JSON_ERROR_NONE) {
-                    Log::info('AIPriceSearchService: Firecrawl analysis completed', [
+                    Log::info('AIPriceSearchService: Price analysis completed', [
                         'product' => $productName,
                         'results_analyzed' => count($priceResults),
                     ]);
@@ -824,11 +824,11 @@ PROMPT;
                 }
             }
 
-            Log::warning('AIPriceSearchService: Failed to parse Firecrawl analysis response');
+            Log::warning('AIPriceSearchService: Failed to parse price analysis response');
             return null;
 
         } catch (\Exception $e) {
-            Log::error('AIPriceSearchService: Firecrawl analysis failed', [
+            Log::error('AIPriceSearchService: Price analysis failed', [
                 'product' => $productName,
                 'error' => $e->getMessage(),
             ]);
@@ -837,13 +837,13 @@ PROMPT;
     }
 
     /**
-     * Build the prompt for AI analysis of Firecrawl results.
+     * Build the prompt for AI analysis of price results.
      *
      * @param string $productName The product name
      * @param string $resultsJson JSON-encoded price results
      * @return string The analysis prompt
      */
-    protected function buildFirecrawlAnalysisPrompt(string $productName, string $resultsJson): string
+    protected function buildPriceAnalysisPrompt(string $productName, string $resultsJson): string
     {
         return <<<PROMPT
 You are analyzing real-time price data from web crawling for "{$productName}".

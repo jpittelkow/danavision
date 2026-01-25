@@ -699,7 +699,6 @@ function PromptEditor({ prompt, onUpdate }: { prompt: PromptData; onUpdate: () =
 
 export default function Settings({ auth, settings, providers, availableProviders, prompts, stores, suppressedStores, storeCategories, flash }: Props) {
   const [showMailPassword, setShowMailPassword] = useState(false);
-  const [showFirecrawlKey, setShowFirecrawlKey] = useState(false);
   const [showGooglePlacesKey, setShowGooglePlacesKey] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
 
@@ -727,8 +726,6 @@ export default function Settings({ auth, settings, providers, availableProviders
     price_check_time: settings?.price_check_time || '03:00',
     // Vendor settings
     suppressed_vendors: settings?.suppressed_vendors || [],
-    // Firecrawl Web Crawler
-    firecrawl_api_key: settings?.firecrawl_api_key || '',
     // Google Places API
     google_places_api_key: settings?.google_places_api_key || '',
   });
@@ -1134,75 +1131,6 @@ export default function Settings({ auth, settings, providers, availableProviders
                     For best results, configure multiple AI providers with web search capabilities. 
                     The system will aggregate results from all providers for comprehensive price data.
                   </p>
-                </CardContent>
-              </Card>
-
-              {/* Firecrawl Web Crawler Configuration */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Globe className="h-5 w-5" />
-                    Web Crawler (Firecrawl)
-                  </CardTitle>
-                  <CardDescription>
-                    Configure Firecrawl.dev for intelligent price discovery across the web
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-blue-500/10 rounded-lg p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-5 w-5 text-blue-500" />
-                      <span className="font-medium text-foreground">Firecrawl Price Discovery</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Firecrawl automatically searches and crawls retailer websites to find real-time prices 
-                      for your products. It discovers new stores, updates prices daily, and finds the best deals.
-                    </p>
-                    {settings?.has_firecrawl_api_key ? (
-                      <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span className="text-sm">Firecrawl API key configured</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                        <AlertCircle className="h-4 w-4" />
-                        <span className="text-sm">No Firecrawl API key configured</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label htmlFor="firecrawl_api_key">Firecrawl API Key</Label>
-                    <div className="relative mt-1">
-                      <Input
-                        id="firecrawl_api_key"
-                        type={showFirecrawlKey ? 'text' : 'password'}
-                        value={data.firecrawl_api_key}
-                        onChange={(e) => setData('firecrawl_api_key', e.target.value)}
-                        placeholder={settings?.has_firecrawl_api_key ? '••••••••' : 'fc-...'}
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowFirecrawlKey(!showFirecrawlKey)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {showFirecrawlKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Get your API key from{' '}
-                      <a 
-                        href="https://firecrawl.dev" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        firecrawl.dev
-                      </a>
-                      . Free tier includes 500 credits.
-                    </p>
-                  </div>
                 </CardContent>
               </Card>
 

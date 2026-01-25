@@ -34,13 +34,10 @@ test.describe('Search', () => {
 
     // Wait for results - allow time for API response
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
 
     // Results section should appear (may have results or no results message)
     const resultsFound = page.locator('text=/Results|results|Found|found|No results|error|Error/');
-    await expect(resultsFound).toBeVisible({ timeout: 10000 }).catch(() => {
-      // Search may still be processing - acceptable for test environment
-    });
+    await expect(resultsFound).toBeVisible({ timeout: 15000 });
   });
 
   test('should switch to image search mode', async ({ page }) => {

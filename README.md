@@ -341,6 +341,51 @@ test('users can perform action', function () {
 });
 ```
 
+## Versioning
+
+DanaVision uses [Semantic Versioning](https://semver.org/). The version is stored in a single source of truth: the `VERSION` file at the project root.
+
+### Current Version
+
+Check the current version:
+```bash
+cat VERSION
+```
+
+### Version Bump
+
+Use the version bump script to update versions:
+
+```bash
+# Bump patch version (1.0.0 -> 1.0.1)
+./scripts/bump-version.sh patch
+
+# Bump minor version (1.0.0 -> 1.1.0)
+./scripts/bump-version.sh minor
+
+# Bump major version (1.0.0 -> 2.0.0)
+./scripts/bump-version.sh major
+
+# Set specific version
+./scripts/bump-version.sh --set 2.0.0-beta.1
+
+# Bump and create git tag
+./scripts/bump-version.sh patch --tag
+
+# Bump, tag, and push
+./scripts/bump-version.sh patch --tag --push
+```
+
+### Version Display
+
+The version is displayed in the application sidebar. It's also available via:
+- Laravel config: `config('version.number')`
+- Frontend: `app.version` prop (via Inertia)
+
+### Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## CI/CD
 
 This repository uses GitHub Actions to automatically build and push Docker images to GitHub Container Registry (ghcr.io) on every push to the main branch. The workflow:

@@ -19,16 +19,9 @@ export default defineConfig({
   /* Retry on CI only - reduced to 1 retry to speed up CI */
   retries: process.env.CI ? 1 : 0,
   
-  /* Opt out of parallel tests on CI */
-  workers: process.env.CI ? 1 : undefined,
-  
-  /* Skip flaky tests in CI - these need investigation */
-  testIgnore: process.env.CI ? [
-    '**/ai-price-search.spec.ts',
-    '**/nearby-store-discovery.spec.ts',
-    '**/generic-items.spec.ts',
-  ] : [],
-  
+  /* Limit workers to prevent overwhelming the server */
+  workers: process.env.CI ? 1 : 3,
+
   /* Reporter to use */
   reporter: [
     ['html', { outputFolder: 'playwright-report' }],

@@ -12,7 +12,7 @@ use App\Support\CrawlLogger;
 use Illuminate\Support\Facades\Log;
 
 /**
- * FirecrawlDiscoveryJob (now powered by Crawl4AI)
+ * PriceDiscoveryJob
  *
  * Background job for discovering product prices using the Store Registry system.
  * Uses Crawl4AI for free local web scraping + AI for price extraction.
@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\Log;
  *
  * @see docs/adr/016-crawl4ai-integration.md
  */
-class FirecrawlDiscoveryJob extends BaseAIJob
+class PriceDiscoveryJob extends BaseAIJob
 {
     /**
      * The number of seconds the job can run before timing out.
@@ -40,7 +40,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
     public int $timeout = 300; // 5 minutes
 
     /**
-     * Process the Firecrawl discovery job.
+     * Process the price discovery job.
      *
      * @param AIJob $aiJob The AIJob model
      * @return array|null The job output data
@@ -50,7 +50,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         $inputData = $aiJob->input_data ?? [];
         $productName = $inputData['product_name'] ?? null;
         $itemId = $aiJob->related_item_id;
-        
+
         // Initialize structured logger
         $logger = new CrawlLogger();
 
@@ -86,7 +86,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         $logger->info($shopLocal ? "Prioritizing local stores" : "Searching all online retailers");
         $this->updateProgressWithLogger($aiJob, 30, $logger);
 
-        Log::info('FirecrawlDiscoveryJob: Starting Crawl4AI discovery', [
+        Log::info('PriceDiscoveryJob: Starting Crawl4AI discovery', [
             'ai_job_id' => $aiJob->id,
             'product_name' => $productName,
             'item_id' => $itemId,
@@ -123,32 +123,32 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         }
 
         if (!$result->isSuccess()) {
-            $errorMsg = $result->error ?? 'Firecrawl discovery failed';
+            $errorMsg = $result->error ?? 'Price discovery failed';
             $logger->error("Discovery failed: {$errorMsg}");
-            Log::error('FirecrawlDiscoveryJob: Discovery failed', [
+            Log::error('PriceDiscoveryJob: Discovery failed', [
                 'ai_job_id' => $aiJob->id,
                 'product_name' => $productName,
                 'error' => $result->error,
             ]);
-            throw new \RuntimeException($result->error ?? 'Firecrawl discovery failed');
+            throw new \RuntimeException($result->error ?? 'Price discovery failed');
         }
 
         // Log results summary
         if ($result->hasResults()) {
             $logger->success("Found {$result->count()} price results");
             $logger->info("Price range: \${$result->getLowestPrice()} - \${$result->getHighestPrice()}");
-            
+
             // List stores found
             $stores = array_unique(array_column($result->results, 'store_name'));
             $logger->setStat('stores_found', count($stores));
-            
+
             if (count($stores) <= 5) {
                 $logger->info("Stores found: " . implode(', ', $stores));
             } else {
                 $logger->info("Stores found: " . implode(', ', array_slice($stores, 0, 5)));
                 $logger->info("...and " . (count($stores) - 5) . " more stores");
             }
-            
+
             // Log individual prices for verification
             foreach ($result->results as $priceResult) {
                 $logger->logPriceExtraction(
@@ -167,9 +167,9 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         if ($itemId && $result->hasResults()) {
             $logger->info("Saving prices to database...");
             $this->updateProgressWithLogger($aiJob, 75, $logger);
-            
+
             $this->updateItemPrices($itemId, $result);
-            
+
             $logger->success("Prices saved to database successfully");
         }
 
@@ -180,9 +180,9 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         if ($result->hasResults() && $itemId) {
             $logger->info("Analyzing price data with AI...");
             $this->updateProgressWithLogger($aiJob, 85, $logger);
-            
+
             $analysis = $this->analyzeResultsWithAI($result, $aiJob);
-            
+
             if ($analysis) {
                 $logger->success("Price analysis complete");
                 if (isset($analysis['best_deal'])) {
@@ -196,8 +196,8 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         $this->updateProgressWithLogger($aiJob, 95, $logger);
 
         $logger->success("Price discovery completed successfully");
-        
-        Log::info('FirecrawlDiscoveryJob: Completed', [
+
+        Log::info('PriceDiscoveryJob: Completed', [
             'ai_job_id' => $aiJob->id,
             'product_name' => $productName,
             'results_count' => $result->count(),
@@ -218,7 +218,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
     {
         // Update with both structured and simple logs for compatibility
         $this->updateProgress($aiJob, $progress, $logger->getSimpleLogs());
-        
+
         // Also update output_data with structured logs
         $currentOutput = $aiJob->output_data ?? [];
         $currentOutput['progress_logs'] = $logger->getLogs();
@@ -270,7 +270,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
     }
 
     /**
-     * Update the related item with Firecrawl price results.
+     * Update the related item with crawl price results.
      *
      * @param int $itemId The list item ID
      * @param CrawlResult $result The crawl result
@@ -280,7 +280,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         $item = ListItem::find($itemId);
 
         if (!$item) {
-            Log::warning('FirecrawlDiscoveryJob: Item not found', ['item_id' => $itemId]);
+            Log::warning('PriceDiscoveryJob: Item not found', ['item_id' => $itemId]);
             return;
         }
 
@@ -308,8 +308,8 @@ class FirecrawlDiscoveryJob extends BaseAIJob
                 // Update existing vendor price
                 $vendorPrice->updatePrice($price, $priceResult['product_url'] ?? null, $inStock);
                 $vendorPrice->update([
-                    'last_firecrawl_at' => now(),
-                    'firecrawl_source' => $result->source,
+                    'last_crawled_at' => now(),
+                    'crawl_source' => $result->source,
                 ]);
             } else {
                 // Create new vendor price entry
@@ -322,8 +322,8 @@ class FirecrawlDiscoveryJob extends BaseAIJob
                     'highest_price' => $price,
                     'in_stock' => $inStock,
                     'last_checked_at' => now(),
-                    'last_firecrawl_at' => now(),
-                    'firecrawl_source' => $result->source,
+                    'last_crawled_at' => now(),
+                    'crawl_source' => $result->source,
                 ]);
             }
 
@@ -345,10 +345,10 @@ class FirecrawlDiscoveryJob extends BaseAIJob
             }
 
             // Capture price history
-            PriceHistory::captureFromItem($item, 'firecrawl_discovery');
+            PriceHistory::captureFromItem($item, 'price_discovery');
         }
 
-        Log::info('FirecrawlDiscoveryJob: Updated item prices', [
+        Log::info('PriceDiscoveryJob: Updated item prices', [
             'item_id' => $itemId,
             'lowest_price' => $lowestPrice,
             'lowest_vendor' => $lowestVendor,
@@ -367,7 +367,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
     {
         try {
             $aiService = $this->getAIService();
-            
+
             if (!$aiService) {
                 return null;
             }
@@ -377,7 +377,7 @@ class FirecrawlDiscoveryJob extends BaseAIJob
 
             // Build prompt for AI analysis
             $resultsJson = json_encode(array_slice($result->results, 0, 15), JSON_PRETTY_PRINT);
-            
+
             $prompt = <<<PROMPT
 Analyze these price search results for "{$productName}":
 
@@ -409,7 +409,7 @@ Only return the JSON object, no other text.
 PROMPT;
 
             $response = $aiService->complete($prompt);
-            
+
             // Parse JSON from response
             if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
                 $parsed = json_decode($matches[0], true);
@@ -421,7 +421,7 @@ PROMPT;
             return null;
 
         } catch (\Exception $e) {
-            Log::warning('FirecrawlDiscoveryJob: AI analysis failed', [
+            Log::warning('PriceDiscoveryJob: AI analysis failed', [
                 'error' => $e->getMessage(),
             ]);
             return null;
@@ -467,7 +467,7 @@ PROMPT;
                     // Dispatch discovery job with delay
                     $aiJob = AIJob::createJob(
                         userId: $userId,
-                        type: AIJob::TYPE_FIRECRAWL_DISCOVERY,
+                        type: AIJob::TYPE_PRICE_DISCOVERY,
                         inputData: [
                             'product_name' => $item->product_name,
                             'product_query' => $item->product_query ?? $item->product_name,
@@ -486,7 +486,7 @@ PROMPT;
 
                     $globalDelay += rand(30, 60); // Spread jobs over time
 
-                    Log::info('FirecrawlDiscoveryJob: Scheduled weekly discovery', [
+                    Log::info('PriceDiscoveryJob: Scheduled weekly discovery', [
                         'user_id' => $userId,
                         'item_id' => $item->id,
                         'product' => $item->product_name,

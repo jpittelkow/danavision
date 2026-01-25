@@ -2,8 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\AI\PriceRefreshJob;
-use App\Jobs\AI\PriceSearchJob;
+use App\Jobs\AI\FirecrawlRefreshJob;
 use App\Jobs\AI\ProductIdentificationJob;
 use App\Jobs\AI\SmartFillJob;
 use App\Models\AIJob;
@@ -113,7 +112,7 @@ class AIJobController extends Controller
         Gate::authorize('create', AIJob::class);
 
         $request->validate([
-            'type' => ['required', 'string', 'in:product_identification,image_analysis,price_search,smart_fill,price_refresh'],
+            'type' => ['required', 'string', 'in:product_identification,image_analysis,smart_fill,price_refresh'],
             'input_data' => ['required', 'array'],
             'related_item_id' => ['nullable', 'integer', 'exists:list_items,id'],
             'related_list_id' => ['nullable', 'integer', 'exists:shopping_lists,id'],
@@ -133,9 +132,8 @@ class AIJobController extends Controller
         // Dispatch the appropriate job
         $jobClass = match ($aiJob->type) {
             AIJob::TYPE_PRODUCT_IDENTIFICATION, AIJob::TYPE_IMAGE_ANALYSIS => ProductIdentificationJob::class,
-            AIJob::TYPE_PRICE_SEARCH => PriceSearchJob::class,
             AIJob::TYPE_SMART_FILL => SmartFillJob::class,
-            AIJob::TYPE_PRICE_REFRESH => PriceRefreshJob::class,
+            AIJob::TYPE_PRICE_REFRESH => FirecrawlRefreshJob::class,
             default => throw new \InvalidArgumentException("Unknown job type: {$aiJob->type}"),
         };
 
@@ -282,9 +280,14 @@ class AIJobController extends Controller
             'logs_count' => $job->request_logs_count ?? $job->requestLogs()->count(),
         ];
 
+        // Always include output_data for crawl/discovery jobs so frontend can display logs
+        // This is needed for the CrawlLogViewer component to work properly
+        if ($this->isCrawlJob($job->type) || $includeDetails) {
+            $data['output_data'] = $job->output_data;
+        }
+
         if ($includeDetails) {
             $data['input_data'] = $job->input_data;
-            $data['output_data'] = $job->output_data;
             $data['logs'] = $job->requestLogs->map(fn($log) => [
                 'id' => $log->id,
                 'provider' => $log->provider,
@@ -300,5 +303,23 @@ class AIJobController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * Check if a job type is a crawl/discovery job that benefits from log display.
+     *
+     * @param string $jobType
+     * @return bool
+     */
+    protected function isCrawlJob(string $jobType): bool
+    {
+        return in_array($jobType, [
+            AIJob::TYPE_FIRECRAWL_DISCOVERY,
+            AIJob::TYPE_FIRECRAWL_REFRESH,
+            AIJob::TYPE_PRICE_SEARCH,
+            AIJob::TYPE_PRICE_REFRESH,
+            AIJob::TYPE_NEARBY_STORE_DISCOVERY,
+            AIJob::TYPE_STORE_AUTO_CONFIG,
+        ], true);
     }
 }

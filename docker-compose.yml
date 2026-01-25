@@ -48,6 +48,23 @@ services:
       retries: 3
       start_period: 40s
 
+  # E2E tests: run with `docker compose run --rm playwright-e2e`
+  # Requires: danavision app running and reachable at http://danavision:80
+  # Uses official Playwright image (Debian/glibc) because the app image may be Alpine.
+  playwright-e2e:
+    image: mcr.microsoft.com/playwright:v1.57.0-noble
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    environment:
+      - PLAYWRIGHT_BASE_URL=http://danavision:80
+    depends_on:
+      danavision:
+        condition: service_healthy
+    profiles:
+      - e2e
+    command: sh -c "npm install && npx playwright test"
+
 volumes:
   # IMPORTANT: These volumes contain critical user data
   # To backup: docker run --rm -v danavision_data:/data -v $(pwd):/backup alpine tar czf /backup/db-backup.tar.gz /data

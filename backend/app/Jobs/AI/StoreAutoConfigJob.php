@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\Log;
  * StoreAutoConfigJob
  *
  * Background job for automatically detecting a store's search URL template.
- * Uses Firecrawl to crawl the store's website and AI to analyze the page
- * structure and detect the search URL pattern.
+ * Uses Crawl4AI for scraping and AI to analyze the page structure and detect
+ * the search URL pattern.
  *
  * This job is dispatched when:
  * - A store is added via Nearby Store Discovery
@@ -38,7 +38,6 @@ class StoreAutoConfigJob extends BaseAIJob
         $storeId = $inputData['store_id'] ?? null;
         $websiteUrl = $inputData['website_url'] ?? null;
         $storeName = $inputData['store_name'] ?? 'Unknown Store';
-        $useAgent = $inputData['use_agent'] ?? false; // Whether to use expensive Tier 4 agent
         $logs = [];
 
         if (!$storeId) {
@@ -50,9 +49,6 @@ class StoreAutoConfigJob extends BaseAIJob
         }
 
         $logs[] = "Starting URL discovery for: {$storeName}";
-        if ($useAgent) {
-            $logs[] = "Using advanced detection (Firecrawl Agent)";
-        }
         $this->updateProgress($aiJob, 10, $logs);
 
         // Find the store
@@ -83,13 +79,6 @@ class StoreAutoConfigJob extends BaseAIJob
 
         // Initialize the auto-config service
         $service = StoreAutoConfigService::forUser($this->userId);
-
-        // For basic detection, Firecrawl is optional (Tier 1 & 2 don't need it)
-        // But for agent detection (Tier 4), it's required
-        if ($useAgent && !$service->isAvailable()) {
-            $logs[] = "Firecrawl API key not configured";
-            throw new \RuntimeException('Firecrawl API key not configured. Please add your API key in Settings.');
-        }
 
         $logs[] = "Analyzing website using tiered detection...";
         $logs[] = "Tier 1: Checking known store templates...";
@@ -164,18 +153,11 @@ class StoreAutoConfigJob extends BaseAIJob
         $error = $result['error'] ?? 'Could not detect search URL pattern';
         $logs[] = "Failed to detect search URL: {$error}";
 
-        // Include agent availability info
-        $agentAvailable = $result['agent_available'] ?? false;
-        if ($agentAvailable) {
-            $logs[] = "Advanced detection (Firecrawl Agent) is available as a fallback option";
-        }
-
         Log::warning('StoreAutoConfigJob: Failed to configure store', [
             'ai_job_id' => $aiJob->id,
             'store_id' => $storeId,
             'store_name' => $storeName,
             'error' => $error,
-            'agent_available' => $agentAvailable,
         ]);
 
         // Return partial success (job completed but no template found)
@@ -187,8 +169,6 @@ class StoreAutoConfigJob extends BaseAIJob
             'template' => null,
             'success' => false,
             'error' => $error,
-            'agent_available' => $agentAvailable,
-            'agent_cost_estimate' => $result['agent_cost_estimate'] ?? null,
             'logs' => $logs,
         ];
     }

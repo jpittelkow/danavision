@@ -19,6 +19,10 @@ import {
 
 interface LayoutProps extends PageProps {
   children: React.ReactNode;
+  app: {
+    version: string;
+    name: string;
+  };
 }
 
 const navigation = [
@@ -28,7 +32,7 @@ const navigation = [
   { name: 'Items', href: '/items', icon: Package },
 ];
 
-export default function AppLayout({ children, auth }: LayoutProps) {
+export default function AppLayout({ children, auth, app }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // Show flash messages as toasts
@@ -157,6 +161,10 @@ export default function AppLayout({ children, auth }: LayoutProps) {
               <LogOut className="w-4 h-4" />
               <span>Sign Out</span>
             </Button>
+            {/* Version display */}
+            <div className="mt-3 pt-3 border-t border-white/10 text-center">
+              <span className="text-xs text-primary-foreground/50">{app?.version || 'dev'}</span>
+            </div>
           </div>
         </div>
       </aside>

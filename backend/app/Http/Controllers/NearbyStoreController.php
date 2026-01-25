@@ -474,7 +474,7 @@ class NearbyStoreController extends Controller
         $hasGooglePlacesKey = !empty(Setting::get(Setting::GOOGLE_PLACES_API_KEY, $user->id))
             || !empty(config('services.google_places.api_key'));
 
-        $hasFirecrawlKey = !empty(Setting::get(Setting::FIRECRAWL_API_KEY, $user->id));
+        $canAutoConfigure = StoreAutoConfigService::forUser($user->id)->isAvailable();
 
         $hasLocation = !empty(Setting::get(Setting::HOME_LATITUDE, $user->id))
             && !empty(Setting::get(Setting::HOME_LONGITUDE, $user->id));
@@ -483,9 +483,8 @@ class NearbyStoreController extends Controller
             'success' => true,
             'available' => $hasGooglePlacesKey,
             'has_google_places_key' => $hasGooglePlacesKey,
-            'has_firecrawl_key' => $hasFirecrawlKey,
             'has_location' => $hasLocation,
-            'can_auto_configure' => $hasFirecrawlKey,
+            'can_auto_configure' => $canAutoConfigure,
         ]);
     }
 }

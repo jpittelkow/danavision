@@ -36,8 +36,8 @@ test.describe('Settings - Address Typeahead', () => {
     // Type a search query
     await addressInput.fill('123 Main St');
 
-    // Wait for potential suggestions (debounced, 300ms + network time)
-    await page.waitForTimeout(1000);
+    // Wait for network to settle (suggestions are debounced)
+    await page.waitForLoadState('networkidle');
 
     // Check if dropdown or suggestions appear
     // Note: Actual suggestions depend on Google Places API availability and key configuration
@@ -111,14 +111,13 @@ test.describe('Settings - Address Validation', () => {
     }
 
     const addressInput = page.locator('input[placeholder*="Search for your address"]');
-    
+
     if (await addressInput.isVisible()) {
       // Type to trigger search
       await addressInput.fill('1600 Pennsylvania Ave');
 
-      // Look for loading spinner (Loader2 icon with animate-spin)
-      // The loading indicator may appear briefly
-      await page.waitForTimeout(100);
+      // Wait for network activity
+      await page.waitForLoadState('networkidle');
     }
   });
 
@@ -130,17 +129,15 @@ test.describe('Settings - Address Validation', () => {
     }
 
     const addressInput = page.locator('input[placeholder*="Search for your address"]');
-    
+
     if (await addressInput.isVisible()) {
       // Make rapid requests to trigger rate limiting
       await addressInput.fill('test1');
-      await page.waitForTimeout(100);
       await addressInput.fill('test12');
-      await page.waitForTimeout(100);
       await addressInput.fill('test123');
 
       // Should either show rate limit message or handle gracefully
-      await page.waitForTimeout(500);
+      await page.waitForLoadState('networkidle');
     }
   });
 });

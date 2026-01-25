@@ -50,9 +50,6 @@ class Setting extends Model
     public const SERPAPI_KEY = 'serpapi_key';
     public const RAINFOREST_KEY = 'rainforest_key';
 
-    // Firecrawl Web Crawler Settings
-    public const FIRECRAWL_API_KEY = 'firecrawl_api_key';
-
     // Google Places API Settings (for nearby store discovery)
     public const GOOGLE_PLACES_API_KEY = 'google_places_api_key';
 
@@ -93,7 +90,6 @@ class Setting extends Model
         self::GEMINI_API_KEY,
         self::SERPAPI_KEY,
         self::RAINFOREST_KEY,
-        self::FIRECRAWL_API_KEY,
         self::GOOGLE_PLACES_API_KEY,
         self::MAIL_PASSWORD,
     ];

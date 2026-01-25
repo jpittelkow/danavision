@@ -127,8 +127,6 @@ export function StorePreferences({
   const [findingUrl, setFindingUrl] = useState<Record<number, boolean>>({});
   const [urlJobIds, setUrlJobIds] = useState<Record<number, number>>({});
   const pollIntervalRef = useRef<Record<number, NodeJS.Timeout>>({});
-  // Track stores where agent detection is available (after standard detection failed)
-  const [agentAvailable, setAgentAvailable] = useState<Record<number, { available: boolean; costEstimate?: string }>>({});
 
   // Cleanup polling intervals on unmount
   useEffect(() => {
@@ -415,22 +413,11 @@ export function StorePreferences({
   }, [onUpdate]);
 
   // Start URL discovery for a store
-  const handleFindSearchUrl = useCallback(async (storeId: number, useAgent: boolean = false) => {
+  const handleFindSearchUrl = useCallback(async (storeId: number) => {
     setFindingUrl((prev) => ({ ...prev, [storeId]: true }));
-    // Clear any previous agent availability when starting a new search
-    if (!useAgent) {
-      setAgentAvailable((prev) => {
-        const newState = { ...prev };
-        delete newState[storeId];
-        return newState;
-      });
-    }
 
     try {
-      const endpoint = useAgent
-        ? `/api/stores/${storeId}/find-search-url-agent`
-        : `/api/stores/${storeId}/find-search-url`;
-      const response = await axios.post(endpoint);
+      const response = await axios.post(`/api/stores/${storeId}/find-search-url`);
       const { ai_job_id, already_running } = response.data;
 
       if (ai_job_id) {
@@ -457,8 +444,6 @@ export function StorePreferences({
                 template?: string; 
                 success?: boolean; 
                 error?: string;
-                agent_available?: boolean;
-                agent_cost_estimate?: string;
               } | undefined;
               
               if (outputData?.template) {
@@ -474,28 +459,10 @@ export function StorePreferences({
                 if (editingStore?.id === storeId) {
                   setEditForm((prev) => ({ ...prev, search_url_template: outputData.template || '' }));
                 }
-                // Clear agent availability on success
-                setAgentAvailable((prev) => {
-                  const newState = { ...prev };
-                  delete newState[storeId];
-                  return newState;
-                });
                 onUpdate?.();
               } else {
-                // Detection failed - check if agent is available
-                if (outputData?.agent_available) {
-                  setAgentAvailable((prev) => ({
-                    ...prev,
-                    [storeId]: {
-                      available: true,
-                      costEstimate: outputData.agent_cost_estimate,
-                    },
-                  }));
-                }
-                // Only show alert if not using agent (agent will show inline option)
-                if (!outputData?.agent_available || useAgent) {
-                  alert(outputData?.error || 'Could not find search URL for this store.');
-                }
+                // Detection failed
+                alert(outputData?.error || 'Could not find search URL for this store.');
               }
             } else if (job.status === 'failed' || job.status === 'cancelled') {
               clearInterval(pollInterval);
@@ -524,11 +491,6 @@ export function StorePreferences({
       alert(errorMessage);
     }
   }, [onUpdate, editingStore]);
-
-  // Handler for trying advanced (agent) detection
-  const handleTryAgentDetection = useCallback((storeId: number) => {
-    handleFindSearchUrl(storeId, true);
-  }, [handleFindSearchUrl]);
 
   return (
     <div className="space-y-6">
@@ -825,48 +787,6 @@ export function StorePreferences({
                       <p className="text-xs text-muted-foreground">
                         Use {'{query}'} where the search term should go, or click the wand to auto-detect.
                       </p>
-                      
-                      {/* Agent Detection Option */}
-                      {editingStore && agentAvailable[editingStore.id]?.available && !editForm.search_url_template && (
-                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-                          <div className="flex items-start gap-3">
-                            <Wand2 className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
-                            <div className="flex-1 space-y-2">
-                              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                                Standard detection couldn&apos;t find the URL
-                              </p>
-                              <p className="text-xs text-amber-800 dark:text-amber-200">
-                                Try advanced detection using Firecrawl Agent? This interacts with the page directly to find the search URL.
-                                {agentAvailable[editingStore.id].costEstimate && (
-                                  <span className="block mt-1 font-medium">
-                                    Estimated cost: {agentAvailable[editingStore.id].costEstimate}
-                                  </span>
-                                )}
-                              </p>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleTryAgentDetection(editingStore.id)}
-                                disabled={findingUrl[editingStore.id]}
-                                className="mt-1 border-amber-300 hover:bg-amber-100 dark:border-amber-700 dark:hover:bg-amber-900/50"
-                              >
-                                {findingUrl[editingStore.id] ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Detecting...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Wand2 className="mr-2 h-4 w-4" />
-                                    Try Advanced Detection
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
 
                     {/* Parent Store Info */}

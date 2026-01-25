@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Models\Store;
 use App\Models\UserStorePreference;
 use App\Services\AI\AIService;
+use App\Support\CrawlLogger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -100,13 +101,18 @@ class StoreDiscoveryService
      *   - skip_discovery: bool - Skip Tier 2 discovery even if few results
      *   - stores: array|null - Specific store IDs to search (overrides user preferences)
      *   - max_stores: int - Maximum number of stores to search
-     * @return FirecrawlResult
+     *   - logger: CrawlLogger|null - Optional logger for detailed progress tracking
+     * @return CrawlResult
      */
-    public function discoverPrices(string $productName, array $options = []): FirecrawlResult
+    public function discoverPrices(string $productName, array $options = []): CrawlResult
     {
+        // Get or create logger for detailed tracking
+        $logger = $options['logger'] ?? null;
+
         if (!$this->isAvailable()) {
             Log::warning('StoreDiscoveryService: Service not available', ['user_id' => $this->userId]);
-            return FirecrawlResult::error('Crawl4AI service not running or AI provider not configured');
+            $logger?->error('Crawl4AI service not running or AI provider not configured');
+            return CrawlResult::error('Crawl4AI service not running or AI provider not configured');
         }
 
         $shopLocal = $options['shop_local'] ?? false;
@@ -122,6 +128,7 @@ class StoreDiscoveryService
 
         // Build the search query
         $searchQuery = $this->buildSearchQuery($productName, $options);
+        $logger?->info("Search query: {$searchQuery}");
 
         // Get stores to search
         $stores = $this->getStoresToSearch($options, $shopLocal, $maxStores);
@@ -131,8 +138,15 @@ class StoreDiscoveryService
             'stores' => $stores->pluck('name')->toArray(),
         ]);
 
+        $logger?->info("Selected {$stores->count()} stores for Tier 1 search");
+        if ($stores->count() > 0) {
+            $storeNames = $stores->pluck('name')->take(5)->toArray();
+            $logger?->debug("Stores: " . implode(', ', $storeNames) . ($stores->count() > 5 ? '...' : ''));
+        }
+
         // ===== TIER 1: Use URL templates for known stores =====
-        $tier1Results = $this->tier1TemplateSearch($searchQuery, $stores);
+        $logger?->info("Starting Tier 1: URL template search");
+        $tier1Results = $this->tier1TemplateSearch($searchQuery, $stores, $logger);
 
         Log::info('StoreDiscoveryService: Tier 1 completed', [
             'results_count' => $tier1Results->count(),
@@ -141,8 +155,15 @@ class StoreDiscoveryService
                 : [],
         ]);
 
+        $logger?->logTierComplete(1, $tier1Results->count());
+
         // If we have enough results or discovery is disabled, return
         if ($tier1Results->count() >= $this->minResultsThreshold || $skipDiscovery) {
+            if ($skipDiscovery) {
+                $logger?->info("Tier 2 discovery skipped (disabled)");
+            } else {
+                $logger?->success("Sufficient results found, skipping Tier 2");
+            }
             return $tier1Results;
         }
 
@@ -152,7 +173,10 @@ class StoreDiscoveryService
             'threshold' => $this->minResultsThreshold,
         ]);
 
-        $tier2Results = $this->tier2SearchDiscovery($searchQuery, $productName);
+        $logger?->info("Tier 1 found {$tier1Results->count()} results (threshold: {$this->minResultsThreshold})");
+        $logger?->info("Starting Tier 2: Major retailer search");
+        
+        $tier2Results = $this->tier2SearchDiscovery($searchQuery, $productName, $logger);
 
         // Merge results from both tiers
         $mergedResults = $this->mergeResults($tier1Results, $tier2Results);
@@ -162,9 +186,13 @@ class StoreDiscoveryService
             'merged_count' => $mergedResults->count(),
         ]);
 
+        $logger?->logTierComplete(2, $tier2Results->count());
+        $logger?->info("Total merged results: {$mergedResults->count()}");
+
         // Learn new stores from Tier 2 results
         if ($tier2Results->hasResults()) {
             $this->learnNewStores($tier2Results->results);
+            $logger?->debug("Learning new stores from discovery results");
         }
 
         return $mergedResults;
@@ -235,13 +263,15 @@ class StoreDiscoveryService
      *
      * @param string $query The search query
      * @param Collection $stores The stores to search
-     * @return FirecrawlResult
+     * @param CrawlLogger|null $logger Optional logger for detailed tracking
+     * @return CrawlResult
      */
-    protected function tier1TemplateSearch(string $query, Collection $stores): FirecrawlResult
+    protected function tier1TemplateSearch(string $query, Collection $stores, ?CrawlLogger $logger = null): CrawlResult
     {
         if ($stores->isEmpty()) {
             Log::info('StoreDiscoveryService: No stores available for Tier 1');
-            return FirecrawlResult::success([], 'tier1_empty');
+            $logger?->warning('No stores available for Tier 1 search');
+            return CrawlResult::success([], 'tier1_empty');
         }
 
         // Get user's location settings for location-aware search URLs
@@ -271,12 +301,16 @@ class StoreDiscoveryService
             if ($url) {
                 $urls[] = $url;
                 $storeMap[$url] = $store;
+                $logger?->debug("Generated URL for {$store->name}");
+            } else {
+                $logger?->warning("Could not generate URL for {$store->name}");
             }
         }
 
         if (empty($urls)) {
             Log::warning('StoreDiscoveryService: No URLs generated from templates');
-            return FirecrawlResult::success([], 'tier1_no_urls');
+            $logger?->error('No URLs could be generated from store templates');
+            return CrawlResult::success([], 'tier1_no_urls');
         }
 
         Log::info('StoreDiscoveryService: Tier 1 scraping URLs with Crawl4AI', [
@@ -284,31 +318,40 @@ class StoreDiscoveryService
             'urls' => array_slice($urls, 0, 5),
         ]);
 
+        $urlCount = count($urls);
+        $logger?->info("Scraping {$urlCount} store URLs with Crawl4AI...");
+
         // Use Crawl4AI for batch scraping (free - no API costs)
         $scrapedPages = $this->crawl4aiService->scrapeUrls($urls);
+
+        $logger?->info("Batch scrape completed, processing results...");
 
         // Extract prices from scraped pages using AI
         $attributedResults = [];
         foreach ($scrapedPages as $index => $page) {
             $url = $urls[$index] ?? null;
+            $store = $storeMap[$url] ?? null;
+            $storeName = $store?->name ?? $this->extractStoreFromUrl($url);
+
             if (!$url || !($page['success'] ?? false)) {
                 Log::warning('StoreDiscoveryService: Scrape failed for URL', [
                     'url' => $url,
                     'error' => $page['error'] ?? 'Unknown error',
                 ]);
+                $logger?->logUrlScrape($url ?? 'unknown', false, $page['error'] ?? 'Unknown error');
                 continue;
             }
 
             $markdown = $page['markdown'] ?? '';
             if (empty($markdown)) {
+                $logger?->warning("Empty content returned from {$storeName}");
                 continue;
             }
 
-            // Find the store for this URL
-            $store = $storeMap[$url] ?? null;
-            $storeName = $store?->name ?? $this->extractStoreFromUrl($url);
+            $logger?->logUrlScrape($url, true);
 
             // Use AI to extract price from markdown
+            $logger?->debug("Extracting price from {$storeName} content...");
             $priceData = $this->extractPriceFromMarkdown($markdown, $query, $storeName);
             
             if ($priceData && isset($priceData['price']) && $priceData['price'] > 0) {
@@ -320,6 +363,9 @@ class StoreDiscoveryService
                     'unit_of_measure' => $priceData['unit_of_measure'] ?? null,
                     'product_url' => $url,
                 ];
+                $logger?->success("Extracted price from {$storeName}: \${$priceData['price']}");
+            } else {
+                $logger?->warning("No price extracted from {$storeName}");
             }
         }
 
@@ -328,7 +374,11 @@ class StoreDiscoveryService
             'prices_extracted' => count($attributedResults),
         ]);
 
-        return FirecrawlResult::success($attributedResults, 'tier1_crawl4ai');
+        $successCount = count(array_filter($scrapedPages, fn($p) => $p['success'] ?? false));
+        $priceCount = count($attributedResults);
+        $logger?->info("Tier 1: {$successCount}/{$urlCount} URLs scraped, {$priceCount} prices found");
+
+        return CrawlResult::success($attributedResults, 'tier1_crawl4ai');
     }
 
     /**
@@ -454,9 +504,10 @@ PROMPT;
      *
      * @param string $query The search query
      * @param string $productName Original product name for logging
-     * @return FirecrawlResult
+     * @param CrawlLogger|null $logger Optional logger for detailed tracking
+     * @return CrawlResult
      */
-    protected function tier2SearchDiscovery(string $query, string $productName): FirecrawlResult
+    protected function tier2SearchDiscovery(string $query, string $productName, ?CrawlLogger $logger = null): CrawlResult
     {
         Log::info('StoreDiscoveryService: Starting Tier 2 discovery with major retailers', [
             'query' => $query,
@@ -478,6 +529,8 @@ PROMPT;
             'retailers' => $storeNames,
         ]);
 
+        $logger?->info("Searching " . count($storeNames) . " major retailers: " . implode(', ', $storeNames));
+
         // Scrape all retailer search pages
         $scrapedPages = $this->crawl4aiService->scrapeUrls($urls);
 
@@ -491,13 +544,18 @@ PROMPT;
                     'store' => $storeName,
                     'error' => $page['error'] ?? 'Unknown error',
                 ]);
+                $logger?->logUrlScrape($url ?? $storeName, false, $page['error'] ?? 'Unknown error');
                 continue;
             }
 
             $markdown = $page['markdown'] ?? '';
             if (empty($markdown)) {
+                $logger?->warning("Empty content returned from {$storeName}");
                 continue;
             }
+
+            $logger?->logUrlScrape($url ?? $storeName, true);
+            $logger?->debug("Extracting best match from {$storeName} search results...");
 
             // Extract price from search results page
             $priceData = $this->extractPriceFromSearchResults($markdown, $productName, $storeName);
@@ -511,6 +569,9 @@ PROMPT;
                     'unit_of_measure' => $priceData['unit_of_measure'] ?? null,
                     'product_url' => $priceData['product_url'] ?? $url,
                 ];
+                $logger?->success("Found match at {$storeName}: \${$priceData['price']}");
+            } else {
+                $logger?->warning("No matching product found at {$storeName}");
             }
         }
 
@@ -519,7 +580,10 @@ PROMPT;
             'prices_found' => count($results),
         ]);
 
-        return FirecrawlResult::success($results, 'tier2_crawl4ai');
+        $successCount = count(array_filter($scrapedPages, fn($p) => $p['success'] ?? false));
+        $logger?->info("Tier 2: {$successCount}/" . count($storeNames) . " retailers scraped, " . count($results) . " prices found");
+
+        return CrawlResult::success($results, 'tier2_crawl4ai');
     }
 
     /**
@@ -586,10 +650,10 @@ PROMPT;
     /**
      * Merge results from multiple tiers, removing duplicates.
      *
-     * @param FirecrawlResult ...$results
-     * @return FirecrawlResult
+     * @param CrawlResult ...$results
+     * @return CrawlResult
      */
-    protected function mergeResults(FirecrawlResult ...$results): FirecrawlResult
+    protected function mergeResults(CrawlResult ...$results): CrawlResult
     {
         $allResults = [];
         $seenStores = [];
@@ -615,7 +679,7 @@ PROMPT;
         // Sort by price ascending
         usort($allResults, fn($a, $b) => ($a['price'] ?? 0) <=> ($b['price'] ?? 0));
 
-        return FirecrawlResult::success($allResults, 'merged');
+        return CrawlResult::success($allResults, 'merged');
     }
 
     /**
@@ -680,12 +744,12 @@ PROMPT;
      *
      * @param array $urls Known product URLs to scrape
      * @param string|null $productName Product name for context (optional)
-     * @return FirecrawlResult
+     * @return CrawlResult
      */
-    public function refreshPrices(array $urls, ?string $productName = null): FirecrawlResult
+    public function refreshPrices(array $urls, ?string $productName = null): CrawlResult
     {
         if (empty($urls)) {
-            return FirecrawlResult::error('No URLs provided for refresh');
+            return CrawlResult::error('No URLs provided for refresh');
         }
 
         Log::info('StoreDiscoveryService: Refreshing prices with Crawl4AI', [
@@ -736,10 +800,10 @@ PROMPT;
         ]);
 
         if (empty($results)) {
-            return FirecrawlResult::error('No prices could be extracted from the provided URLs');
+            return CrawlResult::error('No prices could be extracted from the provided URLs');
         }
 
-        return FirecrawlResult::success($results, 'refresh_crawl4ai');
+        return CrawlResult::success($results, 'refresh_crawl4ai');
     }
 
     /**

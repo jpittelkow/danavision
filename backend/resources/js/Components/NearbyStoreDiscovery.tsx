@@ -126,7 +126,6 @@ export function NearbyStoreDiscovery({ onStoresAdded, hasLocation = false }: Nea
       setAvailability({
         available: false,
         has_google_places_key: false,
-        has_firecrawl_key: false,
         has_location: hasLocation,
         can_auto_configure: false,
       });
