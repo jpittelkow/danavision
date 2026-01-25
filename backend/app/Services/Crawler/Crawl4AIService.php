@@ -31,6 +31,24 @@ class Crawl4AIService
     protected int $timeout = 60;
 
     /**
+     * Patterns that may indicate bot detection, CAPTCHAs, or blocked content.
+     */
+    protected const SUSPICIOUS_PATTERNS = [
+        'access denied',
+        'robot check',
+        'please verify',
+        'captcha',
+        'blocked',
+        'unusual traffic',
+        'not a robot',
+        'enable javascript',
+        'javascript is required',
+        'sorry, we just need to make sure you\'re not a robot',
+        'page could not be loaded',
+        'checking your browser',
+    ];
+
+    /**
      * Scrape a single URL and return markdown content.
      *
      * @param string $url The URL to scrape
@@ -52,28 +70,35 @@ class Crawl4AIService
         Log::info('Crawl4AIService: Scraping URL', ['url' => $url]);
 
         try {
+            $start = microtime(true);
             $response = Http::timeout($this->timeout)
                 ->post(self::BASE_URL . '/scrape', [
                     'url' => $url,
                     'wait_for' => $options['wait_for'] ?? null,
                     'timeout' => ($options['timeout'] ?? 30) * 1000,
                 ]);
+            $durationMs = (int) ((microtime(true) - $start) * 1000);
 
             if (!$response->successful()) {
                 Log::error('Crawl4AIService: Request failed', [
                     'url' => $url,
                     'status' => $response->status(),
+                    'duration_ms' => $durationMs,
                 ]);
                 throw new \RuntimeException('Crawl4AI service request failed');
             }
 
             $data = $response->json();
+            $markdown = $data['markdown'] ?? '';
 
             Log::info('Crawl4AIService: Scrape completed', [
                 'url' => $url,
                 'success' => $data['success'] ?? false,
-                'markdown_length' => strlen($data['markdown'] ?? ''),
+                'markdown_length' => strlen($markdown),
+                'duration_ms' => $durationMs,
             ]);
+
+            $this->logContentQuality($url, $markdown, $data['success'] ?? false, $options['debug'] ?? false);
 
             return $data;
         } catch (\Exception $e) {
@@ -113,16 +138,19 @@ class Crawl4AIService
         ]);
 
         try {
+            $start = microtime(true);
             $response = Http::timeout($this->timeout * 2)
                 ->post(self::BASE_URL . '/batch', [
                     'urls' => array_values($validUrls), // Re-index array
                     'timeout' => ($options['timeout'] ?? 30) * 1000,
                 ]);
+            $durationMs = (int) ((microtime(true) - $start) * 1000);
 
             if (!$response->successful()) {
                 Log::error('Crawl4AIService: Batch request failed', [
                     'status' => $response->status(),
                     'urls_count' => count($validUrls),
+                    'duration_ms' => $durationMs,
                 ]);
                 throw new \RuntimeException('Crawl4AI batch request failed');
             }
@@ -133,7 +161,15 @@ class Crawl4AIService
                 'urls_count' => count($validUrls),
                 'results_count' => count($results),
                 'successful' => count(array_filter($results, fn($r) => $r['success'] ?? false)),
+                'duration_ms' => $durationMs,
             ]);
+
+            $debug = $options['debug'] ?? false;
+            foreach ($results as $index => $page) {
+                $url = $validUrls[$index] ?? 'unknown';
+                $markdown = $page['markdown'] ?? '';
+                $this->logContentQuality($url, $markdown, $page['success'] ?? false, $debug);
+            }
 
             return $results;
         } catch (\Exception $e) {
@@ -174,6 +210,58 @@ class Crawl4AIService
     {
         $this->timeout = $seconds;
         return $this;
+    }
+
+    /**
+     * Log content quality details: first ~500 chars of markdown and any suspicious patterns.
+     * Helps diagnose CAPTCHAs, blocks, or empty pages when 0 prices are found.
+     *
+     * @param string $url The URL that was scraped
+     * @param string $markdown The markdown content returned
+     * @param bool $success Whether the scrape reported success
+     * @param bool $debug When true, use info level; otherwise debug (avoids flooding production logs)
+     * @return void
+     */
+    protected function logContentQuality(string $url, string $markdown, bool $success, bool $debug = false): void
+    {
+        $sample = mb_substr($markdown, 0, 500);
+        $suspicious = $this->detectSuspiciousContent($markdown);
+        $level = $debug ? 'info' : 'debug';
+
+        Log::log($level, 'Crawl4AIService: Content quality', [
+            'url' => $url,
+            'success' => $success,
+            'markdown_length' => strlen($markdown),
+            'content_sample' => $sample ?: '(empty)',
+            'suspicious_patterns' => $suspicious,
+        ]);
+
+        if (!empty($suspicious)) {
+            Log::warning('Crawl4AIService: Suspicious content detected (possible bot block or CAPTCHA)', [
+                'url' => $url,
+                'patterns' => $suspicious,
+            ]);
+        }
+    }
+
+    /**
+     * Detect suspicious patterns in content that may indicate bot blocking or CAPTCHA.
+     *
+     * @param string $content The page content to check
+     * @return array List of matched pattern names
+     */
+    protected function detectSuspiciousContent(string $content): array
+    {
+        $lower = strtolower($content);
+        $found = [];
+
+        foreach (self::SUSPICIOUS_PATTERNS as $pattern) {
+            if (str_contains($lower, $pattern)) {
+                $found[] = $pattern;
+            }
+        }
+
+        return $found;
     }
 
     /**

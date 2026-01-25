@@ -156,6 +156,40 @@ When expanded, the log viewer shows a statistics bar with:
 - **Copy**: Copy all logs to clipboard as plain text
 - **Download**: Download logs as a text file with timestamps
 
+## Debug Logging for 0 Price Results
+
+When Crawl4AI finds 0 prices (e.g. when Firecrawl previously did find them), enhanced logging helps identify the cause. Pass `debug: true` in the discovery options to enable verbose logs.
+
+### What Gets Logged (with `debug: true`)
+
+| Stage | Log detail |
+|-------|------------|
+| **URL generation** | All generated URLs, `query`, and `stores_without_url` (stores that could not produce a URL) |
+| **Scrape** | First ~500 chars of markdown per URL, `suspicious_patterns` (e.g. "Robot Check", "CAPTCHA", "Access Denied"), request timing |
+| **AI extraction** | Prompt preview, raw AI response, and parse failure reason (invalid JSON, missing `price`, or no JSON in response) |
+
+### Enabling Debug
+
+```php
+$result = $discoveryService->discoverPrices($productName, [
+    'debug' => true,
+    'logger' => $logger,
+    // ...other options
+]);
+```
+
+With `debug: false` (default), verbose entries (content samples, prompt/response, parse details) are written at `debug` level and typically do not appear in production logs. "Suspicious content" and scrape failures remain at `warning`/`error`.
+
+### Python service (Crawl4AI)
+
+The Crawl4AI FastAPI service (`docker/crawl4ai/service.py`) logs:
+
+- Incoming scrape and batch requests (URLs, timeout)
+- Per-URL success/failure, markdown length, and duration
+- Batch totals (URLs, successful count, duration)
+
+View service logs: `docker compose exec danavision supervisorctl tail -f crawl4ai`
+
 ## Related Files
 
 - `backend/resources/js/Components/CrawlLogViewer.tsx` - Log viewer component
@@ -164,4 +198,6 @@ When expanded, the log viewer shows a statistics bar with:
 - `backend/app/Support/CrawlLogger.php` - Backend logging helper
 - `backend/app/Jobs/AI/FirecrawlDiscoveryJob.php` - Job with logging
 - `backend/app/Services/Crawler/StoreDiscoveryService.php` - Service with logging
+- `backend/app/Services/Crawler/Crawl4AIService.php` - Scrape and content-quality logging
+- `docker/crawl4ai/service.py` - Python scrape service logging
 - `backend/app/Http/Controllers/AIJobController.php` - API controller

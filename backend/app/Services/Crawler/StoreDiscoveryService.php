@@ -102,12 +102,14 @@ class StoreDiscoveryService
      *   - stores: array|null - Specific store IDs to search (overrides user preferences)
      *   - max_stores: int - Maximum number of stores to search
      *   - logger: CrawlLogger|null - Optional logger for detailed progress tracking
+     *   - debug: bool - Enable verbose logging (content samples, AI prompt/response) to diagnose 0 results
      * @return CrawlResult
      */
     public function discoverPrices(string $productName, array $options = []): CrawlResult
     {
         // Get or create logger for detailed tracking
         $logger = $options['logger'] ?? null;
+        $debug = $options['debug'] ?? false;
 
         if (!$this->isAvailable()) {
             Log::warning('StoreDiscoveryService: Service not available', ['user_id' => $this->userId]);
@@ -146,7 +148,7 @@ class StoreDiscoveryService
 
         // ===== TIER 1: Use URL templates for known stores =====
         $logger?->info("Starting Tier 1: URL template search");
-        $tier1Results = $this->tier1TemplateSearch($searchQuery, $stores, $logger);
+        $tier1Results = $this->tier1TemplateSearch($searchQuery, $stores, $logger, ['debug' => $debug]);
 
         Log::info('StoreDiscoveryService: Tier 1 completed', [
             'results_count' => $tier1Results->count(),
@@ -176,7 +178,7 @@ class StoreDiscoveryService
         $logger?->info("Tier 1 found {$tier1Results->count()} results (threshold: {$this->minResultsThreshold})");
         $logger?->info("Starting Tier 2: Major retailer search");
         
-        $tier2Results = $this->tier2SearchDiscovery($searchQuery, $productName, $logger);
+        $tier2Results = $this->tier2SearchDiscovery($searchQuery, $productName, $logger, ['debug' => $debug]);
 
         // Merge results from both tiers
         $mergedResults = $this->mergeResults($tier1Results, $tier2Results);
@@ -264,10 +266,12 @@ class StoreDiscoveryService
      * @param string $query The search query
      * @param Collection $stores The stores to search
      * @param CrawlLogger|null $logger Optional logger for detailed tracking
+     * @param array $options Options including: debug (bool) for verbose logging
      * @return CrawlResult
      */
-    protected function tier1TemplateSearch(string $query, Collection $stores, ?CrawlLogger $logger = null): CrawlResult
+    protected function tier1TemplateSearch(string $query, Collection $stores, ?CrawlLogger $logger = null, array $options = []): CrawlResult
     {
+        $debug = $options['debug'] ?? false;
         if ($stores->isEmpty()) {
             Log::info('StoreDiscoveryService: No stores available for Tier 1');
             $logger?->warning('No stores available for Tier 1 search');
@@ -286,6 +290,7 @@ class StoreDiscoveryService
         // Generate search URLs from templates
         $urls = [];
         $storeMap = []; // Map URLs to stores for result attribution
+        $storesWithoutUrl = []; // Stores that could not generate a URL (no template or generation failed)
 
         foreach ($stores as $store) {
             // Build location context for this specific store
@@ -303,26 +308,32 @@ class StoreDiscoveryService
                 $storeMap[$url] = $store;
                 $logger?->debug("Generated URL for {$store->name}");
             } else {
+                $storesWithoutUrl[] = $store->name;
                 $logger?->warning("Could not generate URL for {$store->name}");
             }
         }
 
         if (empty($urls)) {
-            Log::warning('StoreDiscoveryService: No URLs generated from templates');
+            Log::warning('StoreDiscoveryService: No URLs generated from templates', [
+                'query' => $query,
+                'stores_without_url' => $storesWithoutUrl,
+            ]);
             $logger?->error('No URLs could be generated from store templates');
             return CrawlResult::success([], 'tier1_no_urls');
         }
 
         Log::info('StoreDiscoveryService: Tier 1 scraping URLs with Crawl4AI', [
+            'query' => $query,
             'urls_count' => count($urls),
-            'urls' => array_slice($urls, 0, 5),
+            'urls' => $urls,
+            'stores_without_url' => $storesWithoutUrl,
         ]);
 
         $urlCount = count($urls);
         $logger?->info("Scraping {$urlCount} store URLs with Crawl4AI...");
 
         // Use Crawl4AI for batch scraping (free - no API costs)
-        $scrapedPages = $this->crawl4aiService->scrapeUrls($urls);
+        $scrapedPages = $this->crawl4aiService->scrapeUrls($urls, ['debug' => $debug]);
 
         $logger?->info("Batch scrape completed, processing results...");
 
@@ -352,7 +363,7 @@ class StoreDiscoveryService
 
             // Use AI to extract price from markdown
             $logger?->debug("Extracting price from {$storeName} content...");
-            $priceData = $this->extractPriceFromMarkdown($markdown, $query, $storeName);
+            $priceData = $this->extractPriceFromMarkdown($markdown, $query, $storeName, $debug);
             
             if ($priceData && isset($priceData['price']) && $priceData['price'] > 0) {
                 $attributedResults[] = [
@@ -387,10 +398,12 @@ class StoreDiscoveryService
      * @param string $markdown The page content as markdown
      * @param string $productName The product being searched for
      * @param string $storeName The store name for context
+     * @param bool $debug When true, verbose logs (prompt, response, parse details) use info level; otherwise debug
      * @return array|null Extracted price data or null if extraction fails
      */
-    protected function extractPriceFromMarkdown(string $markdown, string $productName, string $storeName): ?array
+    protected function extractPriceFromMarkdown(string $markdown, string $productName, string $storeName, bool $debug = false): ?array
     {
+        $verboseLevel = $debug ? 'info' : 'debug';
         $aiService = $this->getAIService();
         if (!$aiService) {
             return null;
@@ -421,16 +434,48 @@ Rules:
 PROMPT;
 
         try {
+            Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction request (extractPriceFromMarkdown)', [
+                'product' => $productName,
+                'store' => $storeName,
+                'prompt_preview' => mb_substr($prompt, 0, 800) . (strlen($prompt) > 800 ? '...' : ''),
+            ]);
+
             $response = $aiService->complete($prompt, ['max_tokens' => 200]);
-            
+
+            Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction response (extractPriceFromMarkdown)', [
+                'product' => $productName,
+                'store' => $storeName,
+                'raw_response' => $response,
+            ]);
+
             // Parse JSON from response
             if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
                 $parsed = json_decode($matches[0], true);
                 if (json_last_error() === JSON_ERROR_NONE && isset($parsed['price'])) {
                     return $parsed;
                 }
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction parse - invalid JSON', [
+                        'product' => $productName,
+                        'store' => $storeName,
+                        'json_error' => json_last_error_msg(),
+                        'extracted_match' => mb_substr($matches[0] ?? '', 0, 500),
+                    ]);
+                } else {
+                    Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction parse - price key missing from JSON', [
+                        'product' => $productName,
+                        'store' => $storeName,
+                        'parsed' => $parsed,
+                    ]);
+                }
+            } else {
+                Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction parse - no JSON object found in response', [
+                    'product' => $productName,
+                    'store' => $storeName,
+                    'response_length' => strlen($response),
+                ]);
             }
-            
+
             return null;
         } catch (\Exception $e) {
             Log::warning('StoreDiscoveryService: AI extraction failed', [
@@ -505,10 +550,13 @@ PROMPT;
      * @param string $query The search query
      * @param string $productName Original product name for logging
      * @param CrawlLogger|null $logger Optional logger for detailed tracking
+     * @param array $options Options including: debug (bool) for verbose logging
      * @return CrawlResult
      */
-    protected function tier2SearchDiscovery(string $query, string $productName, ?CrawlLogger $logger = null): CrawlResult
+    protected function tier2SearchDiscovery(string $query, string $productName, ?CrawlLogger $logger = null, array $options = []): CrawlResult
     {
+        $debug = $options['debug'] ?? false;
+
         Log::info('StoreDiscoveryService: Starting Tier 2 discovery with major retailers', [
             'query' => $query,
             'product' => $productName,
@@ -526,13 +574,15 @@ PROMPT;
         $storeNames = array_keys($retailerSearchUrls);
 
         Log::info('StoreDiscoveryService: Tier 2 scraping major retailers', [
+            'query' => $query,
             'retailers' => $storeNames,
+            'urls' => $urls,
         ]);
 
         $logger?->info("Searching " . count($storeNames) . " major retailers: " . implode(', ', $storeNames));
 
         // Scrape all retailer search pages
-        $scrapedPages = $this->crawl4aiService->scrapeUrls($urls);
+        $scrapedPages = $this->crawl4aiService->scrapeUrls($urls, ['debug' => $debug]);
 
         $results = [];
         foreach ($scrapedPages as $index => $page) {
@@ -558,7 +608,7 @@ PROMPT;
             $logger?->debug("Extracting best match from {$storeName} search results...");
 
             // Extract price from search results page
-            $priceData = $this->extractPriceFromSearchResults($markdown, $productName, $storeName);
+            $priceData = $this->extractPriceFromSearchResults($markdown, $productName, $storeName, $debug);
             
             if ($priceData && isset($priceData['price']) && $priceData['price'] > 0) {
                 $results[] = [
@@ -592,10 +642,12 @@ PROMPT;
      * @param string $markdown The search results page as markdown
      * @param string $productName The product being searched for
      * @param string $storeName The store name
+     * @param bool $debug When true, verbose logs (prompt, response, parse details) use info level; otherwise debug
      * @return array|null Extracted price data
      */
-    protected function extractPriceFromSearchResults(string $markdown, string $productName, string $storeName): ?array
+    protected function extractPriceFromSearchResults(string $markdown, string $productName, string $storeName, bool $debug = false): ?array
     {
+        $verboseLevel = $debug ? 'info' : 'debug';
         $aiService = $this->getAIService();
         if (!$aiService) {
             return null;
@@ -627,15 +679,47 @@ Rules:
 PROMPT;
 
         try {
+            Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction request (extractPriceFromSearchResults)', [
+                'product' => $productName,
+                'store' => $storeName,
+                'prompt_preview' => mb_substr($prompt, 0, 800) . (strlen($prompt) > 800 ? '...' : ''),
+            ]);
+
             $response = $aiService->complete($prompt, ['max_tokens' => 300]);
-            
+
+            Log::log($verboseLevel, 'StoreDiscoveryService: AI extraction response (extractPriceFromSearchResults)', [
+                'product' => $productName,
+                'store' => $storeName,
+                'raw_response' => $response,
+            ]);
+
             if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
                 $parsed = json_decode($matches[0], true);
                 if (json_last_error() === JSON_ERROR_NONE && isset($parsed['price'])) {
                     return $parsed;
                 }
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    Log::log($verboseLevel, 'StoreDiscoveryService: Tier 2 AI extraction parse - invalid JSON', [
+                        'product' => $productName,
+                        'store' => $storeName,
+                        'json_error' => json_last_error_msg(),
+                        'extracted_match' => mb_substr($matches[0] ?? '', 0, 500),
+                    ]);
+                } else {
+                    Log::log($verboseLevel, 'StoreDiscoveryService: Tier 2 AI extraction parse - price key missing from JSON', [
+                        'product' => $productName,
+                        'store' => $storeName,
+                        'parsed' => $parsed,
+                    ]);
+                }
+            } else {
+                Log::log($verboseLevel, 'StoreDiscoveryService: Tier 2 AI extraction parse - no JSON object found in response', [
+                    'product' => $productName,
+                    'store' => $storeName,
+                    'response_length' => strlen($response),
+                ]);
             }
-            
+
             return null;
         } catch (\Exception $e) {
             Log::warning('StoreDiscoveryService: Tier 2 AI extraction failed', [

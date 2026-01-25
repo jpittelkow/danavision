@@ -14,11 +14,16 @@ Environment Variables:
     CRAWL4AI_MAX_CONCURRENT: Maximum concurrent scrapes in batch mode (default: 3)
 """
 import asyncio
+import logging
+import time
 from os import environ
 from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+
+logger = logging.getLogger("crawl4ai.service")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 # Configuration from environment
 MAX_CONCURRENT_SCRAPES = int(environ.get('CRAWL4AI_MAX_CONCURRENT', '3'))
@@ -104,13 +109,15 @@ def get_browser_config() -> BrowserConfig:
 async def scrape_url(request: ScrapeRequest):
     """
     Scrape a single URL and return markdown content.
-    
+
     Args:
         request: ScrapeRequest with url, optional wait_for selector, and timeout
-        
+
     Returns:
         ScrapeResponse with markdown content or error message
     """
+    logger.info("Scrape request: url=%s wait_for=%s timeout=%d", request.url, request.wait_for, request.timeout)
+    start = time.perf_counter()
     try:
         # Build run config with wait_for selector if provided
         run_config = CrawlerRunConfig(
@@ -118,28 +125,41 @@ async def scrape_url(request: ScrapeRequest):
             page_timeout=request.timeout,
             wait_for=request.wait_for,  # CSS selector to wait for
         )
-        
+
         browser_config = get_browser_config()
-        
+
         async with AsyncWebCrawler(config=browser_config) as crawler:
             result = await crawler.arun(
                 url=request.url,
                 config=run_config
             )
-            
-            if not result.success:
-                return ScrapeResponse(
-                    success=False,
-                    error=result.error_message or "Scrape failed"
-                )
-            
-            return ScrapeResponse(
-                success=True,
-                markdown=result.markdown,
-                html=result.html,
-                title=result.title
+
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        md_len = len(result.markdown) if result.markdown else 0
+
+        if not result.success:
+            logger.warning(
+                "Scrape failed: url=%s error=%s duration_ms=%d",
+                request.url, result.error_message or "Scrape failed", duration_ms
             )
+            return ScrapeResponse(
+                success=False,
+                error=result.error_message or "Scrape failed"
+            )
+
+        logger.info(
+            "Scrape completed: url=%s success=true markdown_len=%d title=%s duration_ms=%d",
+            request.url, md_len, result.title or "(none)", duration_ms
+        )
+        return ScrapeResponse(
+            success=True,
+            markdown=result.markdown,
+            html=result.html,
+            title=result.title
+        )
     except Exception as e:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        logger.exception("Scrape exception: url=%s error=%s duration_ms=%d", request.url, str(e), duration_ms)
         return ScrapeResponse(success=False, error=str(e))
 
 
@@ -147,40 +167,59 @@ async def scrape_url(request: ScrapeRequest):
 async def batch_scrape(request: BatchScrapeRequest):
     """
     Scrape multiple URLs concurrently with browser reuse.
-    
+
     Args:
         request: BatchScrapeRequest with list of urls and timeout
-        
+
     Returns:
         BatchScrapeResponse with list of results for each URL
     """
     if not request.urls:
+        logger.info("Batch scrape: empty URLs list")
         return BatchScrapeResponse(results=[])
+
+    logger.info(
+        "Batch scrape request: urls_count=%d timeout=%d urls=%s",
+        len(request.urls), request.timeout, request.urls
+    )
+    batch_start = time.perf_counter()
 
     browser_config = get_browser_config()
     run_config = CrawlerRunConfig(
         wait_until="networkidle",
         page_timeout=request.timeout,
     )
-    
+
     responses = []
-    
+
     # Limit concurrency to avoid overwhelming the system
     # Configurable via CRAWL4AI_MAX_CONCURRENT environment variable
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCRAPES)
-    
+
     async def scrape_one(crawler: AsyncWebCrawler, url: str) -> ScrapeResponse:
         """Scrape a single URL using shared crawler instance."""
         async with semaphore:
+            start = time.perf_counter()
             try:
+                logger.info("Batch scraping URL: %s", url)
                 result = await crawler.arun(url=url, config=run_config)
-                
+                duration_ms = int((time.perf_counter() - start) * 1000)
+                md_len = len(result.markdown) if result.markdown else 0
+
                 if not result.success:
+                    logger.warning(
+                        "Batch scrape failed for url=%s error=%s duration_ms=%d",
+                        url, result.error_message or "Scrape failed", duration_ms
+                    )
                     return ScrapeResponse(
                         success=False,
                         error=result.error_message or "Scrape failed"
                     )
-                
+
+                logger.info(
+                    "Batch scrape OK: url=%s markdown_len=%d duration_ms=%d",
+                    url, md_len, duration_ms
+                )
                 return ScrapeResponse(
                     success=True,
                     markdown=result.markdown,
@@ -188,16 +227,19 @@ async def batch_scrape(request: BatchScrapeRequest):
                     title=result.title
                 )
             except Exception as e:
+                duration_ms = int((time.perf_counter() - start) * 1000)
+                logger.warning("Batch scrape exception for url=%s error=%s duration_ms=%d", url, str(e), duration_ms)
                 return ScrapeResponse(success=False, error=str(e))
-    
+
     try:
         # Reuse single browser instance for all URLs
         async with AsyncWebCrawler(config=browser_config) as crawler:
             tasks = [scrape_one(crawler, url) for url in request.urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             for result in results:
                 if isinstance(result, Exception):
+                    logger.error("Batch scrape task raised: %s", result)
                     responses.append(ScrapeResponse(
                         success=False,
                         error=str(result)
@@ -205,10 +247,16 @@ async def batch_scrape(request: BatchScrapeRequest):
                 else:
                     responses.append(result)
     except Exception as e:
-        # If browser fails to start, return error for all URLs
+        logger.exception("Batch scrape browser/startup failed: %s", e)
         for _ in request.urls:
             responses.append(ScrapeResponse(success=False, error=str(e)))
-    
+
+    batch_duration_ms = int((time.perf_counter() - batch_start) * 1000)
+    ok = sum(1 for r in responses if r.success)
+    logger.info(
+        "Batch scrape completed: urls=%d successful=%d duration_ms=%d",
+        len(request.urls), ok, batch_duration_ms
+    )
     return BatchScrapeResponse(results=responses)
 
 
