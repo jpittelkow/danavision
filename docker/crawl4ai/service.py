@@ -22,6 +22,15 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, field_validator
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 
+# Defensive patch: CrawlResult has no .title; some crawl4ai code paths expect it.
+# Add a property that reads from metadata['title'] so result.title never raises.
+try:
+    from crawl4ai.models import CrawlResult as _CrawlResult
+    if not hasattr(_CrawlResult, "title"):
+        _CrawlResult.title = property(lambda self: (getattr(self, "metadata", None) or {}).get("title"))
+except Exception:
+    pass  # If import fails, _title_from_result() still handles our code paths
+
 logger = logging.getLogger("crawl4ai.service")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
