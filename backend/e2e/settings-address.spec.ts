@@ -13,12 +13,14 @@ test.describe('Settings - Address Typeahead', () => {
   test('should display address input in location settings', async ({ page }) => {
     // Verify we're on the settings page
     await expect(page).toHaveTitle(/Settings/);
+    await page.waitForLoadState('networkidle');
 
-    // Look for the Location section
-    await expect(page.locator('text=Location').first()).toBeVisible();
+    // Look for the Location section - it has a CardTitle with Location
+    await expect(page.locator('h3:has-text("Location"), [class*="CardTitle"]:has-text("Location")').first()).toBeVisible();
 
-    // Verify the address input placeholder
-    await expect(page.locator('input[placeholder*="Search for your address"]').or(page.locator('text=Home Address'))).toBeVisible();
+    // Verify the address input exists (either placeholder or Home Address label)
+    const addressInput = page.locator('input[placeholder*="Search for your address"]').or(page.locator('text=Home Address'));
+    await expect(addressInput.first()).toBeVisible();
   });
 
   test('should show address typeahead suggestions on input', async ({ page }) => {
@@ -79,8 +81,11 @@ test.describe('Settings - Location Integration', () => {
   });
 
   test('should display location card with correct description', async ({ page }) => {
-    // Look for the updated description text
-    await expect(page.locator('text=local price searches and store discovery').or(page.locator('text=local deals'))).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    
+    // Look for the location card description - the text mentions local price searches
+    const descriptionText = page.locator('text=/local.*price.*searches|local.*deals|local.*store/i');
+    await expect(descriptionText.first()).toBeVisible();
   });
 
   test('should include address in form submission', async ({ page }) => {

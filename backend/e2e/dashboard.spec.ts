@@ -25,35 +25,40 @@ test.describe('Dashboard', () => {
   test('should show stats cards', async ({ page }) => {
     await page.goto('/dashboard');
 
-    // Check for stat cards
-    await expect(page.locator('text=Shopping Lists')).toBeVisible();
-    await expect(page.locator('text=Total Items')).toBeVisible();
-    await expect(page.locator('text=Price Drops')).toBeVisible();
-    await expect(page.locator('text=Potential Savings')).toBeVisible();
+    // Check for stat cards - wait for dashboard to fully load
+    await page.waitForLoadState('networkidle');
+    
+    await expect(page.locator('text=Shopping Lists').first()).toBeVisible();
+    await expect(page.locator('text=Total Items').first()).toBeVisible();
+    await expect(page.locator('text=Price Drops').first()).toBeVisible();
+    await expect(page.locator('text=Potential Savings').first()).toBeVisible();
   });
 
   test('should show active jobs section', async ({ page }) => {
     await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
 
     // Check for active jobs card
-    await expect(page.locator('text=Active Jobs')).toBeVisible();
+    await expect(page.locator('text=Active Jobs').first()).toBeVisible();
   });
 
   test('should show price check status', async ({ page }) => {
     await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
 
     // Check for price check status card
-    await expect(page.locator('text=Price Check Status')).toBeVisible();
-    await expect(page.locator('text=Last Updated')).toBeVisible();
-    await expect(page.locator('text=All-Time Lows')).toBeVisible();
+    await expect(page.locator('text=Price Check Status').first()).toBeVisible();
+    await expect(page.locator('text=Last Updated').first()).toBeVisible();
+    await expect(page.locator('text=All-Time Lows').first()).toBeVisible();
   });
 
   test('should show quick action buttons', async ({ page }) => {
     await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
 
     // Check for action buttons
-    await expect(page.locator('a:has-text("New List")')).toBeVisible();
-    await expect(page.locator('a:has-text("Smart Add")')).toBeVisible();
+    await expect(page.locator('a:has-text("New List")').first()).toBeVisible();
+    await expect(page.locator('a:has-text("Smart Add")').first()).toBeVisible();
   });
 
   test('should have updated navigation items', async ({ page }) => {
@@ -99,14 +104,20 @@ test.describe('Dashboard', () => {
 test.describe('Dashboard - Empty State', () => {
   test('should show empty state when no items', async ({ page }) => {
     await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
 
-    // If there are no items, there should be a call to action
-    const emptyState = page.locator('text=Welcome to DanaVision');
-    const hasItems = await page.locator('text=Total Items').locator('..').locator('text=/^[1-9]/').isVisible().catch(() => false);
-
-    if (!hasItems) {
-      // Should show empty state messaging
-      await expect(page.locator('text=Create Your First List').or(page.locator('text=Quick Add with AI'))).toBeVisible();
+    // Check if total items is 0
+    const totalItemsCard = page.locator('text=Total Items').first();
+    await expect(totalItemsCard).toBeVisible();
+    
+    // Look for the number after "Total Items" - if it's 0, we should see empty state
+    const itemsCount = await page.locator('text=Total Items').locator('xpath=ancestor::div[contains(@class,"CardContent")]//p[contains(@class,"text-3xl")]').textContent().catch(() => '0');
+    
+    if (itemsCount === '0') {
+      // Should show empty state messaging with call-to-action buttons
+      await expect(
+        page.locator('text=Create Your First List').or(page.locator('text=Quick Add with AI'))
+      ).toBeVisible();
     }
   });
 });

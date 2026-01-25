@@ -29,15 +29,19 @@ test.describe('Items Page', () => {
 
   test('should open filter panel when clicking filters button', async ({ page }) => {
     await page.goto('/items');
+    await page.waitForLoadState('networkidle');
 
     // Click filter button
     await page.locator('button:has-text("Filters")').click();
+    
+    // Wait for filter panel to appear
+    await page.waitForTimeout(300);
 
-    // Filter panel should appear with options
-    await expect(page.locator('text=List')).toBeVisible();
-    await expect(page.locator('text=Price Status')).toBeVisible();
-    await expect(page.locator('text=Priority')).toBeVisible();
-    await expect(page.locator('text=Sort By')).toBeVisible();
+    // Filter panel should appear with options - look for the label elements
+    await expect(page.locator('label:has-text("List")').first()).toBeVisible();
+    await expect(page.locator('label:has-text("Price Status")').first()).toBeVisible();
+    await expect(page.locator('label:has-text("Priority")').first()).toBeVisible();
+    await expect(page.locator('label:has-text("Sort By")').first()).toBeVisible();
   });
 
   test('should navigate to items page from dashboard', async ({ page }) => {
@@ -63,13 +67,13 @@ test.describe('Items Page', () => {
 
   test('should show empty state when no items', async ({ page }) => {
     await page.goto('/items');
+    await page.waitForLoadState('networkidle');
 
-    // Check for empty state or item count
-    const itemCount = page.locator('text=/\\d+ items?/');
-    const emptyState = page.locator('text=No items found');
+    // Check for empty state message or item count - the page shows total count or "No items found"
+    const itemCountOrEmpty = page.locator('text=/\\d+ items?/').or(page.locator('text=No items found'));
     
     // Either should be visible
-    await expect(itemCount.or(emptyState)).toBeVisible();
+    await expect(itemCountOrEmpty.first()).toBeVisible();
   });
 
   test('should filter by price status', async ({ page }) => {
@@ -102,13 +106,18 @@ test.describe('Items Page', () => {
 
   test('should change sort order', async ({ page }) => {
     await page.goto('/items');
+    await page.waitForLoadState('networkidle');
 
     // Open filters
     await page.locator('button:has-text("Filters")').click();
+    await page.waitForTimeout(300);
 
-    // Select sort by name
-    await page.locator('text=Sort By').locator('..').locator('button').click();
-    await page.locator('[role="option"]:has-text("Name")').first().click();
+    // Find the Sort By select trigger and click it
+    const sortBySection = page.locator('label:has-text("Sort By")').locator('..');
+    await sortBySection.locator('button[role="combobox"]').click();
+    
+    // Wait for dropdown and select "Name (A-Z)"
+    await page.locator('[role="option"]:has-text("Name (A-Z)")').click();
 
     // URL should update with sort
     await expect(page).toHaveURL(/sort=product_name/);

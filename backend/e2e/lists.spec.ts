@@ -19,8 +19,9 @@ test.describe('Shopping Lists', () => {
   test('should navigate to create list page', async ({ page }) => {
     await page.goto('/lists');
 
-    // Click create button
-    await page.click('text=Create List, text=New List, a:has-text("Create")');
+    // Click create button - use .or() for multiple selectors
+    const createButton = page.locator('text=Create List').or(page.locator('text=New List')).or(page.locator('a:has-text("Create")'));
+    await createButton.first().click();
 
     // Verify navigation to create page
     await expect(page).toHaveURL(/\/lists\/create/);
@@ -29,12 +30,12 @@ test.describe('Shopping Lists', () => {
   test('should create a new shopping list', async ({ page }) => {
     await page.goto('/lists/create');
 
-    // Fill in list details
+    // Fill in list details - use id selector which matches htmlFor="name"
     const listName = `Test List ${Date.now()}`;
-    await page.fill('input[name="name"]', listName);
+    await page.fill('#name', listName);
 
     // Optional: Add description if field exists
-    const descriptionField = page.locator('textarea[name="description"], input[name="description"]');
+    const descriptionField = page.locator('#description');
     if (await descriptionField.isVisible()) {
       await descriptionField.fill('Test description for E2E test');
     }
@@ -55,9 +56,11 @@ test.describe('Shopping Lists', () => {
     // Wait for lists to load
     await page.waitForLoadState('networkidle');
 
-    // Click on first list if any exist
-    const listLink = page.locator('a[href*="/lists/"]').first();
-    if (await listLink.isVisible()) {
+    // Click on first list if any exist (exclude /lists/create link)
+    const listLink = page.locator('a[href^="/lists/"]').filter({ hasNotText: 'Create' }).first();
+    const hasLists = await listLink.count() > 0;
+    
+    if (hasLists) {
       await listLink.click();
 
       // Verify list detail page
@@ -74,23 +77,24 @@ test.describe('Shopping Lists', () => {
     // Wait for lists to load
     await page.waitForLoadState('networkidle');
 
-    // Click on first list
-    const listLink = page.locator('a[href*="/lists/"]').first();
-    if (await listLink.isVisible()) {
+    // Click on first list (exclude /lists/create link)
+    const listLink = page.locator('a[href^="/lists/"]').filter({ hasNotText: 'Create' }).first();
+    const hasLists = await listLink.count() > 0;
+    
+    if (hasLists) {
       await listLink.click();
       await page.waitForLoadState('networkidle');
 
-      // Click Add Item
-      await page.click('text=Add Item');
+      // Click Add Item button
+      const addItemButton = page.locator('button:has-text("Add Item")').or(page.locator('text=Add Item'));
+      await addItemButton.first().click();
 
-      // Fill in item details
-      await page.fill('input[name="product_name"]', `Test Item ${Date.now()}`);
+      // Wait for form to appear
+      await page.waitForTimeout(500);
 
-      // Optional: Fill target price
-      const priceField = page.locator('input[name="target_price"]');
-      if (await priceField.isVisible()) {
-        await priceField.fill('29.99');
-      }
+      // Fill in item details - the input field inside the Add Item form
+      const productNameInput = page.locator('input[type="text"]').filter({ hasText: '' }).first();
+      await productNameInput.fill(`Test Item ${Date.now()}`);
 
       // Submit
       await page.click('button[type="submit"]');
