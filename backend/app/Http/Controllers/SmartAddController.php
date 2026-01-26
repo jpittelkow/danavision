@@ -9,7 +9,7 @@ use App\Models\ShoppingList;
 use App\Models\SmartAddQueueItem;
 use App\Services\AI\AIService;
 use App\Services\AI\MultiAIService;
-use App\Services\Crawler\StoreDiscoveryService;
+use App\Services\Crawler\FirecrawlService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -474,9 +474,9 @@ IMPORTANT GUIDELINES:
 9. For image_url, provide a direct link to a product image from a major retailer (Amazon, Walmart, Target, Best Buy, manufacturer site) if you know one. Use stable CDN URLs when possible. Set to null if unknown.
 
 Examples:
-- Sony WH-1000XM5 headphones → is_generic: false, upc: "027242917576"
-- Organic bananas → is_generic: true, unit_of_measure: "lb", upc: null, image_url: null
-- iPhone 15 Pro → is_generic: false, upc: null (varies by carrier/storage)
+- Sony WH-1000XM5 headphones ΓåÆ is_generic: false, upc: "027242917576"
+- Organic bananas ΓåÆ is_generic: true, unit_of_measure: "lb", upc: null, image_url: null
+- iPhone 15 Pro ΓåÆ is_generic: false, upc: null (varies by carrier/storage)
 
 Only return the JSON array, no other text.
 PROMPT;
@@ -644,13 +644,13 @@ PROMPT;
             'last_checked_at' => ($validated['current_price'] ?? null) ? now() : null,
         ]);
 
-        // Dispatch background job to search for prices using Crawl4AI
+        // Dispatch background job to search for prices using Firecrawl
         // This runs asynchronously after the item is added
         if (!($validated['skip_price_search'] ?? false)) {
             $userId = $request->user()->id;
-            $discoveryService = StoreDiscoveryService::forUser($userId);
-
-            if ($discoveryService->isAvailable()) {
+            $firecrawlService = FirecrawlService::forUser($userId);
+            
+            if ($firecrawlService->isAvailable()) {
                 $aiJob = AIJob::createJob(
                     userId: $userId,
                     type: AIJob::TYPE_FIRECRAWL_DISCOVERY,
@@ -667,13 +667,13 @@ PROMPT;
                     relatedListId: $list->id,
                 );
 
-                // Dispatch the discovery job after response is sent
+                // Dispatch the Firecrawl discovery job after response is sent
                 // This ensures the redirect happens immediately while price search runs in background
                 FirecrawlDiscoveryJob::dispatch($aiJob->id, $userId)
                     ->afterResponse();
             }
-            // If AI provider is not configured, item is still added but no price search runs
-            // User will see a message in the UI to configure AI in Settings
+            // If Firecrawl is not configured, item is still added but no price search runs
+            // User will see a message in the UI to configure Firecrawl in Settings
         }
 
         // Redirect to the item page so user can see prices as they load
@@ -768,12 +768,12 @@ Generic vs Specific Items:
   - Volume: "gallon", "liter", "quart", "pint", "fl_oz" (fluid ounce)
   - Count: "each", "dozen"
 - Examples:
-  - Blueberries → is_generic: true, unit_of_measure: "lb" or "oz", upc: null
-  - Ground beef → is_generic: true, unit_of_measure: "lb", upc: null
-  - Milk → is_generic: true, unit_of_measure: "gallon", upc: null
-  - Eggs → is_generic: true, unit_of_measure: "dozen", upc: null
-  - Avocados → is_generic: true, unit_of_measure: "each", upc: null
-  - Sony WH-1000XM5 → is_generic: false, unit_of_measure: null, upc: "027242917576"
+  - Blueberries ΓåÆ is_generic: true, unit_of_measure: "lb" or "oz", upc: null
+  - Ground beef ΓåÆ is_generic: true, unit_of_measure: "lb", upc: null
+  - Milk ΓåÆ is_generic: true, unit_of_measure: "gallon", upc: null
+  - Eggs ΓåÆ is_generic: true, unit_of_measure: "dozen", upc: null
+  - Avocados ΓåÆ is_generic: true, unit_of_measure: "each", upc: null
+  - Sony WH-1000XM5 ΓåÆ is_generic: false, unit_of_measure: null, upc: "027242917576"
 
 Only return the JSON object, no other text.
 PROMPT;
@@ -872,12 +872,12 @@ Return a JSON object:
 }
 
 Examples:
-- "blueberries" → {"is_generic": true, "unit_of_measure": "lb", "category": "Produce"}
-- "ground beef" → {"is_generic": true, "unit_of_measure": "lb", "category": "Meat"}
-- "milk" → {"is_generic": true, "unit_of_measure": "gallon", "category": "Dairy"}
-- "eggs" → {"is_generic": true, "unit_of_measure": "dozen", "category": "Dairy"}
-- "Sony WH-1000XM5" → {"is_generic": false, "unit_of_measure": null, "category": "Electronics"}
-- "iPhone 15" → {"is_generic": false, "unit_of_measure": null, "category": "Electronics"}
+- "blueberries" ΓåÆ {"is_generic": true, "unit_of_measure": "lb", "category": "Produce"}
+- "ground beef" ΓåÆ {"is_generic": true, "unit_of_measure": "lb", "category": "Meat"}
+- "milk" ΓåÆ {"is_generic": true, "unit_of_measure": "gallon", "category": "Dairy"}
+- "eggs" ΓåÆ {"is_generic": true, "unit_of_measure": "dozen", "category": "Dairy"}
+- "Sony WH-1000XM5" ΓåÆ {"is_generic": false, "unit_of_measure": null, "category": "Electronics"}
+- "iPhone 15" ΓåÆ {"is_generic": false, "unit_of_measure": null, "category": "Electronics"}
 
 Only return the JSON object, no other text.
 PROMPT;
@@ -1101,11 +1101,11 @@ PROMPT;
         // Mark the queue item as added
         $queueItem->markAsAdded($item->id, $selectedIndex);
 
-        // Dispatch background job to search for prices using Crawl4AI
+        // Dispatch background job to search for prices
         $userId = $request->user()->id;
-        $discoveryService = StoreDiscoveryService::forUser($userId);
-
-        if ($discoveryService->isAvailable()) {
+        $firecrawlService = FirecrawlService::forUser($userId);
+        
+        if ($firecrawlService->isAvailable()) {
             $aiJob = AIJob::createJob(
                 userId: $userId,
                 type: AIJob::TYPE_FIRECRAWL_DISCOVERY,

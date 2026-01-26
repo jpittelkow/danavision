@@ -50,7 +50,9 @@ docker compose exec danavision composer install
 # Frontend commands (Node/npm)
 docker compose exec danavision npm install
 docker compose exec danavision npm run dev
-docker compose exec danavision npm run test:e2e
+
+# E2E tests: use dedicated Playwright container (from project root)
+docker compose run --rm playwright-e2e
 
 # Database access
 docker compose exec danavision sqlite3 /var/www/html/data/database.sqlite
@@ -104,10 +106,13 @@ EVERY new feature, bug fix, or change MUST include tests. No exceptions.
 # Backend tests (Pest PHP) - run inside container
 docker compose exec danavision ./vendor/bin/pest
 
-# E2E tests (Playwright) - requires app running
+# E2E tests (Playwright) - use Playwright Docker image (works when app image is Alpine)
+docker compose run --rm playwright-e2e
+
+# E2E with in-container run (only if app image is Debian-based and has Playwright browsers)
 docker compose exec danavision npm run test:e2e
 
-# E2E with UI mode (debugging)
+# E2E with UI mode (debugging) - run from backend with app at localhost:8080
 docker compose exec danavision npm run test:e2e:ui
 ```
 

@@ -2,6 +2,7 @@
 
 namespace App\Services\Crawler;
 
+use App\Models\Setting;
 use App\Models\Store;
 use App\Services\AI\AIService;
 use Illuminate\Support\Facades\Http;
@@ -21,6 +22,11 @@ use Illuminate\Support\Facades\Log;
  */
 class StoreAutoConfigService
 {
+    /**
+     * Firecrawl API base URL.
+     */
+    protected const FIRECRAWL_BASE_URL = 'https://api.firecrawl.dev/v1';
+
     /**
      * Request timeout in seconds.
      */
@@ -506,14 +512,14 @@ class StoreAutoConfigService
     ];
 
     /**
-     * The user ID for service context.
+     * The user ID for fetching API keys.
      */
     protected int $userId;
 
     /**
-     * The Crawl4AI service for web scraping.
+     * The Firecrawl API key.
      */
-    protected Crawl4AIService $crawl4aiService;
+    protected ?string $firecrawlApiKey;
 
     /**
      * The AI service for intelligent analysis.
@@ -523,12 +529,12 @@ class StoreAutoConfigService
     /**
      * Create a new StoreAutoConfigService instance.
      *
-     * @param int $userId The user ID for service context
+     * @param int $userId The user ID for API key retrieval
      */
     public function __construct(int $userId)
     {
         $this->userId = $userId;
-        $this->crawl4aiService = new Crawl4AIService();
+        $this->firecrawlApiKey = Setting::get(Setting::FIRECRAWL_API_KEY, $userId);
     }
 
     /**
@@ -543,13 +549,13 @@ class StoreAutoConfigService
     }
 
     /**
-     * Check if the service is available (Crawl4AI running and AI provider configured).
+     * Check if the service is available (has required API keys).
      *
      * @return bool
      */
     public function isAvailable(): bool
     {
-        return $this->crawl4aiService->isAvailable() && $this->getAIService()->isAvailable();
+        return !empty($this->firecrawlApiKey);
     }
 
     /**
@@ -571,12 +577,14 @@ class StoreAutoConfigService
      * Tiers:
      * 1. Known Templates - Instant lookup from pre-configured database (free)
      * 2. Common Patterns - Test common URL patterns with validation (cheap)
-     * 3. AI Analysis - Use Crawl4AI to scrape and AI to analyze page structure (medium cost)
+     * 3. AI Analysis - Use AI to analyze page structure (medium cost)
+     * 4. Firecrawl Agent - Interactive detection (expensive, requires user opt-in)
      *
      * @param string $websiteUrl The store's website URL (homepage)
-     * @return array{success: bool, template?: string, validated?: bool, tier?: string, local_stock?: bool, local_price?: bool, error?: string}
+     * @param bool $useAgent Whether to use Firecrawl Agent (Tier 4) if other tiers fail
+     * @return array{success: bool, template?: string, validated?: bool, tier?: string, agent_available?: bool, local_stock?: bool, local_price?: bool, error?: string}
      */
-    public function detectSearchUrlTemplate(string $websiteUrl): array
+    public function detectSearchUrlTemplate(string $websiteUrl, bool $useAgent = false): array
     {
         // Ensure URL has protocol
         if (!str_starts_with($websiteUrl, 'http')) {
@@ -617,7 +625,7 @@ class StoreAutoConfigService
 
         // ============================================
         // TIER 3: AI Analysis (medium cost)
-        // Uses Crawl4AI for scraping and AI for analysis
+        // Requires Firecrawl API for scraping
         // ============================================
         if ($this->isAvailable()) {
             $tier3Result = $this->tier3AIAnalysis($websiteUrl);
@@ -630,6 +638,20 @@ class StoreAutoConfigService
             }
         }
 
+        // ============================================
+        // TIER 4: Firecrawl Agent (expensive, requires opt-in)
+        // ============================================
+        if ($useAgent && $this->isAvailable()) {
+            $tier4Result = $this->tier4FirecrawlAgent($websiteUrl);
+            if ($tier4Result['success']) {
+                Log::info('StoreAutoConfigService: Tier 4 success - Agent found pattern', [
+                    'domain' => $domain,
+                    'template' => $tier4Result['template'],
+                ]);
+                return array_merge($tier4Result, ['tier' => 'firecrawl_agent']);
+            }
+        }
+
         // All tiers failed
         Log::warning('StoreAutoConfigService: All detection tiers failed', [
             'domain' => $domain,
@@ -639,6 +661,8 @@ class StoreAutoConfigService
         return [
             'success' => false,
             'error' => 'Could not detect search URL pattern using any method',
+            'agent_available' => $this->isAvailable() && !$useAgent,
+            'agent_cost_estimate' => '~50-100 API credits',
         ];
     }
 
@@ -794,6 +818,77 @@ class StoreAutoConfigService
     }
 
     /**
+     * Tier 4: Use Firecrawl Agent for interactive detection.
+     * This is expensive and should only be used as a last resort with user opt-in.
+     *
+     * @param string $websiteUrl
+     * @return array
+     */
+    protected function tier4FirecrawlAgent(string $websiteUrl): array
+    {
+        try {
+            // Use Firecrawl's action/agent API to interact with the page
+            $response = Http::timeout(self::TIMEOUT)
+                ->withHeaders([
+                    'Authorization' => "Bearer {$this->firecrawlApiKey}",
+                    'Content-Type' => 'application/json',
+                ])
+                ->post(self::FIRECRAWL_BASE_URL . '/scrape', [
+                    'url' => $websiteUrl,
+                    'formats' => ['markdown', 'html', 'links'],
+                    'actions' => [
+                        // Try to find and interact with search
+                        [
+                            'type' => 'click',
+                            'selector' => 'input[type="search"], input[name="q"], input[name="query"], input[placeholder*="search" i], .search-input, #search',
+                        ],
+                        [
+                            'type' => 'write',
+                            'text' => 'test product',
+                        ],
+                        [
+                            'type' => 'press',
+                            'key' => 'Enter',
+                        ],
+                        [
+                            'type' => 'wait',
+                            'milliseconds' => 3000,
+                        ],
+                    ],
+                    'waitFor' => 3000,
+                ]);
+
+            if (!$response->successful()) {
+                return ['success' => false, 'error' => 'Firecrawl agent request failed'];
+            }
+
+            $data = $response->json('data') ?? $response->json();
+            $finalUrl = $data['url'] ?? $data['metadata']['finalUrl'] ?? null;
+
+            if ($finalUrl && str_contains($finalUrl, 'test') || str_contains($finalUrl, 'search')) {
+                // Extract template from the final URL
+                $template = $this->extractTemplateFromSearchResultUrl($finalUrl, 'test product');
+                if ($template) {
+                    $isValid = $this->validateSearchUrl($template, 'laptop');
+                    return [
+                        'success' => true,
+                        'template' => $template,
+                        'validated' => $isValid,
+                    ];
+                }
+            }
+
+            return ['success' => false, 'error' => 'Could not determine search URL from agent interaction'];
+
+        } catch (\Exception $e) {
+            Log::error('StoreAutoConfigService: Tier 4 agent failed', [
+                'error' => $e->getMessage(),
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Extract a template from a search result URL by replacing the query with a placeholder.
      *
      * @param string $url The search result URL
@@ -835,7 +930,7 @@ class StoreAutoConfigService
         if (!$this->isAvailable()) {
             return [
                 'success' => false,
-                'error' => 'Crawler service not available. Please ensure Crawl4AI is running and an AI provider is configured in Settings.',
+                'error' => 'Firecrawl API key not configured',
             ];
         }
 
@@ -935,30 +1030,36 @@ class StoreAutoConfigService
     }
 
     /**
-     * Scrape a website using Crawl4AI.
+     * Scrape a website using Firecrawl.
      *
      * @param string $url
-     * @return array{markdown: string, html: string, links: array}|null
+     * @return array|null
      */
     protected function scrapeWebsite(string $url): ?array
     {
         try {
-            $data = $this->crawl4aiService->scrapeUrl($url);
-            if (!($data['success'] ?? false)) {
+            $response = Http::timeout(self::TIMEOUT)
+                ->withHeaders([
+                    'Authorization' => "Bearer {$this->firecrawlApiKey}",
+                    'Content-Type' => 'application/json',
+                ])
+                ->post(self::FIRECRAWL_BASE_URL . '/scrape', [
+                    'url' => $url,
+                    'formats' => ['markdown', 'html', 'links'],
+                    'onlyMainContent' => false,
+                    'includeTags' => ['form', 'input', 'a', 'link'],
+                ]);
+
+            if (!$response->successful()) {
                 Log::warning('StoreAutoConfigService: Scrape failed', [
                     'url' => $url,
-                    'error' => $data['error'] ?? 'Unknown error',
+                    'status' => $response->status(),
                 ]);
                 return null;
             }
 
-            $html = $data['html'] ?? '';
+            return $response->json('data') ?? $response->json();
 
-            return [
-                'markdown' => $data['markdown'] ?? '',
-                'html' => $html,
-                'links' => $this->extractLinksFromHtml($html),
-            ];
         } catch (\Exception $e) {
             Log::error('StoreAutoConfigService: Scrape exception', [
                 'url' => $url,
@@ -966,26 +1067,6 @@ class StoreAutoConfigService
             ]);
             return null;
         }
-    }
-
-    /**
-     * Extract href URLs from HTML for analyzeSearchPattern.
-     *
-     * @param string $html
-     * @return array<int, string>
-     */
-    protected function extractLinksFromHtml(string $html): array
-    {
-        if (empty($html)) {
-            return [];
-        }
-
-        $links = [];
-        if (preg_match_all('/<a\s+[^>]*href\s*=\s*["\']([^"\']+)["\'][^>]*>/i', $html, $matches)) {
-            $links = $matches[1];
-        }
-
-        return array_values(array_unique(array_filter($links)));
     }
 
     /**

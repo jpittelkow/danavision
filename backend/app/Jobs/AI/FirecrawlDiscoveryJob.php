@@ -6,30 +6,26 @@ use App\Models\AIJob;
 use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
-use App\Services\Crawler\CrawlResult;
+use App\Services\Crawler\FirecrawlResult;
+use App\Services\Crawler\FirecrawlService;
 use App\Services\Crawler\StoreDiscoveryService;
-use App\Support\CrawlLogger;
 use Illuminate\Support\Facades\Log;
 
 /**
- * FirecrawlDiscoveryJob (now powered by Crawl4AI)
- *
+ * FirecrawlDiscoveryJob
+ * 
  * Background job for discovering product prices using the Store Registry system.
- * Uses Crawl4AI for free local web scraping + AI for price extraction.
- *
- * Tiers:
- * - Tier 1: URL templates for known stores (free scraping)
- * - Tier 2: Major retailer search pages (free scraping)
- *
- * Cost: Only LLM API calls for price extraction (~$0.002/extraction)
- *
+ * Uses a tiered approach to minimize Firecrawl API costs:
+ * 
+ * - Tier 1: URL templates for known stores (cheapest - ~1 credit/store)
+ * - Tier 2: Firecrawl Search API for discovery (~5-10 credits)
+ * - Tier 3: Firecrawl Agent API for complex searches (expensive, fallback only)
+ * 
  * This job:
  * 1. Uses StoreDiscoveryService to find prices across stores
  * 2. For local products, prioritizes local store searches
  * 3. Saves results to item_vendor_prices table
  * 4. Optionally sends results to AI for analysis
- *
- * @see docs/adr/016-crawl4ai-integration.md
  */
 class FirecrawlDiscoveryJob extends BaseAIJob
 {
@@ -50,81 +46,81 @@ class FirecrawlDiscoveryJob extends BaseAIJob
         $inputData = $aiJob->input_data ?? [];
         $productName = $inputData['product_name'] ?? null;
         $itemId = $aiJob->related_item_id;
-        
-        // Initialize structured logger
-        $logger = new CrawlLogger();
+        $logs = [];
 
         if (!$productName) {
-            throw new \RuntimeException('No product name provided for price discovery.');
+            throw new \RuntimeException('No product name provided for Firecrawl discovery.');
         }
 
-        $logger->info("Starting price discovery for: {$productName}");
-        $this->updateProgressWithLogger($aiJob, 10, $logger);
+        $logs[] = "Starting price discovery for: {$productName}";
+        $this->updateProgress($aiJob, 10, $logs);
 
-        // Create StoreDiscoveryService (uses Crawl4AI + AI extraction)
+        // Create StoreDiscoveryService (uses tiered approach)
         $discoveryService = StoreDiscoveryService::forUser($this->userId);
 
-        // Check if service is available (Crawl4AI + AI provider)
+        // Check if service is available
         if (!$discoveryService->isAvailable()) {
-            $logger->error('Price discovery not available. Please ensure AI provider is configured in Settings.');
-            throw new \RuntimeException('Price discovery not available. Please ensure AI provider is configured in Settings.');
+            throw new \RuntimeException('Firecrawl API key not configured. Please set up Firecrawl in Settings.');
         }
 
-        $logger->success("Store Discovery service initialized (Crawl4AI mode)");
-        $this->updateProgressWithLogger($aiJob, 20, $logger);
+        $logs[] = "Store Discovery service initialized (tiered mode)";
+        $this->updateProgress($aiJob, 20, $logs);
 
         // Check for cancellation
         if ($this->isCancelled($aiJob)) {
-            $logger->warning('Job cancelled by user');
-            return $this->buildOutputData($logger, null, null, true);
+            return ['cancelled' => true, 'logs' => $logs];
         }
 
         // Perform tiered price discovery
         $shopLocal = $inputData['shop_local'] ?? false;
+        $useAgentFallback = $inputData['use_agent_fallback'] ?? false;
+        
+        $logs[] = "Using tiered discovery (Store Registry + Search API)";
+        $logs[] = $shopLocal ? "Prioritizing local stores" : "Searching all online retailers";
+        $this->updateProgress($aiJob, 30, $logs);
 
-        $logger->info("Using Crawl4AI for free web scraping");
-        $logger->info($shopLocal ? "Prioritizing local stores" : "Searching all online retailers");
-        $this->updateProgressWithLogger($aiJob, 30, $logger);
-
-        Log::info('FirecrawlDiscoveryJob: Starting Crawl4AI discovery', [
+        Log::info('FirecrawlDiscoveryJob: Starting tiered discovery', [
             'ai_job_id' => $aiJob->id,
             'product_name' => $productName,
             'item_id' => $itemId,
             'shop_local' => $shopLocal,
+            'use_agent_fallback' => $useAgentFallback,
         ]);
 
-        // Pass the logger to the discovery service for detailed logging
+        // Use the StoreDiscoveryService for tiered discovery
         $result = $discoveryService->discoverPrices($productName, [
             'shop_local' => $shopLocal,
             'upc' => $inputData['upc'] ?? null,
             'brand' => $inputData['brand'] ?? null,
             'is_generic' => $inputData['is_generic'] ?? false,
             'unit_of_measure' => $inputData['unit_of_measure'] ?? null,
-            'logger' => $logger,
         ]);
 
-        // Merge any logs from the discovery service
-        if ($result->metadata && isset($result->metadata['logs'])) {
-            foreach ($result->metadata['logs'] as $log) {
-                $logger->info($log);
+        $logs[] = "Tiered discovery completed (source: {$result->source})";
+        $this->updateProgress($aiJob, 50, $logs);
+
+        // If tiered discovery returned few results and Agent fallback is enabled, use it
+        if ($useAgentFallback && $result->count() < 2) {
+            $logs[] = "Few results from tiered discovery, trying Agent API fallback...";
+            $this->updateProgress($aiJob, 55, $logs);
+            
+            $agentResult = $this->tryAgentFallback($productName, $inputData);
+            if ($agentResult && $agentResult->count() > $result->count()) {
+                $result = $agentResult;
+                $logs[] = "Agent API returned more results, using those instead";
             }
         }
 
-        $logger->info("Discovery phase completed (source: {$result->source})");
-        $this->updateProgressWithLogger($aiJob, 50, $logger);
-
-        $logger->info("Processing discovery results");
-        $this->updateProgressWithLogger($aiJob, 60, $logger);
+        $logs[] = "Discovery response received";
+        $this->updateProgress($aiJob, 60, $logs);
 
         // Check for cancellation
         if ($this->isCancelled($aiJob)) {
-            $logger->warning('Job cancelled by user');
-            return $this->buildOutputData($logger, null, null, true);
+            return ['cancelled' => true, 'logs' => $logs];
         }
 
         if (!$result->isSuccess()) {
-            $errorMsg = $result->error ?? 'Firecrawl discovery failed';
-            $logger->error("Discovery failed: {$errorMsg}");
+            $logs[] = "ERROR: " . ($result->error ?? 'Firecrawl discovery failed');
             Log::error('FirecrawlDiscoveryJob: Discovery failed', [
                 'ai_job_id' => $aiJob->id,
                 'product_name' => $productName,
@@ -133,69 +129,54 @@ class FirecrawlDiscoveryJob extends BaseAIJob
             throw new \RuntimeException($result->error ?? 'Firecrawl discovery failed');
         }
 
-        // Log results summary
+        $logs[] = "Found {$result->count()} price results";
+        
         if ($result->hasResults()) {
-            $logger->success("Found {$result->count()} price results");
-            $logger->info("Price range: \${$result->getLowestPrice()} - \${$result->getHighestPrice()}");
+            $logs[] = "Price range: \${$result->getLowestPrice()} - \${$result->getHighestPrice()}";
             
             // List stores found
             $stores = array_unique(array_column($result->results, 'store_name'));
-            $logger->setStat('stores_found', count($stores));
-            
-            if (count($stores) <= 5) {
-                $logger->info("Stores found: " . implode(', ', $stores));
-            } else {
-                $logger->info("Stores found: " . implode(', ', array_slice($stores, 0, 5)));
-                $logger->info("...and " . (count($stores) - 5) . " more stores");
-            }
-            
-            // Log individual prices for verification
-            foreach ($result->results as $priceResult) {
-                $logger->logPriceExtraction(
-                    $priceResult['store_name'] ?? 'Unknown',
-                    (float) ($priceResult['price'] ?? 0),
-                    $priceResult['item_name'] ?? null
-                );
+            $logs[] = "Stores found: " . implode(', ', array_slice($stores, 0, 5));
+            if (count($stores) > 5) {
+                $logs[] = "...and " . (count($stores) - 5) . " more stores";
             }
         } else {
-            $logger->warning("No prices found for this product");
+            $logs[] = "No prices found for this product";
         }
 
-        $this->updateProgressWithLogger($aiJob, 70, $logger);
+        $this->updateProgress($aiJob, 70, $logs);
 
         // If we have a related item, update its prices
         if ($itemId && $result->hasResults()) {
-            $logger->info("Saving prices to database...");
-            $this->updateProgressWithLogger($aiJob, 75, $logger);
+            $logs[] = "Saving prices to database...";
+            $this->updateProgress($aiJob, 75, $logs);
             
             $this->updateItemPrices($itemId, $result);
             
-            $logger->success("Prices saved to database successfully");
+            $logs[] = "Prices saved successfully";
         }
 
-        $this->updateProgressWithLogger($aiJob, 80, $logger);
+        $this->updateProgress($aiJob, 80, $logs);
 
         // Optionally analyze results with AI
         $analysis = null;
         if ($result->hasResults() && $itemId) {
-            $logger->info("Analyzing price data with AI...");
-            $this->updateProgressWithLogger($aiJob, 85, $logger);
+            $logs[] = "Analyzing price data...";
+            $this->updateProgress($aiJob, 85, $logs);
             
             $analysis = $this->analyzeResultsWithAI($result, $aiJob);
             
             if ($analysis) {
-                $logger->success("Price analysis complete");
+                $logs[] = "Price analysis complete";
                 if (isset($analysis['best_deal'])) {
-                    $logger->success("Best deal: {$analysis['best_deal']['store']} at \${$analysis['best_deal']['price']}");
+                    $logs[] = "Best deal: {$analysis['best_deal']['store']} at \${$analysis['best_deal']['price']}";
                 }
-            } else {
-                $logger->info("AI analysis skipped or unavailable");
             }
         }
 
-        $this->updateProgressWithLogger($aiJob, 95, $logger);
+        $this->updateProgress($aiJob, 95, $logs);
 
-        $logger->success("Price discovery completed successfully");
+        $logs[] = "Discovery completed successfully";
         
         Log::info('FirecrawlDiscoveryJob: Completed', [
             'ai_job_id' => $aiJob->id,
@@ -204,78 +185,25 @@ class FirecrawlDiscoveryJob extends BaseAIJob
             'lowest_price' => $result->getLowestPrice(),
         ]);
 
-        return $this->buildOutputData($logger, $result, $analysis, false, $productName);
-    }
-
-    /**
-     * Update job progress with structured logger.
-     *
-     * @param AIJob $aiJob The AI job
-     * @param int $progress Progress percentage
-     * @param CrawlLogger $logger The structured logger
-     */
-    protected function updateProgressWithLogger(AIJob $aiJob, int $progress, CrawlLogger $logger): void
-    {
-        // Update with both structured and simple logs for compatibility
-        $this->updateProgress($aiJob, $progress, $logger->getSimpleLogs());
-        
-        // Also update output_data with structured logs
-        $currentOutput = $aiJob->output_data ?? [];
-        $currentOutput['progress_logs'] = $logger->getLogs();
-        $currentOutput['crawl_stats'] = $logger->getStats();
-        $aiJob->update(['output_data' => $currentOutput]);
-    }
-
-    /**
-     * Build the final output data array.
-     *
-     * @param CrawlLogger $logger The structured logger
-     * @param CrawlResult|null $result The crawl result
-     * @param array|null $analysis The AI analysis
-     * @param bool $cancelled Whether the job was cancelled
-     * @param string|null $productName The product name
-     * @return array
-     */
-    protected function buildOutputData(
-        CrawlLogger $logger,
-        ?CrawlResult $result,
-        ?array $analysis,
-        bool $cancelled,
-        ?string $productName = null
-    ): array {
-        $output = [
-            'progress_logs' => $logger->getLogs(),
-            'logs' => $logger->getSimpleLogs(),
-            'crawl_stats' => $logger->getStats(),
-            'cancelled' => $cancelled,
+        return [
+            'product_name' => $productName,
+            'results' => $result->results,
+            'results_count' => $result->count(),
+            'lowest_price' => $result->getLowestPrice(),
+            'highest_price' => $result->getHighestPrice(),
+            'source' => $result->source,
+            'analysis' => $analysis,
+            'logs' => $logs,
         ];
-
-        if ($productName) {
-            $output['product_name'] = $productName;
-        }
-
-        if ($result) {
-            $output['results'] = $result->results;
-            $output['results_count'] = $result->count();
-            $output['lowest_price'] = $result->getLowestPrice();
-            $output['highest_price'] = $result->getHighestPrice();
-            $output['source'] = $result->source;
-        }
-
-        if ($analysis) {
-            $output['analysis'] = $analysis;
-        }
-
-        return $output;
     }
 
     /**
      * Update the related item with Firecrawl price results.
      *
      * @param int $itemId The list item ID
-     * @param CrawlResult $result The crawl result
+     * @param FirecrawlResult $result The Firecrawl result
      */
-    protected function updateItemPrices(int $itemId, CrawlResult $result): void
+    protected function updateItemPrices(int $itemId, FirecrawlResult $result): void
     {
         $item = ListItem::find($itemId);
 
@@ -357,13 +285,13 @@ class FirecrawlDiscoveryJob extends BaseAIJob
     }
 
     /**
-     * Optionally analyze crawl results with AI for price insights.
+     * Optionally analyze Firecrawl results with AI for price insights.
      *
-     * @param CrawlResult $result The crawl result
+     * @param FirecrawlResult $result The Firecrawl result
      * @param AIJob $aiJob The AIJob model
      * @return array|null Analysis results
      */
-    protected function analyzeResultsWithAI(CrawlResult $result, AIJob $aiJob): ?array
+    protected function analyzeResultsWithAI(FirecrawlResult $result, AIJob $aiJob): ?array
     {
         try {
             $aiService = $this->getAIService();
@@ -429,16 +357,45 @@ PROMPT;
     }
 
     /**
-     * Schedule weekly discovery for all users with AI provider configured.
-     * Called from the scheduler to find new prices for existing products.
+     * Try Agent API as a fallback for complex searches.
+     * This is expensive but provides better results for some products.
+     *
+     * @param string $productName
+     * @param array $inputData
+     * @return FirecrawlResult|null
+     */
+    protected function tryAgentFallback(string $productName, array $inputData): ?FirecrawlResult
+    {
+        try {
+            $firecrawlService = FirecrawlService::forUser($this->userId);
+            
+            return $firecrawlService->discoverProductPrices($productName, [
+                'shop_local' => $inputData['shop_local'] ?? false,
+                'upc' => $inputData['upc'] ?? null,
+                'brand' => $inputData['brand'] ?? null,
+                'is_generic' => $inputData['is_generic'] ?? false,
+                'unit_of_measure' => $inputData['unit_of_measure'] ?? null,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('FirecrawlDiscoveryJob: Agent fallback failed', [
+                'product' => $productName,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Schedule weekly discovery for all users with Firecrawl configured.
+     * Called from the scheduler to find new sites for existing products.
      */
     public static function scheduleWeeklyDiscovery(): void
     {
         // Track delay across all users to spread jobs over time
         $globalDelay = 0;
-
-        // Cache of users with discovery available (need AI provider)
-        $userDiscoveryCache = [];
+        
+        // Cache of users with Firecrawl available
+        $userFirecrawlCache = [];
 
         // Process items in chunks to avoid memory issues with large databases
         ListItem::with('shoppingList')
@@ -446,21 +403,21 @@ PROMPT;
             ->whereHas('shoppingList', function ($query) {
                 $query->whereNotNull('user_id');
             })
-            ->chunkById(100, function ($items) use (&$globalDelay, &$userDiscoveryCache) {
+            ->chunkById(100, function ($items) use (&$globalDelay, &$userFirecrawlCache) {
                 foreach ($items as $item) {
                     $userId = $item->shoppingList->user_id;
-
+                    
                     if ($userId === null) {
                         continue;
                     }
 
-                    // Check if user has discovery available (AI provider configured)
-                    if (!isset($userDiscoveryCache[$userId])) {
-                        $discoveryService = StoreDiscoveryService::forUser($userId);
-                        $userDiscoveryCache[$userId] = $discoveryService->isAvailable();
+                    // Check if user has Firecrawl configured (cached)
+                    if (!isset($userFirecrawlCache[$userId])) {
+                        $firecrawlService = FirecrawlService::forUser($userId);
+                        $userFirecrawlCache[$userId] = $firecrawlService->isAvailable();
                     }
 
-                    if (!$userDiscoveryCache[$userId]) {
+                    if (!$userFirecrawlCache[$userId]) {
                         continue;
                     }
 
@@ -483,7 +440,7 @@ PROMPT;
 
                     dispatch(new self($aiJob->id, $userId))
                         ->delay(now()->addSeconds($globalDelay));
-
+                    
                     $globalDelay += rand(30, 60); // Spread jobs over time
 
                     Log::info('FirecrawlDiscoveryJob: Scheduled weekly discovery', [

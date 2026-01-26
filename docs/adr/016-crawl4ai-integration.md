@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+**Superseded** — Reverted to Firecrawl (ADR 011) for reliability. Crawl4AI had poor price discovery on major retailers (Amazon, Target, Walmart).
 
 ## Date
 

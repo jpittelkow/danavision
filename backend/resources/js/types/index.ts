@@ -195,6 +195,9 @@ export interface DashboardData {
 export interface Settings {
   ai_provider: 'claude' | 'openai' | 'gemini' | 'local';
   ai_api_key?: string;
+  // Firecrawl Web Crawler (primary price search provider)
+  firecrawl_api_key?: string;
+  has_firecrawl_api_key?: boolean;
   // Google Places API (for nearby store discovery)
   google_places_api_key?: string;
   has_google_places_api_key?: boolean;
@@ -285,82 +288,6 @@ export type AIJobType =
 export type AIJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 /**
- * Log entry type for crawl/job progress logs.
- * Provides console-style structured logging in the UI.
- */
-export type CrawlLogLevel = 'info' | 'success' | 'warning' | 'error' | 'debug';
-
-/**
- * Individual log entry from a crawl/job operation.
- */
-export interface CrawlLogEntry {
-  /** Log level for styling */
-  level: CrawlLogLevel;
-  /** Log message */
-  message: string;
-  /** ISO timestamp when the log was created */
-  timestamp: string;
-  /** Optional additional data/context */
-  data?: Record<string, unknown>;
-}
-
-/**
- * Structured output data for crawl jobs.
- * Provides detailed information about the crawl operation.
- */
-export interface CrawlJobOutputData {
-  /** Product name that was searched */
-  product_name?: string;
-  /** Price results found */
-  results?: Array<{
-    store_name: string;
-    item_name?: string;
-    price: number;
-    stock_status?: string;
-    product_url?: string;
-  }>;
-  /** Number of results found */
-  results_count?: number;
-  /** Lowest price found */
-  lowest_price?: number;
-  /** Highest price found */
-  highest_price?: number;
-  /** Source tier (tier1_crawl4ai, tier2_crawl4ai, merged) */
-  source?: string;
-  /** AI analysis of results */
-  analysis?: {
-    best_deal?: {
-      store: string;
-      price: number;
-      why: string;
-    };
-    price_range?: {
-      low: number;
-      high: number;
-      average: number;
-    };
-    summary?: string;
-    advice?: string;
-  };
-  /** Structured progress logs for UI display */
-  progress_logs?: CrawlLogEntry[];
-  /** Legacy simple string logs (for backward compatibility) */
-  logs?: string[];
-  /** Crawl statistics */
-  crawl_stats?: {
-    urls_attempted: number;
-    urls_successful: number;
-    urls_failed: number;
-    stores_found: number;
-    tier1_results: number;
-    tier2_results: number;
-    total_duration_ms: number;
-  };
-  /** Whether the job was cancelled */
-  cancelled?: boolean;
-}
-
-/**
  * AI background job model.
  * Represents an AI task running asynchronously.
  */
@@ -373,8 +300,7 @@ export interface AIJob {
   progress: number;
   input_summary: string;
   input_data?: Record<string, unknown>;
-  /** Output data - for crawl jobs, use CrawlJobOutputData type */
-  output_data?: CrawlJobOutputData | Record<string, unknown>;
+  output_data?: Record<string, unknown>;
   error_message?: string;
   related_item_id?: number;
   related_list_id?: number;
@@ -578,6 +504,7 @@ export interface NearbyStoreDiscoveryResult {
 export interface NearbyStoreAvailability {
   available: boolean;
   has_google_places_key: boolean;
+  has_firecrawl_key: boolean;
   has_location: boolean;
   can_auto_configure: boolean;
 }
@@ -630,14 +557,6 @@ export interface SmartAddQueueItem {
   expires_at: string;
 }
 
-/**
- * Application metadata shared on every page.
- */
-export interface AppInfo {
-  version: string;
-  name: string;
-}
-
 export type PageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {
   auth: {
     user: User | null;
@@ -647,5 +566,4 @@ export type PageProps<T extends Record<string, unknown> = Record<string, unknown
     error?: string;
     message?: string;
   };
-  app: AppInfo;
 };

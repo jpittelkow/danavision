@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useJobPolling } from '@/hooks/useJobPolling';
-import type { AIJob, AIJobStats, CrawlJobOutputData } from '@/types';
+import type { AIJob, AIJobStats } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/Components/ui/card';
 import { Button } from '@/Components/ui/button';
 import { Badge } from '@/Components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/Components/ui/select';
-import { CrawlLogViewer } from '@/Components/CrawlLogViewer';
 import {
   Loader2,
   XCircle,
@@ -17,8 +16,6 @@ import {
   Activity,
   History,
   Ban,
-  DollarSign,
-  Store,
 } from 'lucide-react';
 
 /**
@@ -259,39 +256,6 @@ interface JobCardProps {
   onDelete: (id: number) => void;
 }
 
-/**
- * Check if a job is a crawl-type job that has detailed logs.
- */
-function isCrawlJob(jobType: string): boolean {
-  return ['firecrawl_discovery', 'firecrawl_refresh', 'price_search', 'price_refresh'].includes(jobType);
-}
-
-/**
- * Get crawl results summary from output data.
- */
-function getCrawlSummary(outputData?: CrawlJobOutputData | Record<string, unknown>): {
-  resultsCount: number;
-  lowestPrice: number | null;
-  highestPrice: number | null;
-  storesFound: string[];
-} | null {
-  const data = outputData as CrawlJobOutputData | undefined;
-  if (!data || (!data.results_count && !data.results?.length)) {
-    return null;
-  }
-
-  const storesFound = data.results
-    ? [...new Set(data.results.map(r => r.store_name))]
-    : [];
-
-  return {
-    resultsCount: data.results_count ?? data.results?.length ?? 0,
-    lowestPrice: data.lowest_price ?? null,
-    highestPrice: data.highest_price ?? null,
-    storesFound,
-  };
-}
-
 function JobCard({ job, onCancel, onDelete }: JobCardProps) {
   const statusBadge = () => {
     switch (job.status) {
@@ -310,9 +274,6 @@ function JobCard({ job, onCancel, onDelete }: JobCardProps) {
     }
   };
 
-  const isCrawl = isCrawlJob(job.type);
-  const crawlSummary = isCrawl ? getCrawlSummary(job.output_data) : null;
-
   return (
     <div className="border rounded-lg p-4 bg-card">
       <div className="flex items-start justify-between gap-4">
@@ -327,29 +288,6 @@ function JobCard({ job, onCancel, onDelete }: JobCardProps) {
           {job.error_message && (
             <p className="text-sm text-destructive mt-1">{job.error_message}</p>
           )}
-
-          {/* Crawl results summary */}
-          {crawlSummary && job.status === 'completed' && (
-            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
-              <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                <DollarSign className="h-3 w-3" />
-                {crawlSummary.resultsCount} price{crawlSummary.resultsCount !== 1 ? 's' : ''} found
-              </span>
-              {crawlSummary.lowestPrice !== null && (
-                <span className="text-muted-foreground">
-                  Best: ${crawlSummary.lowestPrice.toFixed(2)}
-                </span>
-              )}
-              {crawlSummary.storesFound.length > 0 && (
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Store className="h-3 w-3" />
-                  {crawlSummary.storesFound.slice(0, 3).join(', ')}
-                  {crawlSummary.storesFound.length > 3 && ` +${crawlSummary.storesFound.length - 3} more`}
-                </span>
-              )}
-            </div>
-          )}
-
           <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
             <span>{new Date(job.created_at).toLocaleString()}</span>
             {job.formatted_duration && job.formatted_duration !== '-' && (
@@ -374,8 +312,6 @@ function JobCard({ job, onCancel, onDelete }: JobCardProps) {
           )}
         </div>
       </div>
-
-      {/* Progress bar for active jobs */}
       {job.status === 'processing' && job.progress > 0 && (
         <div className="mt-3 w-full bg-muted rounded-full h-2">
           <div
@@ -383,16 +319,6 @@ function JobCard({ job, onCancel, onDelete }: JobCardProps) {
             style={{ width: `${job.progress}%` }}
           />
         </div>
-      )}
-
-      {/* Crawl log viewer for crawl jobs */}
-      {isCrawl && job.output_data && (
-        <CrawlLogViewer
-          outputData={job.output_data}
-          defaultExpanded={job.status === 'processing'}
-          maxHeight={250}
-          autoScroll={job.status === 'processing'}
-        />
       )}
     </div>
   );

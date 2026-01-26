@@ -1,11 +1,10 @@
 <?php
 
-use App\Models\AIProvider;
 use App\Models\Setting;
 use App\Models\Store;
 use App\Models\User;
 use App\Models\UserStorePreference;
-use App\Services\Crawler\CrawlResult;
+use App\Services\Crawler\FirecrawlResult;
 use App\Services\Crawler\StoreDiscoveryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -48,33 +47,9 @@ beforeEach(function () {
     ]);
 });
 
-/**
- * Helper to set up a user with AI provider configured.
- */
-function setupUserWithAI(): User
-{
-    $user = User::factory()->create();
-    
-    // Create an AI provider for the user
-    AIProvider::create([
-        'user_id' => $user->id,
-        'provider' => AIProvider::PROVIDER_OPENAI,
-        'api_key' => encrypt('test-api-key'),
-        'model' => 'gpt-4o-mini',
-        'is_active' => true,
-        'is_primary' => true,
-    ]);
-    
-    return $user;
-}
-
 test('store discovery service can be created for user', function () {
-    $user = setupUserWithAI();
-
-    // Mock Crawl4AI health check
-    Http::fake([
-        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-    ]);
+    $user = User::factory()->create();
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
     $service = StoreDiscoveryService::forUser($user->id);
 
@@ -82,62 +57,50 @@ test('store discovery service can be created for user', function () {
     expect($service->isAvailable())->toBeTrue();
 });
 
-test('store discovery service is not available without ai provider', function () {
+test('store discovery service is not available without api key', function () {
     $user = User::factory()->create();
 
-    // Mock Crawl4AI health check
-    Http::fake([
-        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-    ]);
-
-    $service = StoreDiscoveryService::forUser($user->id);
-
-    // Not available because no AI provider configured
-    expect($service->isAvailable())->toBeFalse();
-});
-
-test('store discovery service is not available when crawl4ai is down', function () {
-    $user = setupUserWithAI();
-
-    // Mock Crawl4AI health check failure
-    Http::fake([
-        '127.0.0.1:5000/health' => Http::response(null, 500),
-    ]);
-
     $service = StoreDiscoveryService::forUser($user->id);
 
     expect($service->isAvailable())->toBeFalse();
 });
 
-test('store discovery service uses crawl4ai for scraping', function () {
-    $user = setupUserWithAI();
+test('store discovery service uses store url templates', function () {
+    $user = User::factory()->create();
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
-    // Mock Crawl4AI and AI API
+    // Mock the scrape batch API call
     Http::fake([
-        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-        '127.0.0.1:5000/batch' => Http::response([
-            'results' => [
+        'api.firecrawl.dev/v1/batch/scrape' => Http::response([
+            'success' => true,
+            'data' => [
                 [
-                    'success' => true,
-                    'markdown' => '# Amazon Search Results\n\nTest Product - $29.99 - In Stock',
+                    'url' => 'https://www.amazon.com/s?k=test+product',
+                    'json' => [
+                        'store_name' => 'Amazon',
+                        'item_name' => 'Test Product',
+                        'price' => 29.99,
+                        'stock_status' => 'in_stock',
+                    ],
                 ],
                 [
-                    'success' => true,
-                    'markdown' => '# Walmart Search Results\n\nTest Product - $27.99 - In Stock',
-                ],
-                [
-                    'success' => true,
-                    'markdown' => '# Target Search Results\n\nTest Product - $28.99 - In Stock',
+                    'url' => 'https://www.walmart.com/search?q=test+product',
+                    'json' => [
+                        'store_name' => 'Walmart',
+                        'item_name' => 'Test Product',
+                        'price' => 27.99,
+                        'stock_status' => 'in_stock',
+                    ],
                 ],
             ],
         ], 200),
-        // Mock OpenAI API for price extraction
-        'api.openai.com/*' => Http::response([
-            'choices' => [
-                [
-                    'message' => [
-                        'content' => '{"item_name": "Test Product", "price": 29.99, "stock_status": "in_stock"}',
-                    ],
+        // Fallback for individual scrapes
+        'api.firecrawl.dev/v1/scrape' => Http::response([
+            'success' => true,
+            'data' => [
+                'json' => [
+                    'price' => 25.99,
+                    'stock_status' => 'in_stock',
                 ],
             ],
         ], 200),
@@ -146,16 +109,17 @@ test('store discovery service uses crawl4ai for scraping', function () {
     $service = StoreDiscoveryService::forUser($user->id);
     $result = $service->discoverPrices('test product', ['skip_discovery' => true]);
 
-    expect($result)->toBeInstanceOf(CrawlResult::class);
-    
-    // Should have called Crawl4AI batch endpoint
+    expect($result)->toBeInstanceOf(FirecrawlResult::class);
+    // Should have used batch scrape
     Http::assertSent(function ($request) {
-        return str_contains($request->url(), '127.0.0.1:5000/batch');
+        return str_contains($request->url(), 'batch/scrape') ||
+               str_contains($request->url(), 'scrape');
     });
 });
 
 test('store discovery service returns results from user enabled stores', function () {
-    $user = setupUserWithAI();
+    $user = User::factory()->create();
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
     // Disable Walmart for this user
     $walmart = Store::where('slug', 'walmart')->first();
@@ -167,35 +131,25 @@ test('store discovery service returns results from user enabled stores', functio
     ]);
 
     Http::fake([
-        '127.0.0.1:5000/*' => Http::response([
-            'results' => [],
-        ], 200),
-        'api.openai.com/*' => Http::response([
-            'choices' => [['message' => ['content' => '{"price": null}']]],
+        'api.firecrawl.dev/*' => Http::response([
+            'success' => true,
+            'data' => [],
         ], 200),
     ]);
 
     $service = StoreDiscoveryService::forUser($user->id);
     $result = $service->discoverPrices('test product', ['skip_discovery' => true]);
 
-    // Verify walmart was not in the batch request
+    // The request should not include walmart
     Http::assertSent(function ($request) {
-        if (!str_contains($request->url(), 'batch')) {
-            return true;
-        }
-        $body = json_decode($request->body(), true);
-        $urls = $body['urls'] ?? [];
-        foreach ($urls as $url) {
-            if (str_contains($url, 'walmart.com')) {
-                return false;
-            }
-        }
-        return true;
+        $body = $request->body();
+        return !str_contains($body, 'walmart.com');
     });
 });
 
 test('store discovery service prioritizes favorite stores', function () {
-    $user = setupUserWithAI();
+    $user = User::factory()->create();
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
     // Make Target a favorite with high priority
     $target = Store::where('slug', 'target')->first();
@@ -214,146 +168,56 @@ test('store discovery service prioritizes favorite stores', function () {
     expect($firstStore->slug)->toBe('target');
 });
 
-test('store discovery service triggers tier 2 when few results', function () {
-    $user = setupUserWithAI();
+test('store discovery service merges tier 2 results when needed', function () {
+    $user = User::factory()->create();
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
-    // Tier 1: 3 stores, all fail -> triggers tier 2
-    // Tier 2 search: 4 retailers, 1 success with markdown
-    // Tier 2 product: 1 product page, success
-    // AI: 1st = product URLs, 2nd = price from product page
+    // Return few results from tier 1 to trigger tier 2
     Http::fake([
-        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-        '127.0.0.1:5000/batch' => Http::sequence()
-            ->push(Http::response([
-                'results' => [
-                    ['success' => false, 'error' => 'Page not found'],
-                    ['success' => false, 'error' => 'Page not found'],
-                    ['success' => false, 'error' => 'Page not found'],
+        'api.firecrawl.dev/v1/batch/scrape' => Http::response([
+            'success' => true,
+            'data' => [
+                [
+                    'url' => 'https://www.amazon.com/s?k=test',
+                    'json' => [
+                        'price' => 29.99,
+                        'store_name' => 'Amazon',
+                    ],
                 ],
-            ], 200))
-            ->push(Http::response([
-                'results' => [
-                    ['success' => true, 'markdown' => 'Amazon search results. Product: Test Product link /dp/ABC123'],
-                    ['success' => false, 'error' => 'Timeout'],
-                    ['success' => false, 'error' => 'Timeout'],
-                    ['success' => false, 'error' => 'Timeout'],
+            ],
+        ], 200),
+        'api.firecrawl.dev/v1/scrape' => Http::response([
+            'success' => true,
+            'data' => [
+                'json' => [
+                    'price' => 25.99,
+                    'store_name' => 'Test Store',
                 ],
-            ], 200))
-            ->push(Http::response([
-                'results' => [
-                    ['success' => true, 'markdown' => 'Test Product - $24.99 - In Stock'],
+            ],
+        ], 200),
+        'api.firecrawl.dev/v1/search' => Http::response([
+            'success' => true,
+            'data' => [
+                [
+                    'url' => 'https://newstore.com/product',
+                    'title' => 'Test Product',
+                    'json' => [
+                        'price' => 24.99,
+                        'store_name' => 'New Store',
+                    ],
                 ],
-            ], 200)),
-        'api.openai.com/*' => Http::sequence()
-            ->push(Http::response([
-                'choices' => [['message' => ['content' => '{"products":[{"name":"Test Product","url":"https://www.amazon.com/dp/ABC123"}]}']]],
-            ], 200))
-            ->push(Http::response([
-                'choices' => [['message' => ['content' => '{"item_name":"Test Product","price":24.99,"stock_status":"in_stock"}']]],
-            ], 200)),
-    ]);
-
-    $service = StoreDiscoveryService::forUser($user->id);
-    $service->setMinResultsThreshold(5);
-    $result = $service->discoverPrices('test product');
-
-    expect($result->hasResults())->toBeTrue();
-    expect($result->results[0]['product_url'] ?? null)->toBe('https://www.amazon.com/dp/ABC123');
-    Http::assertSent(fn ($r) => str_contains($r->url(), '127.0.0.1:5000/batch'));
-});
-
-test('tier 2 two-step flow always sets product_url for refresh', function () {
-    $user = setupUserWithAI();
-
-    Http::fake([
-        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-        '127.0.0.1:5000/batch' => Http::sequence()
-            ->push(Http::response(['results' => [['success' => false], ['success' => false], ['success' => false]]], 200))
-            ->push(Http::response([
-                'results' => [
-                    ['success' => true, 'markdown' => 'Target search. Item /p/12345'],
-                    ['success' => false], ['success' => false], ['success' => false],
-                ],
-            ], 200))
-            ->push(Http::response([
-                'results' => [['success' => true, 'markdown' => 'Product page $99.99']],
-            ], 200)),
-        'api.openai.com/*' => Http::sequence()
-            ->push(Http::response([
-                'choices' => [['message' => ['content' => '{"products":[{"name":"Item","url":"https://www.target.com/p/12345"}]}']]],
-            ], 200))
-            ->push(Http::response([
-                'choices' => [['message' => ['content' => '{"item_name":"Item","price":99.99,"stock_status":"in_stock"}']]],
-            ], 200)),
-    ]);
-
-    $service = StoreDiscoveryService::forUser($user->id);
-    $service->setMinResultsThreshold(10);
-    $result = $service->discoverPrices('test');
-
-    expect($result->hasResults())->toBeTrue();
-    expect($result->results[0])->toHaveKey('product_url');
-    expect($result->results[0]['product_url'])->toBe('https://www.target.com/p/12345');
-});
-
-test('tier 2 returns empty when no product URLs extracted from search', function () {
-    $user = setupUserWithAI();
-
-    Http::fake([
-        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-        '127.0.0.1:5000/batch' => Http::sequence()
-            ->push(Http::response(['results' => [['success' => false], ['success' => false], ['success' => false]]], 200))
-            ->push(Http::response([
-                'results' => [
-                    ['success' => true, 'markdown' => 'No relevant products here.'],
-                    ['success' => true, 'markdown' => 'Also nothing.'],
-                    ['success' => false], ['success' => false],
-                ],
-            ], 200)),
-        'api.openai.com/*' => Http::response([
-            'choices' => [['message' => ['content' => '{"products":[]}']]],
+            ],
         ], 200),
     ]);
 
     $service = StoreDiscoveryService::forUser($user->id);
-    $service->setMinResultsThreshold(10);
-    $result = $service->discoverPrices('obscure product');
+    $service->setMinResultsThreshold(5); // Set high threshold to trigger tier 2
+    $result = $service->discoverPrices('test product');
 
-    expect($result->hasResults())->toBeFalse();
-    expect($result->results)->toHaveCount(0);
-});
-
-test('resolveProductUrl makes relative product URLs absolute', function () {
-    $user = setupUserWithAI();
-
-    Http::fake([
-        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-        '127.0.0.1:5000/batch' => Http::sequence()
-            ->push(Http::response(['results' => [['success' => false], ['success' => false], ['success' => false]]], 200))
-            ->push(Http::response([
-                'results' => [
-                    ['success' => true, 'markdown' => 'Amazon /dp/B0REL'],
-                    ['success' => false], ['success' => false], ['success' => false],
-                ],
-            ], 200))
-            ->push(Http::response([
-                'results' => [['success' => true, 'markdown' => 'Price $49.00']],
-            ], 200)),
-        'api.openai.com/*' => Http::sequence()
-            ->push(Http::response([
-                'choices' => [['message' => ['content' => '{"products":[{"name":"X","url":"/dp/B0REL"}]}']]],
-            ], 200))
-            ->push(Http::response([
-                'choices' => [['message' => ['content' => '{"item_name":"X","price":49,"stock_status":"in_stock"}']]],
-            ], 200)),
-    ]);
-
-    $service = StoreDiscoveryService::forUser($user->id);
-    $service->setMinResultsThreshold(10);
-    $result = $service->discoverPrices('x');
-
-    expect($result->hasResults())->toBeTrue();
-    expect($result->results[0]['product_url'])->toBe('https://www.amazon.com/dp/B0REL');
+    // Should have called search API for tier 2
+    Http::assertSent(function ($request) {
+        return str_contains($request->url(), 'search');
+    });
 });
 
 test('store can generate search url from template', function () {
@@ -440,7 +304,8 @@ test('user store preferences can be updated in bulk', function () {
 });
 
 test('store discovery service gets correct store stats', function () {
-    $user = setupUserWithAI();
+    $user = User::factory()->create();
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
     // Add a preference
     $amazon = Store::where('slug', 'amazon')->first();

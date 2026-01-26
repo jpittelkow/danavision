@@ -6,8 +6,7 @@ use App\Jobs\AI\FirecrawlDiscoveryJob;
 use App\Models\AIJob;
 use App\Models\Setting;
 use App\Models\ShoppingList;
-use App\Services\Crawler\StoreDiscoveryService;
-use App\Traits\SuppressesVendors;
+use App\Services\Crawler\FirecrawlService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,7 +14,6 @@ use Inertia\Response;
 
 class ShoppingListController extends Controller
 {
-    use SuppressesVendors;
     /**
      * Display all lists for the user.
      */
@@ -82,12 +80,15 @@ class ShoppingListController extends Controller
             'shares.user',
         ]);
 
-        $userId = $request->user()->id;
+        // Get suppressed vendors
+        $suppressedVendors = $this->getSuppressedVendors($request->user()->id);
 
         // Transform items to include computed properties
-        $items = $list->items->map(function ($item) use ($userId) {
+        $items = $list->items->map(function ($item) use ($suppressedVendors) {
             // Filter vendor prices to exclude suppressed vendors
-            $filteredVendorPrices = $this->filterSuppressedVendorPrices($item->vendorPrices, $userId);
+            $filteredVendorPrices = $item->vendorPrices->filter(function ($vp) use ($suppressedVendors) {
+                return !$this->isVendorSuppressed($vp->vendor, $suppressedVendors);
+            });
 
             return [
                 'id' => $item->id,
@@ -141,6 +142,34 @@ class ShoppingListController extends Controller
     }
 
     /**
+     * Get the list of suppressed vendors for a user.
+     */
+    protected function getSuppressedVendors(int $userId): array
+    {
+        $suppressedJson = Setting::get(Setting::SUPPRESSED_VENDORS, $userId);
+        return $suppressedJson ? json_decode($suppressedJson, true) ?: [] : [];
+    }
+
+    /**
+     * Check if a vendor is suppressed.
+     */
+    protected function isVendorSuppressed(string $vendor, array $suppressedVendors): bool
+    {
+        if (empty($suppressedVendors)) {
+            return false;
+        }
+
+        $vendorLower = strtolower($vendor);
+        foreach ($suppressedVendors as $suppressed) {
+            $suppressedLower = strtolower($suppressed);
+            if (str_contains($vendorLower, $suppressedLower) || str_contains($suppressedLower, $vendorLower)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Show form for editing a list.
      */
     public function edit(ShoppingList $list): Response
@@ -188,18 +217,18 @@ class ShoppingListController extends Controller
     }
 
     /**
-     * Refresh prices for all items in the list using Crawl4AI.
+     * Refresh prices for all items in the list using Firecrawl.
      */
     public function refresh(Request $request, ShoppingList $list): RedirectResponse
     {
         $this->authorize('update', $list);
 
         $userId = $request->user()->id;
-        $discoveryService = StoreDiscoveryService::forUser($userId);
-
-        // Check if price discovery is available (Crawl4AI + AI provider)
-        if (!$discoveryService->isAvailable()) {
-            return back()->with('error', 'Price discovery is not available. Please configure an AI provider in Settings.');
+        $firecrawlService = FirecrawlService::forUser($userId);
+        
+        // Check if Firecrawl is available
+        if (!$firecrawlService->isAvailable()) {
+            return back()->with('error', 'Firecrawl is not configured. Please set up a Firecrawl API key in Settings.');
         }
 
         $items = $list->items()->where('is_purchased', false)->get();

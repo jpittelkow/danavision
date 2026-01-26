@@ -20,7 +20,7 @@ Smart Shopping Price Tracker for Dana - Track prices, get alerts on drops, and f
 - **Frontend**: React + TypeScript + Tailwind CSS
 - **Database**: SQLite
 - **Container**: Docker (Nginx + PHP-FPM + Supervisor)
-- **Testing**: Pest PHP (Feature & Unit tests)
+- **Testing**: Pest PHP (Feature & Unit), Playwright (E2E)
 - **AI**: Multi-provider (Claude, OpenAI, Gemini)
 - **Price APIs**: SerpApi (Google Shopping), Rainforest (Amazon)
 
@@ -293,6 +293,19 @@ docker compose exec danavision ./vendor/bin/pest -v
 # Run tests with coverage (requires Xdebug)
 docker compose exec danavision ./vendor/bin/pest --coverage
 ```
+
+### E2E Tests (Playwright)
+
+E2E tests use [Playwright](https://playwright.dev/) and run in a dedicated Docker image (Debian/glibc) so they work even when the app image is Alpine-based:
+
+```bash
+# Run all E2E tests (from project root; ensures app is up and healthy first)
+docker compose run --rm playwright-e2e
+
+# Or from backend: npm run test:e2e:docker
+```
+
+Ensure the app is running (`docker compose up -d`) and the DB is seeded (`docker compose exec danavision php artisan db:seed`) so the test user `test@example.com` / `password` exists. Tests use `auth.setup.ts` to log in and reuse auth state. Config: `backend/playwright.config.ts`; specs: `backend/e2e/`.
 
 ### Test Suite Overview
 

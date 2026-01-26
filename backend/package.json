@@ -10,7 +10,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:debug": "playwright test --debug"
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:docker": "docker compose -f ../docker-compose.yml run --rm playwright-e2e"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

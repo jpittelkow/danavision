@@ -34,6 +34,7 @@ class SettingController extends Controller
             Setting::ANTHROPIC_API_KEY,
             Setting::OPENAI_API_KEY,
             Setting::GEMINI_API_KEY,
+            Setting::FIRECRAWL_API_KEY,
             Setting::GOOGLE_PLACES_API_KEY,
             Setting::MAIL_DRIVER,
             Setting::MAIL_HOST,
@@ -111,6 +112,9 @@ class SettingController extends Controller
             'settings' => [
                 'ai_provider' => $settings[Setting::AI_PROVIDER] ?? 'claude',
                 'ai_api_key' => $settings[Setting::ANTHROPIC_API_KEY] || $settings[Setting::OPENAI_API_KEY] || $settings[Setting::GEMINI_API_KEY] ? '********' : null,
+                // Firecrawl Web Crawler (primary price search provider)
+                'firecrawl_api_key' => $settings[Setting::FIRECRAWL_API_KEY] ? '********' : null,
+                'has_firecrawl_api_key' => !empty($settings[Setting::FIRECRAWL_API_KEY]),
                 // Google Places API (for nearby store discovery)
                 'google_places_api_key' => $settings[Setting::GOOGLE_PLACES_API_KEY] ? '********' : null,
                 'has_google_places_api_key' => !empty($settings[Setting::GOOGLE_PLACES_API_KEY]),
@@ -168,6 +172,8 @@ class SettingController extends Controller
         $validated = $request->validate([
             'ai_provider' => ['nullable', 'in:claude,openai,gemini,local'],
             'ai_api_key' => ['nullable', 'string'],
+            // Firecrawl Web Crawler (primary price search provider)
+            'firecrawl_api_key' => ['nullable', 'string'],
             // Google Places API (for nearby store discovery)
             'google_places_api_key' => ['nullable', 'string'],
             // Email settings
@@ -214,6 +220,11 @@ class SettingController extends Controller
             if ($aiKeyField) {
                 Setting::set($aiKeyField, $validated['ai_api_key'], $userId);
             }
+        }
+
+        // Firecrawl API Key (only if not masked)
+        if (isset($validated['firecrawl_api_key']) && $validated['firecrawl_api_key'] !== '********') {
+            Setting::set(Setting::FIRECRAWL_API_KEY, $validated['firecrawl_api_key'], $userId);
         }
 
         // Google Places API Key (only if not masked)
@@ -1028,7 +1039,7 @@ class SettingController extends Controller
      * Trigger search URL discovery for a store.
      *
      * Creates a background job to detect the store's search URL template
-     * using Crawl4AI and AI analysis.
+     * using Firecrawl and AI analysis.
      *
      * @param Request $request
      * @param int $storeId
@@ -1055,12 +1066,12 @@ class SettingController extends Controller
             ], 400);
         }
 
-        // Check if crawler and AI are available
+        // Check if Firecrawl is available
         $autoConfigService = StoreAutoConfigService::forUser($userId);
         if (!$autoConfigService->isAvailable()) {
             return response()->json([
                 'success' => false,
-                'error' => 'Crawler service not available. Please ensure Crawl4AI is running and an AI provider is configured in Settings.',
+                'error' => 'Firecrawl API key not configured. Please add your API key in Settings.',
             ], 400);
         }
 
@@ -1101,6 +1112,85 @@ class SettingController extends Controller
             'success' => true,
             'ai_job_id' => $aiJob->id,
             'message' => 'Search URL discovery started',
+        ], 201);
+    }
+
+    /**
+     * Find search URL using the expensive Firecrawl Agent (Tier 4).
+     * This should only be used after regular detection has failed.
+     *
+     * @param Request $request
+     * @param int $storeId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function findSearchUrlWithAgent(Request $request, int $storeId): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Find the store
+        $store = Store::find($storeId);
+        if (!$store) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store not found',
+            ], 404);
+        }
+
+        // Check if store has a domain/website
+        if (empty($store->domain)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Store does not have a website domain configured',
+            ], 400);
+        }
+
+        // Check if Firecrawl is available
+        $autoConfigService = StoreAutoConfigService::forUser($userId);
+        if (!$autoConfigService->isAvailable()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Firecrawl API key not configured. Please add your API key in Settings.',
+            ], 400);
+        }
+
+        // Build website URL from domain
+        $websiteUrl = 'https://' . preg_replace('/^www\./', '', $store->domain);
+
+        // Check for existing pending/processing job for this store
+        $existingJob = AIJob::where('user_id', $userId)
+            ->where('type', AIJob::TYPE_STORE_AUTO_CONFIG)
+            ->whereIn('status', [AIJob::STATUS_PENDING, AIJob::STATUS_PROCESSING])
+            ->whereJsonContains('input_data->store_id', $storeId)
+            ->first();
+
+        if ($existingJob) {
+            return response()->json([
+                'success' => true,
+                'ai_job_id' => $existingJob->id,
+                'message' => 'URL discovery already in progress',
+                'already_running' => true,
+            ]);
+        }
+
+        // Create the AI job with agent flag
+        $aiJob = AIJob::createJob(
+            userId: $userId,
+            type: AIJob::TYPE_STORE_AUTO_CONFIG,
+            inputData: [
+                'store_id' => $store->id,
+                'website_url' => $websiteUrl,
+                'store_name' => $store->name,
+                'use_agent' => true, // Flag to use expensive agent detection
+            ],
+        );
+
+        // Dispatch the job (afterResponse ensures HTTP response is sent first)
+        dispatch(new StoreAutoConfigJob($aiJob->id, $userId))->afterResponse();
+
+        return response()->json([
+            'success' => true,
+            'ai_job_id' => $aiJob->id,
+            'message' => 'Advanced URL discovery started (using Firecrawl Agent)',
         ], 201);
     }
 }

@@ -1,4 +1,4 @@
-# DanaVision Docker Documentation
+﻿# DanaVision Docker Documentation
 
 ## Overview
 
@@ -8,19 +8,6 @@ DanaVision is deployed as a single Docker container that includes everything nee
 - PHP-FPM 8.3
 - SQLite database (embedded)
 - Pre-built React frontend
-- Python 3.11 + Crawl4AI service (web scraping for price discovery)
-- Chromium browser (headless, for Crawl4AI)
-- Supervisor (process management)
-
-### Resource Requirements
-
-| Resource | Minimum | Recommended |
-|----------|---------|-------------|
-| RAM | 1GB | 2GB |
-| CPU | 1 core | 2 cores |
-| Disk | 2GB | 5GB |
-
-> **Note**: The Chromium browser used by Crawl4AI requires approximately 256-512MB additional memory when actively scraping.
 
 ## Quick Start
 
@@ -142,39 +129,22 @@ volumes:
 
 ## Dockerfile
 
-The Dockerfile (in `docker/Dockerfile`) creates a single container with PHP, Python, Chromium, and all dependencies:
+The Dockerfile (in `docker/Dockerfile`) creates a single container with:
 
 ```dockerfile
 FROM php:8.3-fpm-alpine
 
-# Install system dependencies including Python and Chromium for Crawl4AI
+# Install system dependencies
 RUN apk add --no-cache \
     nginx \
     supervisor \
     nodejs \
     npm \
     sqlite \
-    curl \
-    # Python for Crawl4AI service
-    python3 \
-    py3-pip \
-    # Chromium for web scraping
-    chromium \
-    chromium-chromedriver \
-    nss freetype harfbuzz ca-certificates ttf-freefont
+    curl
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo_sqlite bcmath zip
-
-# Set Playwright/Crawl4AI to use system Chromium
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
-ENV CHROMIUM_PATH=/usr/bin/chromium-browser
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-
-# Install Crawl4AI Python service
-COPY docker/crawl4ai/requirements.txt /opt/crawl4ai/requirements.txt
-RUN pip3 install --no-cache-dir --break-system-packages -r /opt/crawl4ai/requirements.txt
-COPY docker/crawl4ai/ /opt/crawl4ai/
+RUN docker-php-ext-install pdo_sqlite
 
 # Copy application files
 COPY backend/ /var/www/html/
@@ -186,22 +156,12 @@ RUN npm install && npm run build
 
 # Configure nginx and supervisor
 COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/supervisord.conf /etc/supervisord.conf
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 80
 
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 ```
-
-### Container Components
-
-| Component | Purpose | Port |
-|-----------|---------|------|
-| Nginx | Web server | 80 (external) |
-| PHP-FPM | PHP processing | 9000 (internal) |
-| Crawl4AI | Web scraping API | 5000 (internal) |
-| Queue Workers | Background jobs | - |
-| Scheduler | Cron tasks | - |
 
 ## Environment Variables
 
@@ -353,120 +313,22 @@ server {
 
 ## Supervisor Configuration
 
-Supervisor manages all processes within the container:
+Supervisor manages both Nginx and PHP-FPM processes:
 
 ```ini
 [supervisord]
 nodaemon=true
-logfile=/dev/null
-pidfile=/run/supervisord.pid
-user=root
 
 [program:nginx]
-command=/usr/sbin/nginx -g "daemon off;"
+command=nginx -g 'daemon off;'
 autostart=true
 autorestart=true
-priority=10
 
 [program:php-fpm]
-command=/usr/local/sbin/php-fpm -F -R
+command=php-fpm --nodaemonize
 autostart=true
 autorestart=true
-priority=5
-
-[program:scheduler]
-command=/bin/sh -c "while true; do php /var/www/html/artisan schedule:run; sleep 60; done"
-autostart=true
-autorestart=true
-priority=15
-
-[program:queue-worker]
-process_name=%(program_name)s_%(process_num)02d
-command=php /var/www/html/artisan queue:work database --sleep=3 --tries=3 --max-time=3600
-autostart=true
-autorestart=true
-numprocs=2
-
-[program:crawl4ai]
-command=python3 -m uvicorn service:app --host 127.0.0.1 --port 5000 --workers 1
-directory=/opt/crawl4ai
-autostart=true
-autorestart=true
-startsecs=5
-priority=20
-environment=PLAYWRIGHT_BROWSERS_PATH="/usr/bin",CHROMIUM_PATH="/usr/bin/chromium-browser"
 ```
-
-### Managed Processes
-
-| Process | Description | Instances |
-|---------|-------------|-----------|
-| nginx | Web server | 1 |
-| php-fpm | PHP processor | 1 |
-| scheduler | Laravel scheduler | 1 |
-| queue-worker | Background jobs | 2 |
-| crawl4ai | Web scraping API | 1 |
-
-## Crawl4AI Service
-
-DanaVision includes an embedded Crawl4AI service for web scraping and price discovery. This eliminates external API costs for web crawling.
-
-### Architecture
-
-```
-PHP Application ──HTTP──► Crawl4AI Service ──► Chromium Browser ──► Web
-     │                     (localhost:5000)
-     │
-     └── AI Service (OpenAI/Claude/Gemini) ◄── Price extraction from markdown
-```
-
-### API Endpoints
-
-The Crawl4AI service exposes these internal endpoints (not accessible externally):
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/scrape` | POST | Scrape a single URL, returns markdown |
-| `/batch` | POST | Scrape multiple URLs concurrently |
-| `/health` | GET | Health check |
-
-### Configuration
-
-The service is pre-configured to use system Chromium. No additional configuration is needed.
-
-Environment variables (set automatically):
-- `PLAYWRIGHT_BROWSERS_PATH=/usr/bin`
-- `CHROMIUM_PATH=/usr/bin/chromium-browser`
-- `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
-
-### Checking Service Status
-
-```bash
-# Check if Crawl4AI is running
-docker exec danavision curl -s http://127.0.0.1:5000/health
-
-# View Crawl4AI logs
-docker exec danavision supervisorctl tail -f crawl4ai
-```
-
-### Troubleshooting Crawl4AI
-
-**Service not starting:**
-```bash
-# Check supervisor status
-docker exec danavision supervisorctl status
-
-# Restart the service
-docker exec danavision supervisorctl restart crawl4ai
-```
-
-**Out of memory:**
-- Ensure container has at least 2GB RAM
-- Reduce concurrent scraping (configured in code)
-
-**Browser crashes:**
-- Usually resolves with container restart
-- Check container has adequate resources
 
 ## Health Check
 

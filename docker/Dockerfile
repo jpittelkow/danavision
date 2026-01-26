@@ -1,67 +1,27 @@
 # docker/Dockerfile
-FROM php:8.3-fpm
+FROM php:8.3-fpm-alpine
 
-# Install dependencies including Node.js, Python, and Chromium for Crawl4AI
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install dependencies including Node.js
+RUN apk add --no-cache \
     nginx \
     supervisor \
-    sqlite3 \
-    libsqlite3-dev \
+    sqlite \
+    sqlite-dev \
     libzip-dev \
     zip \
     unzip \
     git \
     curl \
-    # Python for Crawl4AI service
-    python3 \
-    python3-pip \
-    python3-venv \
-    # Chromium dependencies for Playwright
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libpango-1.0-0 \
-    libcairo2 \
-    ca-certificates \
-    fonts-freefont-ttf \
-    && docker-php-ext-install pdo pdo_sqlite zip bcmath \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js 20
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    nodejs \
+    npm \
+    && docker-php-ext-install pdo pdo_sqlite zip bcmath
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Install Crawl4AI Python service in a virtual environment
-COPY docker/crawl4ai/requirements.txt /opt/crawl4ai/requirements.txt
-RUN python3 -m venv /opt/crawl4ai/venv \
-    && /opt/crawl4ai/venv/bin/pip install --no-cache-dir -r /opt/crawl4ai/requirements.txt \
-    && /opt/crawl4ai/venv/bin/playwright install chromium \
-    && /opt/crawl4ai/venv/bin/playwright install-deps chromium
-COPY docker/crawl4ai/ /opt/crawl4ai/
-
-# Set up crawl4ai venv path for the service
-ENV CRAWL4AI_PYTHON=/opt/crawl4ai/venv/bin/python
-
-# Configure Nginx (Debian uses conf.d instead of http.d)
+# Configure Nginx
 COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/default.conf /etc/nginx/conf.d/default.conf
-RUN rm -f /etc/nginx/sites-enabled/default
+COPY docker/default.conf /etc/nginx/http.d/default.conf
 
 # Configure Supervisor
 COPY docker/supervisord.conf /etc/supervisord.conf

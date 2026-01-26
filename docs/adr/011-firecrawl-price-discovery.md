@@ -2,10 +2,7 @@
 
 ## Status
 
-**Superseded** by [ADR 016: Crawl4AI Integration](016-crawl4ai-integration.md)
-
-> **Note**: This ADR documents the original Firecrawl integration. It has been replaced
-> by Crawl4AI to eliminate API costs. See ADR 016 for the current implementation.
+Accepted (current implementation)
 
 ## Date
 

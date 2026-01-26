@@ -7,22 +7,20 @@ use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
 use App\Models\Setting;
-use App\Services\Crawler\StoreDiscoveryService;
+use App\Services\Crawler\FirecrawlService;
 use Illuminate\Support\Facades\Log;
 
 /**
- * FirecrawlRefreshJob (now powered by Crawl4AI)
- *
- * Background job for refreshing product prices using Crawl4AI.
+ * FirecrawlRefreshJob
+ * 
+ * Background job for refreshing product prices using Firecrawl Scrape API.
  * Uses known product URLs to get updated prices without re-discovering stores.
- *
+ * 
  * This job:
  * 1. Collects all known product URLs from item_vendor_prices
- * 2. Uses Crawl4AI to scrape URLs + AI to extract prices (free scraping)
+ * 2. Uses Firecrawl Scrape API to refresh prices for those URLs
  * 3. Updates the item_vendor_prices table with new prices
  * 4. Triggers notifications if price drops are detected
- *
- * @see docs/adr/016-crawl4ai-integration.md
  */
 class FirecrawlRefreshJob extends BaseAIJob
 {
@@ -46,15 +44,15 @@ class FirecrawlRefreshJob extends BaseAIJob
         $logs[] = "Starting price refresh job";
         $this->updateProgress($aiJob, 10, $logs);
 
-        // Create StoreDiscovery service (uses Crawl4AI)
-        $discoveryService = StoreDiscoveryService::forUser($this->userId);
+        // Create Firecrawl service
+        $firecrawlService = FirecrawlService::forUser($this->userId);
 
-        // Check if service is available (Crawl4AI + AI provider)
-        if (!$discoveryService->isAvailable()) {
-            throw new \RuntimeException('Price refresh not available. Please ensure AI provider is configured in Settings.');
+        // Check if Firecrawl is available
+        if (!$firecrawlService->isAvailable()) {
+            throw new \RuntimeException('Firecrawl API key not configured. Please set up Firecrawl in Settings.');
         }
 
-        $logs[] = "StoreDiscovery service initialized (Crawl4AI mode)";
+        $logs[] = "Firecrawl service initialized";
         $this->updateProgress($aiJob, 20, $logs);
 
         // Get the item and its vendor prices with URLs
@@ -100,14 +98,13 @@ class FirecrawlRefreshJob extends BaseAIJob
             'urls_count' => count($urls),
         ]);
 
-        $logs[] = "Scraping URLs with Crawl4AI...";
+        $logs[] = "Sending scrape requests to Firecrawl...";
         $this->updateProgress($aiJob, 30, $logs);
 
-        // Perform Crawl4AI scraping with AI price extraction
-        $productName = $item?->product_name ?? $inputData['product_name'] ?? null;
-        $result = $discoveryService->refreshPrices($urls, $productName);
+        // Perform Firecrawl scraping
+        $result = $firecrawlService->scrapeProductUrls($urls);
 
-        $logs[] = "Received response from Crawl4AI";
+        $logs[] = "Received response from Firecrawl";
         $this->updateProgress($aiJob, 70, $logs);
 
         // Check for cancellation
@@ -149,7 +146,7 @@ class FirecrawlRefreshJob extends BaseAIJob
                         'drop_amount' => $oldPrice - $newPrice,
                         'drop_percent' => (($oldPrice - $newPrice) / $oldPrice) * 100,
                     ];
-                    $logs[] = "Price drop at {$vendorPrice->vendor}: \${$oldPrice} → \${$newPrice}";
+                    $logs[] = "Price drop at {$vendorPrice->vendor}: \${$oldPrice} ΓåÆ \${$newPrice}";
                 }
 
                 // Determine stock status
@@ -159,7 +156,7 @@ class FirecrawlRefreshJob extends BaseAIJob
                 $vendorPrice->updatePrice($newPrice, $url, $inStock);
                 $vendorPrice->update([
                     'last_firecrawl_at' => now(),
-                    'firecrawl_source' => 'crawl4ai_refresh',
+                    'firecrawl_source' => 'daily_refresh',
                 ]);
 
                 $pricesUpdated++;
@@ -235,7 +232,7 @@ class FirecrawlRefreshJob extends BaseAIJob
             }
 
             // Capture price history
-            PriceHistory::captureFromItem($item, 'crawl4ai_refresh');
+            PriceHistory::captureFromItem($item, 'firecrawl_refresh');
         }
     }
 
@@ -286,11 +283,11 @@ class FirecrawlRefreshJob extends BaseAIJob
      */
     public static function scheduleForUser(int $userId): void
     {
-        // Check if user has price refresh available (Crawl4AI + AI provider)
-        $discoveryService = StoreDiscoveryService::forUser($userId);
-
-        if (!$discoveryService->isAvailable()) {
-            Log::info('FirecrawlRefreshJob: Skipping user without AI provider', ['user_id' => $userId]);
+        // Check if user has Firecrawl configured
+        $firecrawlService = FirecrawlService::forUser($userId);
+        
+        if (!$firecrawlService->isAvailable()) {
+            Log::info('FirecrawlRefreshJob: Skipping user without Firecrawl', ['user_id' => $userId]);
             return;
         }
 

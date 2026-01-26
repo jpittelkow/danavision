@@ -5,14 +5,13 @@ namespace App\Http\Controllers;
 use App\Jobs\AI\FirecrawlDiscoveryJob;
 use App\Jobs\AI\FirecrawlRefreshJob;
 use App\Jobs\AI\SmartFillJob;
-use App\Services\Crawler\StoreDiscoveryService;
+use App\Services\Crawler\FirecrawlService;
 use App\Models\AIJob;
 use App\Models\ItemVendorPrice;
 use App\Models\ListItem;
 use App\Models\PriceHistory;
 use App\Models\Setting;
 use App\Models\ShoppingList;
-use App\Traits\SuppressesVendors;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,7 +19,6 @@ use Inertia\Response;
 
 class ListItemController extends Controller
 {
-    use SuppressesVendors;
     /**
      * Display all items accessible to the user.
      * 
@@ -146,13 +144,17 @@ class ListItemController extends Controller
             'shoppingList',
         ]);
 
-        $userId = $request->user()->id;
+        // Get suppressed vendors
+        $suppressedVendors = $this->getSuppressedVendors($request->user()->id);
 
         // Filter vendor prices to exclude suppressed vendors
-        $filteredVendorPrices = $this->filterSuppressedVendorPrices($item->vendorPrices, $userId);
+        $filteredVendorPrices = $item->vendorPrices->filter(function ($vp) use ($suppressedVendors) {
+            return !$this->isVendorSuppressed($vp->vendor, $suppressedVendors);
+        });
 
         // Group price history by retailer for charting (also filter suppressed)
-        $priceHistoryByRetailer = $this->filterSuppressedPriceHistory($item->priceHistory, $userId)
+        $priceHistoryByRetailer = $item->priceHistory
+            ->filter(fn ($ph) => !$this->isVendorSuppressed($ph->retailer, $suppressedVendors))
             ->groupBy('retailer')
             ->map(fn ($group) => $group->map(fn ($ph) => [
                 'date' => $ph->captured_at->toISOString(),
@@ -208,6 +210,34 @@ class ListItemController extends Controller
             'price_history' => $priceHistoryByRetailer,
             'can_edit' => $request->user()->can('update', $item),
         ]);
+    }
+
+    /**
+     * Get the list of suppressed vendors for a user.
+     */
+    protected function getSuppressedVendors(int $userId): array
+    {
+        $suppressedJson = Setting::get(Setting::SUPPRESSED_VENDORS, $userId);
+        return $suppressedJson ? json_decode($suppressedJson, true) ?: [] : [];
+    }
+
+    /**
+     * Check if a vendor is suppressed.
+     */
+    protected function isVendorSuppressed(string $vendor, array $suppressedVendors): bool
+    {
+        if (empty($suppressedVendors)) {
+            return false;
+        }
+
+        $vendorLower = strtolower($vendor);
+        foreach ($suppressedVendors as $suppressed) {
+            $suppressedLower = strtolower($suppressed);
+            if (str_contains($vendorLower, $suppressedLower) || str_contains($suppressedLower, $vendorLower)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -291,11 +321,11 @@ class ListItemController extends Controller
         $useAsync = $request->boolean('async', false);
         $userId = $request->user()->id;
 
-        // Check if price discovery is available (Crawl4AI + AI provider)
-        $discoveryService = StoreDiscoveryService::forUser($userId);
-
-        if (!$discoveryService->isAvailable()) {
-            $error = 'Price discovery is not available. Please configure an AI provider in Settings.';
+        // Check if Firecrawl is available
+        $firecrawlService = FirecrawlService::forUser($userId);
+        
+        if (!$firecrawlService->isAvailable()) {
+            $error = 'Firecrawl is not configured. Please set up a Firecrawl API key in Settings.';
             return $useAsync
                 ? response()->json(['error' => $error], 422)
                 : back()->with('error', $error);
@@ -535,9 +565,9 @@ Guidelines:
 - unit_of_measure: If is_generic is true, specify the unit (lb, oz, kg, gallon, each, dozen, etc.).
 
 Examples:
-- "Sony WH-1000XM5" → sku: "WH-1000XM5", upc: "027242917576", is_generic: false
-- "Organic Blueberries" → sku: null, upc: null, is_generic: true, unit_of_measure: "lb"
-- "iPhone 15 Pro Max 256GB" → sku: "MU773LL/A", upc: "194253389316", is_generic: false
+- "Sony WH-1000XM5" ΓåÆ sku: "WH-1000XM5", upc: "027242917576", is_generic: false
+- "Organic Blueberries" ΓåÆ sku: null, upc: null, is_generic: true, unit_of_measure: "lb"
+- "iPhone 15 Pro Max 256GB" ΓåÆ sku: "MU773LL/A", upc: "194253389316", is_generic: false
 
 Return ONLY the JSON object, no other text.
 PROMPT;

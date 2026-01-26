@@ -1,13 +1,11 @@
 <?php
 
-use App\Models\AIProvider;
 use App\Models\User;
 use App\Models\Setting;
 use App\Models\ShoppingList;
 use App\Models\SmartAddQueueItem;
 use App\Models\ListItem;
 use App\Jobs\AI\FirecrawlDiscoveryJob;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
@@ -15,32 +13,6 @@ beforeEach(function () {
     Storage::fake('public');
     Queue::fake();
 });
-
-/**
- * Helper to set up a user with AI provider configured for Crawl4AI.
- * The StoreDiscoveryService requires both Crawl4AI running and an AI provider.
- */
-function setupUserWithCrawl4AI(): User
-{
-    $user = User::factory()->create();
-    
-    // Create an AI provider for the user (required for price extraction)
-    AIProvider::create([
-        'user_id' => $user->id,
-        'provider' => AIProvider::PROVIDER_OPENAI,
-        'api_key' => encrypt('test-api-key'),
-        'model' => 'gpt-4o-mini',
-        'is_active' => true,
-        'is_primary' => true,
-    ]);
-
-    // Mock Crawl4AI health check
-    Http::fake([
-        '127.0.0.1:5000/health' => Http::response(['status' => 'ok'], 200),
-    ]);
-    
-    return $user;
-}
 
 test('smart add page is accessible when authenticated', function () {
     $user = User::factory()->create();
@@ -114,9 +86,11 @@ test('users can add item to list from smart add and are redirected to item page'
 });
 
 test('adding item dispatches background price search job', function () {
-    // Use helper that sets up AI provider and mocks Crawl4AI health check
-    $user = setupUserWithCrawl4AI();
+    $user = User::factory()->create();
     $list = ShoppingList::factory()->create(['user_id' => $user->id]);
+    
+    // Configure Firecrawl for the user
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
     $response = $this->actingAs($user)->post('/smart-add/add', [
         'list_id' => $list->id,
@@ -127,14 +101,16 @@ test('adding item dispatches background price search job', function () {
     $item = ListItem::where('product_name', 'Test Product')->first();
     $response->assertRedirect("/items/{$item->id}");
 
-    // Verify the FirecrawlDiscoveryJob was dispatched (uses Crawl4AI backend)
+    // Verify the FirecrawlDiscoveryJob was dispatched (Firecrawl is now the primary price search)
     Queue::assertPushed(FirecrawlDiscoveryJob::class);
 });
 
 test('adding item can skip price search job', function () {
-    // Use helper that sets up AI provider and mocks Crawl4AI health check
-    $user = setupUserWithCrawl4AI();
+    $user = User::factory()->create();
     $list = ShoppingList::factory()->create(['user_id' => $user->id]);
+    
+    // Configure Firecrawl for the user (so we can verify skip works)
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
 
     $response = $this->actingAs($user)->post('/smart-add/add', [
         'list_id' => $list->id,
@@ -146,7 +122,7 @@ test('adding item can skip price search job', function () {
     $item = ListItem::where('product_name', 'Test Product Skip')->first();
     $response->assertRedirect("/items/{$item->id}");
 
-    // Verify NO job was dispatched when skip_price_search is true
+    // Verify NO job was dispatched (Firecrawl is now the primary price search)
     Queue::assertNotPushed(FirecrawlDiscoveryJob::class);
 });
 
@@ -408,9 +384,11 @@ test('user can add queue item to list', function () {
 });
 
 test('adding queue item to list dispatches price search', function () {
-    // Use helper that sets up AI provider and mocks Crawl4AI health check
-    $user = setupUserWithCrawl4AI();
+    $user = User::factory()->create();
     $list = ShoppingList::factory()->create(['user_id' => $user->id]);
+    
+    // Configure Firecrawl for the user
+    Setting::set(Setting::FIRECRAWL_API_KEY, 'fc-test-key', $user->id);
     
     $queueItem = SmartAddQueueItem::create([
         'user_id' => $user->id,
