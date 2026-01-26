@@ -315,6 +315,50 @@ export interface AIJob {
 }
 
 /**
+ * Job log level for structured progress logs.
+ */
+export type JobLogLevel = 'info' | 'success' | 'warning' | 'error' | 'debug';
+
+/**
+ * Structured log entry from job progress (crawl/discovery, etc.).
+ */
+export interface JobLogEntry {
+  level: JobLogLevel;
+  message: string;
+  timestamp: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * Crawl/discovery statistics from job output.
+ */
+export interface JobCrawlStats {
+  urls_attempted: number;
+  urls_successful: number;
+  urls_failed: number;
+  stores_found: number;
+  tier1_results: number;
+  tier2_results: number;
+  total_duration_ms: number;
+}
+
+/**
+ * Job output data shape for jobs with progress logs (firecrawl_discovery, etc.).
+ */
+export interface JobOutputData {
+  product_name?: string;
+  results?: Array<Record<string, unknown>>;
+  results_count?: number;
+  lowest_price?: number;
+  highest_price?: number;
+  source?: string;
+  analysis?: Record<string, unknown>;
+  progress_logs?: JobLogEntry[];
+  logs?: string[];
+  crawl_stats?: JobCrawlStats;
+}
+
+/**
  * AI request log types
  */
 export type AIRequestLogStatus = 'pending' | 'success' | 'failed' | 'timeout';

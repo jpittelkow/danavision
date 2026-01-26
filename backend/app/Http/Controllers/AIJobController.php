@@ -282,6 +282,19 @@ class AIJobController extends Controller
             'logs_count' => $job->request_logs_count ?? $job->requestLogs()->count(),
         ];
 
+        // Include output_data for job types that have progress logs (enables JobLogViewer in list/active)
+        $logViewerJobTypes = [
+            'firecrawl_discovery',
+            'firecrawl_refresh',
+            'price_search',
+            'price_refresh',
+            'nearby_store_discovery',
+            'store_auto_config',
+        ];
+        if (in_array($job->type, $logViewerJobTypes)) {
+            $data['output_data'] = $job->output_data;
+        }
+
         if ($includeDetails) {
             $data['input_data'] = $job->input_data;
             $data['output_data'] = $job->output_data;

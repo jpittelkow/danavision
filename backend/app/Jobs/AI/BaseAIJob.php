@@ -146,10 +146,11 @@ abstract class BaseAIJob implements ShouldQueue
     {
         $statusMessage = null;
         if ($logs && !empty($logs)) {
-            // Use the last log entry as the status message
-            $statusMessage = end($logs);
+            $last = end($logs);
+            // Support structured log entries (array with 'message') or legacy string
+            $statusMessage = (is_array($last) && isset($last['message'])) ? $last['message'] : $last;
         }
-        
+
         $aiJob->updateProgress($progress, $statusMessage, $logs);
     }
 

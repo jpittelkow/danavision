@@ -17,6 +17,7 @@ import {
   History,
   Ban,
 } from 'lucide-react';
+import { JobLogViewer } from '@/Components/JobLogViewer';
 
 /**
  * JobsTab Component
@@ -194,6 +195,8 @@ export function JobsTab() {
                 <SelectItem value="price_search">Price Search</SelectItem>
                 <SelectItem value="smart_fill">Smart Fill</SelectItem>
                 <SelectItem value="price_refresh">Price Refresh</SelectItem>
+                <SelectItem value="firecrawl_discovery">Firecrawl Discovery</SelectItem>
+                <SelectItem value="firecrawl_refresh">Firecrawl Refresh</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -320,6 +323,12 @@ function JobCard({ job, onCancel, onDelete }: JobCardProps) {
           />
         </div>
       )}
+      <JobLogViewer
+        outputData={job.output_data}
+        defaultExpanded={job.status === 'processing'}
+        maxHeight={250}
+        autoScroll={true}
+      />
     </div>
   );
 }
