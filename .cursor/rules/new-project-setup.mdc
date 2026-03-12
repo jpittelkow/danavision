@@ -1,0 +1,51 @@
+---
+description: Guides new project setup from Sourdough - triggers when user wants to fork, customize, or start a new app
+globs: ["FORK-ME.md", ".env.example", "docs/customization-checklist.md"]
+---
+# New Project Setup
+
+When the user's intent is to start a new project based on Sourdough (forking, customizing, "build me an app", "set up a new project", "customize this for my project", etc.):
+
+**Quick start:** Tell the user they can say **"Get cooking"** to launch the guided setup wizard.
+
+## Setup Flow
+
+The setup is broken into **three tiers**, each with its own recipe:
+
+1. **Tier 1: Identity & Branding** → `docs/ai/recipes/setup-identity-branding.md`
+   - App name, short name, description, fonts, brand color
+   - Renames all "Sourdough" references across ~50+ files
+
+2. **Tier 2: Features & Auth** → `docs/ai/recipes/setup-features-auth.md`
+   - Which features to keep/remove (AI, notifications, backup, PWA, search, HIPAA)
+   - Auth model (email/pass, +SSO, +2FA, +Passkeys)
+
+3. **Tier 3: Infrastructure & Repo** → `docs/ai/recipes/setup-infrastructure-repo.md`
+   - Database choice, dev port, timezone, mail, git setup
+   - Final verification checklist
+
+## Key Principles
+
+- **Ask first, code second** — Each tier asks questions BEFORE making any code changes
+- **Execute after each tier** — Don't wait until all tiers are answered; apply changes per tier
+- **Tier boundaries are pause points** — The user can stop after any tier and resume later
+- **Offer suggestions** — Show font pairings, explain feature trade-offs, suggest defaults
+- **Follow the customization checklist** — Feature removal details in `docs/customization-checklist.md`
+
+## Context Files to Read
+
+```
+docs/ai/recipes/setup-new-project.md          # Master index (START HERE)
+docs/ai/recipes/setup-identity-branding.md     # Tier 1 execution
+docs/ai/recipes/setup-features-auth.md         # Tier 2 execution
+docs/ai/recipes/setup-infrastructure-repo.md   # Tier 3 execution
+FORK-ME.md                                     # What Sourdough provides
+docs/customization-checklist.md                # Detailed feature removal steps
+frontend/config/app.ts                         # App identity config
+frontend/config/fonts.ts                       # Font configuration
+.env.example                                   # Environment variables
+```
+
+## Trigger Rule
+
+The "Get cooking" trigger phrase is handled by `.cursor/rules/get-cooking.mdc` which orchestrates the full wizard conversation flow.

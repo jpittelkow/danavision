@@ -1,0 +1,63 @@
+# Dependencies
+backend/vendor/
+frontend/node_modules/
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Laravel
+backend/storage/app/*
+!backend/storage/app/.gitkeep
+backend/storage/framework/cache/*
+!backend/storage/framework/cache/.gitkeep
+backend/storage/framework/sessions/*
+!backend/storage/framework/sessions/.gitkeep
+backend/storage/framework/views/*
+!backend/storage/framework/views/.gitkeep
+backend/storage/logs/*
+!backend/storage/logs/.gitkeep
+backend/bootstrap/cache/*
+!backend/bootstrap/cache/.gitkeep
+backend/database/*.sqlite
+backend/public/storage
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/.vercel
+
+# Testing
+backend/.phpunit.result.cache
+frontend/coverage/
+playwright-report/
+
+# Build artifacts
+*.log
+
+# Docker
+data/
+docker-compose*.yml
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in container)
+docs/
+
+# Plans
+.cursor/
+
+# Backups
+*.zip
+backups/

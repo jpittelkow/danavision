@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"avatar\\\\|image.*upload\\\\|profile.*picture\")",
+      "Bash(xargs grep -l \"default_theme\")",
+      "Bash(xargs grep -l \"test.*notification\\\\|testNotification\\\\|diagnosePush\")",
+      "Bash(grep -n \"invalid\\\\|Invalid\" /c/Users/jpitt_6932a9v/code/sourdough/backend/vendor/minishlink/web-push/src/*.php)",
+      "Bash(git show 71b01be --no-stat)",
+      "Bash(xargs grep -l \"user/settings\")",
+      "Bash(npx next lint -- --max-warnings=0)",
+      "Bash(ls /c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\\\\\(dashboard\\\\\\)/configuration/notification-templates/)",
+      "Bash(head -300 /c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\\\\\(dashboard\\\\\\)/configuration/notifications/page.tsx)",
+      "Bash(wc -l \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/notifications/page.tsx\" \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/email/page.tsx\" \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/notification-templates/page.tsx\" \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/notification-templates/[id]/page.tsx\" \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/novu/page.tsx\" \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/notification-deliveries/page.tsx\" \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/email-templates/page.tsx\")",
+      "Bash(head -100 \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/notifications/page.tsx\")",
+      "Bash(wc -l \"c:\\\\Users\\\\jpitt_6932a9v\\\\code\\\\sourdough\\\\frontend\\\\app\\\\\\(dashboard\\)\\\\user\\\\preferences\\\\page.tsx\")",
+      "Bash(wc -l \"c:/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/user/preferences/page.tsx\")",
+      "Bash(git log --all --oneline --grep=\"avatar\" -i -- frontend/components/user-dropdown.tsx frontend/components/user/avatar-upload.tsx frontend/components/header.tsx backend/app/Http/Controllers/Api/ProfileController.php)",
+      "Bash(ls -la \"/c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\(dashboard\\)/configuration/\")",
+      "Bash(timeout 180 bash -c 'while true; do lines=$\\(wc -l < C:/Users/JPITT_~4/AppData/Local/Temp/claude/c--Users-jpitt-6932a9v-code-sourdough/tasks/b8nbm2rrm.output 2>/dev/null || echo 0\\); if tail -5 C:/Users/JPITT_~4/AppData/Local/Temp/claude/c--Users-jpitt-6932a9v-code-sourdough/tasks/b8nbm2rrm.output 2>/dev/null | grep -qE \"\"\\(Release complete|FAILED|error:|pushed\\)\"\"; then break; fi; sleep 5; done && tail -40 C:/Users/JPITT_~4/AppData/Local/Temp/claude/c--Users-jpitt-6932a9v-code-sourdough/tasks/b8nbm2rrm.output')",
+      "Bash(timeout 120 bash -c 'while true; do if tail -5 C:/Users/JPITT_~4/AppData/Local/Temp/claude/c--Users-jpitt-6932a9v-code-sourdough/tasks/b8nbm2rrm.output 2>/dev/null | grep -qiE \"\"\\(Release complete|complete!|pushed|FAILED|fatal\\)\"\"; then break; fi; sleep 5; done')",
+      "Bash(wc -l /c/Users/jpitt_6932a9v/code/sourdough/backend/app/Services/Stripe/*.php /c/Users/jpitt_6932a9v/code/sourdough/backend/app/Http/Controllers/Api/Stripe*.php /c/Users/jpitt_6932a9v/code/sourdough/backend/app/Http/Controllers/StripeConnectCallbackController.php /c/Users/jpitt_6932a9v/code/sourdough/backend/app/Models/Payment.php /c/Users/jpitt_6932a9v/code/sourdough/backend/app/Models/StripeCustomer.php /c/Users/jpitt_6932a9v/code/sourdough/backend/app/Models/StripeWebhookEvent.php /c/Users/jpitt_6932a9v/code/sourdough/frontend/lib/stripe.ts /c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\\\\\(dashboard\\\\\\)/configuration/stripe/page.tsx /c/Users/jpitt_6932a9v/code/sourdough/frontend/app/\\\\\\(dashboard\\\\\\)/configuration/payments/page.tsx)",
+      "Bash(git init:*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\jpitt_6932a9v\\code\\sourdough"
+    ]
+  }
+}

@@ -1,0 +1,83 @@
+# Dev Server Management
+
+You are responsible for keeping the development server online during development sessions.
+
+## Responsibilities
+
+1. **Monitor Server Status**: Proactively check that the dev server is running when beginning work
+2. **Start Server When Needed**: If the server is not running, start it using Docker commands
+3. **Verify Server Health**: Test that the server is accessible and responding correctly
+4. **Restart on Issues**: If the server becomes unresponsive, restart it
+
+## Server Health Checks
+
+### Check if Container is Running
+
+```bash
+docker-compose ps
+```
+
+### Verify Server is Accessible
+
+**Note:** The dev server runs on port **8080** by default (configurable via `APP_PORT` in `.env`).
+
+```bash
+# Check if the server responds
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8080
+```
+
+Or on Windows PowerShell:
+
+```powershell
+(Invoke-WebRequest -Uri http://localhost:8080 -UseBasicParsing -TimeoutSec 5).StatusCode
+```
+
+### View Logs for Issues
+
+```bash
+docker-compose logs --tail=50
+```
+
+## Standard Operations
+
+### Start the Dev Server
+
+```bash
+docker-compose up -d
+```
+
+### Restart the Dev Server
+
+```bash
+docker-compose restart
+```
+
+### Stop the Dev Server
+
+```bash
+docker-compose down
+```
+
+### Rebuild and Start
+
+```bash
+docker-compose up -d --build
+```
+
+## When to Check Server Status
+
+- **At session start**: Verify the server is running before beginning work
+- **After making Docker/config changes**: Rebuild and verify after changes to Dockerfile, docker-compose.yml, or config files
+- **When testing features**: Ensure server is healthy before testing
+- **If errors occur**: Check server logs when encountering unexpected errors
+
+## Troubleshooting
+
+If the server won't start or is unresponsive:
+
+1. Check logs: `docker-compose logs --tail=100`
+2. Check for port conflicts: `docker ps` or `netstat -an | findstr 8080`
+3. Try full rebuild: `docker-compose down && docker-compose up -d --build`
+4. Check Docker is running: `docker info`
+
+See [Docker Configuration](../../docs/docker.md) for complete Docker commands and troubleshooting.

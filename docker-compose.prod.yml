@@ -1,0 +1,74 @@
+# Sourdough Production Docker Compose
+
+services:
+  app:
+    image: ghcr.io/sourdough-start/sourdough:latest
+    container_name: ${CONTAINER_NAME:-sourdough}
+    ports:
+      - "${APP_PORT:-80}:80"
+    volumes:
+      # Persist data only (no source code mounts)
+      - sourdough_data:/var/www/html/data
+      - sourdough_storage:/var/www/html/backend/storage/app
+      - sourdough_backups:/var/www/html/backend/storage/app/backups
+      - meilisearch_data:/var/lib/meilisearch
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${APP_URL:-http://localhost}
+      # Reverse proxy support (Cloudflare Tunnel, Traefik, Nginx, etc.)
+      # Set to * to trust all proxies, or comma-separated IPs
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
+      # APP_KEY and MEILI_MASTER_KEY are auto-generated on first boot and persisted
+      # in the data volume. Override only if migrating from an existing deployment:
+      # - APP_KEY=${APP_KEY:-}
+      # - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-}
+      # FRONTEND_URL defaults to APP_URL (override only if frontend is on a different origin):
+      # - FRONTEND_URL=${FRONTEND_URL:-}
+      # SANCTUM_STATEFUL_DOMAINS auto-derived from APP_URL (override for multiple domains):
+      # - SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-}
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/data/database.sqlite
+      - CACHE_STORE=file
+      - SESSION_DRIVER=file
+      - QUEUE_CONNECTION=database
+      # Mail (optional)
+      - MAIL_MAILER=${MAIL_MAILER:-log}
+      - MAIL_HOST=${MAIL_HOST:-}
+      - MAIL_PORT=${MAIL_PORT:-}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-}
+      # SSO Providers (optional)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      # AI Providers (optional)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # Meilisearch (search, runs inside container; key auto-generated)
+      - MEILISEARCH_HOST=http://127.0.0.1:7700
+      - MEILI_ENV=production
+      - SCOUT_DRIVER=meilisearch
+      # NAS volume permission matching (Unraid, Synology)
+      - PUID=${PUID:-}
+      - PGID=${PGID:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  sourdough_data:
+    driver: local
+  sourdough_storage:
+    driver: local
+  sourdough_backups:
+    driver: local
+  meilisearch_data:
+    driver: local

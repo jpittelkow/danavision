@@ -1,0 +1,33 @@
+---
+description: Core development workflow for AI assistants
+alwaysApply: true
+---
+# Development Workflow
+
+## Before Any Work
+1. Read docs/ai/README.md - find your task type in the context loading table
+2. Read the files listed for your task type (docs/ai/context-loading.md has full details)
+3. Read applicable recipes from docs/ai/recipes/
+4. Read applicable patterns from docs/ai/patterns/ (specific files, not all)
+5. Check docs/roadmaps.md if the task might be planned work
+
+## During Work
+- Follow patterns from docs/ai/patterns/
+- Avoid anti-patterns from docs/ai/anti-patterns/
+- Check for existing components/utilities before creating new ones (frontend/components/, frontend/lib/)
+- Docker changes? Include Dockerfile/docker-compose/entrypoint/.env.example updates
+
+## After Work (MANDATORY)
+- Update relevant docs (features, architecture, patterns, anti-patterns, recipes, ADRs, context-loading)
+- Update docs/roadmaps.md if completing planned work
+- Journal significant changes in docs/journal/YYYY-MM-DD-description.md (template in docs/ai/documentation-guide.md)
+- Run code review: docs/ai/recipes/code-review.md
+
+## Quick Checks (Must Pass Before Done)
+- No debug code (dd, dump, console.log, debugger)
+- No hardcoded secrets - use config() and env
+- User scoping on data queries (user_id filter)
+- Admin routes protected (auth:sanctum + can:permission)
+- PHI access routes have log.access middleware
+- Frontend errors use errorLogger, not console.error
+- Mobile-first CSS (base styles for mobile, md:/lg: for larger)

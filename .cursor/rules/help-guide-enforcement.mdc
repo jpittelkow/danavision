@@ -1,0 +1,23 @@
+---
+description: Ensure help guides stay in sync with features
+globs:
+  - frontend/app/(dashboard)/configuration/*/page.tsx
+  - backend/app/Http/Controllers/Api/*Controller.php
+---
+# Help Guide Enforcement
+
+When adding or modifying a feature that has a configuration page or user-facing functionality:
+
+1. **Check** if a help article exists in `frontend/lib/help/help-content.ts` for this feature
+2. **Create** one if missing — follow `docs/ai/recipes/add-help-article.md`
+3. **Update** it if it exists but the feature behavior changed
+4. **Add a HelpLink** to the config page if not already present
+5. **Add/update** the search entry in `backend/config/search-pages.php` with the `help:` URL prefix and correct `permission` field
+
+When removing a feature:
+
+1. **Remove** the corresponding help article from `frontend/lib/help/help-content.ts`
+2. **Remove** the search entry from `backend/config/search-pages.php`
+3. **Remove** any `HelpLink` references from deleted pages
+
+Help categories are permission-gated (not admin-only). Match the category's `permission` field to the config page's required permission. See `docs/ai/recipes/add-help-article.md` for the full category-to-permission mapping.

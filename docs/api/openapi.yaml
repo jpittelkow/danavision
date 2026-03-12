@@ -1,0 +1,4684 @@
+openapi: 3.0.3
+info:
+  title: Sourdough API
+  description: |
+    Sourdough is a starter application framework for AI to develop other apps, providing 
+    enterprise-grade user management, multi-provider notification system, and 
+    multi-LLM orchestration with council mode.
+  version: 0.1.0
+  contact:
+    name: Sourdough Support
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api
+    description: Development server
+  - url: https://your-domain.com/api
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: SSO
+    description: Single Sign-On with OAuth2/OIDC providers
+  - name: Two-Factor Authentication
+    description: TOTP-based two-factor authentication
+  - name: Passkeys
+    description: WebAuthn passkey authentication
+  - name: Profile
+    description: User profile management
+  - name: User Settings
+    description: User preferences and notification settings
+  - name: Notifications
+    description: In-app notification management
+  - name: API Tokens
+    description: Personal API token management
+  - name: Search
+    description: Global search functionality
+  - name: Dashboard
+    description: Dashboard widgets and statistics
+  - name: Settings
+    description: Admin settings management
+  - name: LLM
+    description: AI/LLM orchestration and providers
+  - name: User Management
+    description: Admin user management
+  - name: User Groups
+    description: Admin group and permission management
+  - name: Audit Logs
+    description: Audit log viewing and export
+  - name: Access Logs
+    description: HIPAA access log management
+  - name: Email Templates
+    description: Email template customization
+  - name: Notification Templates
+    description: Notification template customization
+  - name: Backup
+    description: Backup and restore functionality
+  - name: Storage
+    description: Storage settings and file management
+  - name: Stripe
+    description: Stripe Connect, payment settings, and payments
+  - name: Usage
+    description: Integration usage tracking and cost reporting
+  - name: Webhooks
+    description: Outbound webhook configuration
+  - name: Jobs
+    description: Scheduled tasks and job queue management
+  - name: Branding
+    description: Application branding customization
+  - name: Version
+    description: Application version information
+
+paths:
+  # ==================== Authentication ====================
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, password_confirmation]
+              properties:
+                name:
+                  type: string
+                  example: John Doe
+                email:
+                  type: string
+                  format: email
+                  example: john@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                password_confirmation:
+                  type: string
+                  format: password
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                remember:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Logout current user
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+
+  /auth/user:
+    get:
+      tags: [Authentication]
+      summary: Get current authenticated user
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Current user data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/forgot-password:
+    post:
+      tags: [Authentication]
+      summary: Request password reset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Reset link sent if email exists
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/reset-password:
+    post:
+      tags: [Authentication]
+      summary: Reset password with token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, email, password, password_confirmation]
+              properties:
+                token:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                password_confirmation:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password reset successful
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ==================== SSO ====================
+  /auth/check-email:
+    post:
+      tags: [Authentication]
+      summary: Check email availability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Email availability status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+        '429':
+          description: Rate limited (10 requests per minute)
+
+  /auth/sso/providers:
+    get:
+      tags: [SSO]
+      summary: Get available SSO providers
+      responses:
+        '200':
+          description: List of available SSO providers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sso_enabled:
+                    type: boolean
+                  providers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SSOProvider'
+
+  /auth/sso/{provider}:
+    get:
+      tags: [SSO]
+      summary: Redirect to SSO provider (web route, not API)
+      description: This is a web route (routes/web.php) that uses session/cookie middleware for OAuth flow. Included here for completeness.
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github, microsoft, apple, discord, gitlab]
+      responses:
+        '302':
+          description: Redirect to SSO provider
+        '400':
+          description: Invalid or disabled provider
+
+  /auth/sso/{provider}/link:
+    post:
+      tags: [SSO]
+      summary: Link SSO provider to existing account
+      security:
+        - sanctum: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github, microsoft, apple, discord, gitlab]
+      responses:
+        '200':
+          description: Redirect URL for OAuth flow
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirect_url:
+                    type: string
+                    format: uri
+        '400':
+          description: Invalid or disabled provider
+
+  /auth/sso/{provider}/unlink:
+    delete:
+      tags: [SSO]
+      summary: Unlink SSO provider from account
+      security:
+        - sanctum: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, github, microsoft, apple, discord, gitlab]
+      responses:
+        '200':
+          description: Provider unlinked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Cannot unlink last authentication method
+
+  /auth/sso/linked-accounts:
+    get:
+      tags: [SSO]
+      summary: List linked SSO accounts
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: List of linked SSO providers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  linked_accounts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        provider:
+                          type: string
+                        provider_id:
+                          type: string
+                        nickname:
+                          type: string
+                        avatar:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+
+  # ==================== Two-Factor Authentication ====================
+  /auth/2fa/status:
+    get:
+      tags: [Two-Factor Authentication]
+      summary: Get 2FA status
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: 2FA status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  confirmed:
+                    type: boolean
+
+  /auth/2fa/enable:
+    post:
+      tags: [Two-Factor Authentication]
+      summary: Enable 2FA (start setup)
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: 2FA setup data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret:
+                    type: string
+                  qr_code:
+                    type: string
+                    description: Base64 encoded QR code image
+
+  /auth/2fa/confirm:
+    post:
+      tags: [Two-Factor Authentication]
+      summary: Confirm 2FA setup with TOTP code
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: '^\d{6}$'
+      responses:
+        '200':
+          description: 2FA confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Invalid code
+
+  /auth/2fa/disable:
+    post:
+      tags: [Two-Factor Authentication]
+      summary: Disable 2FA
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: 2FA disabled
+        '400':
+          description: Invalid password
+
+  /auth/2fa/verify:
+    post:
+      tags: [Two-Factor Authentication]
+      summary: Verify 2FA code during login
+      description: |
+        Verify 2FA code during login. This endpoint does not require authentication
+        as it is used during the login flow before full auth is established.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 6-digit TOTP code or recovery code
+                is_recovery_code:
+                  type: boolean
+                  default: false
+                  description: Set to true when using a recovery code instead of TOTP
+      responses:
+        '200':
+          description: 2FA verified, user authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid code
+        '429':
+          description: Rate limited (5 attempts per 5 minutes)
+
+  /auth/2fa/recovery-codes:
+    post:
+      tags: [Two-Factor Authentication]
+      summary: Get recovery codes
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Recovery codes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes:
+                    type: array
+                    items:
+                      type: string
+                    example: ["ABCD-1234", "EFGH-5678"]
+        '400':
+          description: Invalid password
+
+  /auth/2fa/recovery-codes/regenerate:
+    post:
+      tags: [Two-Factor Authentication]
+      summary: Regenerate recovery codes
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: New recovery codes generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recovery_codes:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Invalid password
+
+  # ==================== Profile ====================
+  /profile:
+    get:
+      tags: [Profile]
+      summary: Get user profile
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+    put:
+      tags: [Profile]
+      summary: Update user profile
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                avatar:
+                  type: string
+      responses:
+        '200':
+          description: Profile updated
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    delete:
+      tags: [Profile]
+      summary: Delete user account
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Account deleted
+
+  /profile/password:
+    put:
+      tags: [Profile]
+      summary: Update password
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, password, password_confirmation]
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                password:
+                  type: string
+                  format: password
+                password_confirmation:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password updated
+        '400':
+          description: Invalid current password
+
+  # ==================== Notifications ====================
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: Get user notifications
+      security:
+        - sanctum: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get unread notification count
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+
+  /notifications/mark-read:
+    post:
+      tags: [Notifications]
+      summary: Mark notifications as read
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Notifications marked as read
+
+  /notifications/mark-all-read:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: All notifications marked as read
+
+  /notifications/delete-batch:
+    post:
+      tags: [Notifications]
+      summary: Batch delete notifications
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Notifications deleted
+
+  /notifications/diagnose-push:
+    get:
+      tags: [Notifications]
+      summary: Diagnostic for web push delivery gates
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Push notification diagnostic results
+
+  # ==================== Notification Settings (Admin) ====================
+  /notification-settings:
+    get:
+      tags: [Notification Settings]
+      summary: Get system notification settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Notification settings
+    put:
+      tags: [Notification Settings]
+      summary: Update notification settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /notification-settings/generate-vapid:
+    post:
+      tags: [Notification Settings]
+      summary: Generate WebPush VAPID key pair
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: VAPID keys generated
+
+  /notification-settings/test/{channel}:
+    post:
+      tags: [Notification Settings]
+      summary: Test specific notification channel
+      security:
+        - sanctum: []
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test result
+
+  /notification-settings/keys/{key}:
+    delete:
+      tags: [Notification Settings]
+      summary: Reset one notification setting to env default
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Setting reset
+
+  # ==================== Admin Notification Channels ====================
+  /admin/notification-channels:
+    get:
+      tags: [Notification Channels]
+      summary: List all channels with config status
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Channel list with availability and config status
+    put:
+      tags: [Notification Channels]
+      summary: Toggle channel availability and set SMS provider
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Channels updated
+
+  /admin/notification-channels/test-all:
+    post:
+      tags: [Notification Channels]
+      summary: Test all enabled channels
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Test results for all channels
+
+  /admin/notification-channels/verify:
+    get:
+      tags: [Notification Channels]
+      summary: Verify channel configuration without sending
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Verification results
+
+  # ==================== Notification Deliveries ====================
+  /notification-deliveries:
+    get:
+      tags: [Notification Deliveries]
+      summary: List notification delivery logs
+      security:
+        - sanctum: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated delivery logs
+
+  /notification-deliveries/stats:
+    get:
+      tags: [Notification Deliveries]
+      summary: Get delivery statistics
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Delivery statistics (success/failure counts)
+
+  # ==================== User Notification Settings ====================
+  /user/notification-settings:
+    get:
+      tags: [User Notification Settings]
+      summary: Get available channels and user preferences
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: User notification preferences
+    put:
+      tags: [User Notification Settings]
+      summary: Update user channel settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Preferences updated
+
+  /user/notification-settings/type-preferences:
+    get:
+      tags: [User Notification Settings]
+      summary: Get per-notification-type preferences
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Type preferences
+    put:
+      tags: [User Notification Settings]
+      summary: Update per-type preference
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Type preference updated
+
+  /user/webpush-subscriptions:
+    get:
+      tags: [User Notification Settings]
+      summary: List user web push subscriptions
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Web push subscriptions
+
+  /user/webpush-subscription:
+    post:
+      tags: [User Notification Settings]
+      summary: Register web push subscription
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint:
+                  type: string
+                  format: uri
+                keys:
+                  type: object
+                  properties:
+                    p256dh:
+                      type: string
+                    auth:
+                      type: string
+      responses:
+        '201':
+          description: Subscription registered
+    delete:
+      tags: [User Notification Settings]
+      summary: Unsubscribe all web push
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: All subscriptions removed
+
+  /user/webpush-subscription/{id}:
+    delete:
+      tags: [User Notification Settings]
+      summary: Delete specific web push subscription
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscription removed
+
+  # ==================== Novu Integration ====================
+  /novu/subscriber-hash:
+    get:
+      tags: [Novu]
+      summary: Get HMAC hash for Novu Inbox authentication
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Subscriber HMAC hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hash:
+                    type: string
+
+  /novu-settings:
+    get:
+      tags: [Novu]
+      summary: Get Novu settings (API key masked)
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Novu settings
+    put:
+      tags: [Novu]
+      summary: Update Novu settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /novu-settings/test:
+    post:
+      tags: [Novu]
+      summary: Test Novu connection and validate workflows
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Connection test result
+
+  /novu-settings/workflow-map:
+    get:
+      tags: [Novu]
+      summary: Get notification type to workflow ID mappings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Workflow mappings
+    put:
+      tags: [Novu]
+      summary: Update workflow mappings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Workflow mappings updated
+
+  /novu-settings/keys/{key}:
+    delete:
+      tags: [Novu]
+      summary: Reset one Novu setting to env default
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Setting reset
+
+  # ==================== Real-Time Streaming ====================
+  /broadcasting/auth:
+    post:
+      tags: [Broadcasting]
+      summary: Authenticate private channel subscription
+      description: Sanctum session-based authentication for Laravel Echo private channels. Channels include private-app-logs (admin), private-audit-logs (admin), and private-user.{id} (per-user notifications).
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                socket_id:
+                  type: string
+                channel_name:
+                  type: string
+      responses:
+        '200':
+          description: Channel authentication response
+
+  # ==================== LLM ====================
+  /llm/providers:
+    get:
+      tags: [LLM]
+      summary: Get available LLM providers
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: List of available providers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LLMProvider'
+    post:
+      tags: [LLM]
+      summary: Add a provider
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider:
+                  type: string
+                  enum: [claude, openai, gemini, ollama, azure, bedrock]
+                api_key:
+                  type: string
+                host:
+                  type: string
+                model:
+                  type: string
+      responses:
+        '201':
+          description: Provider added
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /llm/providers/{provider}:
+    put:
+      tags: [LLM]
+      summary: Update a provider's config
+      security:
+        - sanctum: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [claude, openai, gemini, ollama, azure, bedrock]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key:
+                  type: string
+                host:
+                  type: string
+                model:
+                  type: string
+      responses:
+        '200':
+          description: Provider updated
+    delete:
+      tags: [LLM]
+      summary: Remove a provider
+      security:
+        - sanctum: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Provider removed
+
+  /llm/config:
+    get:
+      tags: [LLM]
+      summary: Get user LLM configuration
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: LLM configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                    enum: [single, aggregation, council]
+                  providers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LLMProviderConfig'
+    put:
+      tags: [LLM]
+      summary: Update LLM configuration
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  enum: [single, aggregation, council]
+                providers:
+                  type: array
+                  items:
+                    type: string
+                  description: Ordered list of provider identifiers
+      responses:
+        '200':
+          description: Configuration updated
+
+  /llm/query:
+    post:
+      tags: [LLM]
+      summary: Send a query to LLM
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                system_prompt:
+                  type: string
+                mode:
+                  type: string
+                  enum: [single, aggregation, council]
+                provider:
+                  type: string
+      responses:
+        '200':
+          description: LLM response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LLMResponse'
+        '400':
+          description: No provider configured
+
+  /llm/query/vision:
+    post:
+      tags: [LLM]
+      summary: Send a vision query to LLM
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                image:
+                  type: string
+                  format: binary
+                  description: Image file upload (multipart) or base64 string
+                image_url:
+                  type: string
+                  description: URL of image (alternative to image upload)
+                mime_type:
+                  type: string
+                  default: image/jpeg
+                system_prompt:
+                  type: string
+                provider:
+                  type: string
+      responses:
+        '200':
+          description: LLM vision response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LLMResponse'
+
+  # ==================== Backup ====================
+  /backup:
+    get:
+      tags: [Backup]
+      summary: List available backups
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: List of backups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Backup'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /backup/create:
+    post:
+      tags: [Backup]
+      summary: Create a new backup
+      security:
+        - sanctum: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                include_database:
+                  type: boolean
+                  default: true
+                include_files:
+                  type: boolean
+                  default: true
+                include_settings:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Backup created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backup:
+                    $ref: '#/components/schemas/Backup'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /backup/{filename}:
+    delete:
+      tags: [Backup]
+      summary: Delete a backup
+      security:
+        - sanctum: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Backup deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Backup not found
+
+  /backup/download/{filename}:
+    get:
+      tags: [Backup]
+      summary: Download a backup file
+      security:
+        - sanctum: []
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Backup file
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Backup not found
+
+  /backup/restore:
+    post:
+      tags: [Backup]
+      summary: Restore from backup
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                backup:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Restore completed
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ==================== Version ====================
+  /version:
+    get:
+      tags: [Version]
+      summary: Get application version
+      responses:
+        '200':
+          description: Version information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                    example: 0.1.0
+                  build:
+                    type: string
+                  commit:
+                    type: string
+
+  /health:
+    get:
+      tags: [Version]
+      summary: Health check endpoint
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  # ==================== Passkeys ====================
+  /auth/passkeys:
+    get:
+      tags: [Passkeys]
+      summary: List user's passkeys
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: List of passkeys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passkeys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Passkey'
+
+  /auth/passkeys/register/options:
+    post:
+      tags: [Passkeys]
+      summary: Get passkey registration options
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: WebAuthn registration options
+
+  /auth/passkeys/register:
+    post:
+      tags: [Passkeys]
+      summary: Register a new passkey
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential, name]
+              properties:
+                credential:
+                  type: object
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Passkey registered
+        '400':
+          description: Registration failed
+
+  /auth/passkeys/{id}:
+    put:
+      tags: [Passkeys]
+      summary: Update passkey name
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Passkey updated
+    delete:
+      tags: [Passkeys]
+      summary: Delete passkey
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Passkey deleted
+
+  /auth/passkeys/login/options:
+    post:
+      tags: [Passkeys]
+      summary: Get passkey login options
+      responses:
+        '200':
+          description: WebAuthn login options
+
+  /auth/passkeys/login:
+    post:
+      tags: [Passkeys]
+      summary: Authenticate with passkey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential]
+              properties:
+                credential:
+                  type: object
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  # ==================== Email Verification ====================
+  /auth/verify-email:
+    post:
+      tags: [Authentication]
+      summary: Verify email with token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, hash]
+              properties:
+                id:
+                  type: integer
+                hash:
+                  type: string
+      responses:
+        '200':
+          description: Email verified
+
+  /auth/resend-verification:
+    post:
+      tags: [Authentication]
+      summary: Resend verification email
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Verification email sent
+
+  # ==================== User Settings ====================
+  /user/settings:
+    get:
+      tags: [User Settings]
+      summary: Get user preferences
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: User settings
+          content:
+            application/json:
+              schema:
+                type: object
+    put:
+      tags: [User Settings]
+      summary: Update user preferences
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  # NOTE: /user/notification-settings endpoints are defined above under "User Notification Settings" section
+
+  /user/webpush-subscription:
+    post:
+      tags: [User Settings]
+      summary: Store web push subscription
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint:
+                  type: string
+                keys:
+                  type: object
+      responses:
+        '200':
+          description: Subscription stored
+    delete:
+      tags: [User Settings]
+      summary: Remove web push subscription
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Subscription removed
+
+  # ==================== API Tokens ====================
+  /api-tokens:
+    get:
+      tags: [API Tokens]
+      summary: List user's API tokens
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: List of tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiToken'
+    post:
+      tags: [API Tokens]
+      summary: Create API token
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                abilities:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Token created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  api_token:
+                    $ref: '#/components/schemas/ApiToken'
+
+  /api-tokens/{token}:
+    delete:
+      tags: [API Tokens]
+      summary: Revoke API token
+      security:
+        - sanctum: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Token revoked
+
+  # ==================== Dashboard ====================
+  /dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Get dashboard statistics
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Dashboard data (permission-filtered)
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ==================== Search ====================
+  /search:
+    get:
+      tags: [Search]
+      summary: Global search
+      description: Search across multiple resource types. Admin sees all; non-admin scoped to own resources.
+      security:
+        - sanctum: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 500
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [users, user_groups, notifications, email_templates, notification_templates, api_tokens, ai_providers, webhooks]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  meta:
+                    type: object
+                    properties:
+                      query:
+                        type: string
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+
+  /search/suggestions:
+    get:
+      tags: [Search]
+      summary: Autocomplete suggestions
+      security:
+        - sanctum: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [users, user_groups, notifications, email_templates, notification_templates, api_tokens, ai_providers, webhooks]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+      responses:
+        '200':
+          description: Autocomplete suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  # ==================== User Management ====================
+  /users:
+    get:
+      tags: [User Management]
+      summary: List users
+      description: Requires can:users.view permission
+      security:
+        - sanctum: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: group
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [User Management]
+      summary: Create user
+      description: Requires can:users.create permission
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                is_admin:
+                  type: boolean
+      responses:
+        '201':
+          description: User created
+
+  /users/{user}:
+    get:
+      tags: [User Management]
+      summary: Get user details
+      security:
+        - sanctum: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User details
+    put:
+      tags: [User Management]
+      summary: Update user
+      security:
+        - sanctum: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+      responses:
+        '200':
+          description: User updated
+    delete:
+      tags: [User Management]
+      summary: Delete user
+      security:
+        - sanctum: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User deleted
+
+  /users/{user}/toggle-admin:
+    post:
+      tags: [User Management]
+      summary: Toggle admin status
+      security:
+        - sanctum: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Admin status toggled
+
+  /users/{user}/reset-password:
+    post:
+      tags: [User Management]
+      summary: Force password reset
+      security:
+        - sanctum: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Password reset sent
+
+  /users/{user}/disable:
+    post:
+      tags: [User Management]
+      summary: Toggle disabled status
+      security:
+        - sanctum: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Status toggled
+
+  /users/{user}/resend-verification:
+    post:
+      tags: [User Management]
+      summary: Resend verification email
+      security:
+        - sanctum: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Verification sent
+
+  /users/{user}/groups:
+    put:
+      tags: [User Management]
+      summary: Update user groups
+      security:
+        - sanctum: []
+      parameters:
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group_ids]
+              properties:
+                group_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Groups updated
+
+  # ==================== User Groups ====================
+  /permissions:
+    get:
+      tags: [User Groups]
+      summary: List available permissions
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Categorized permissions list
+
+  /groups:
+    get:
+      tags: [User Groups]
+      summary: List groups
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserGroup'
+    post:
+      tags: [User Groups]
+      summary: Create group
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug]
+              properties:
+                name:
+                  type: string
+                slug:
+                  type: string
+                description:
+                  type: string
+                is_default:
+                  type: boolean
+      responses:
+        '201':
+          description: Group created
+
+  /groups/{group}:
+    get:
+      tags: [User Groups]
+      summary: Get group details
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Group details
+    put:
+      tags: [User Groups]
+      summary: Update group
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '200':
+          description: Group updated
+    delete:
+      tags: [User Groups]
+      summary: Delete group
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Group deleted
+
+  /groups/{group}/members:
+    get:
+      tags: [User Groups]
+      summary: List group members
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated members list
+    post:
+      tags: [User Groups]
+      summary: Add members to group
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_ids]
+              properties:
+                user_ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Members added
+
+  /groups/{group}/members/{user}:
+    delete:
+      tags: [User Groups]
+      summary: Remove member from group
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Member removed
+
+  /groups/{group}/permissions:
+    get:
+      tags: [User Groups]
+      summary: Get group permissions
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Group permissions
+    put:
+      tags: [User Groups]
+      summary: Update group permissions
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissions]
+              properties:
+                permissions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      permission:
+                        type: string
+                      resource_type:
+                        type: string
+                      resource_id:
+                        type: integer
+      responses:
+        '200':
+          description: Permissions updated
+
+  # ==================== Audit Logs ====================
+  /audit-logs:
+    get:
+      tags: [Audit Logs]
+      summary: List audit logs
+      description: Requires can:audit.view permission
+      security:
+        - sanctum: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, error, critical]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: correlation_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLog'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /audit-logs/export:
+    get:
+      tags: [Audit Logs]
+      summary: Export audit logs as CSV
+      description: Requires can:logs.export permission
+      security:
+        - sanctum: []
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, error, critical]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: correlation_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /audit-logs/stats:
+    get:
+      tags: [Audit Logs]
+      summary: Get audit statistics
+      description: Requires can:audit.view permission
+      security:
+        - sanctum: []
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditStats'
+
+  # ==================== Access Logs ====================
+  /access-logs:
+    get:
+      tags: [Access Logs]
+      summary: List access logs
+      description: Requires can:logs.view permission. HIPAA compliance feature.
+      security:
+        - sanctum: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Paginated access logs
+    delete:
+      tags: [Access Logs]
+      summary: Delete all access logs
+      description: Only available when HIPAA logging is disabled
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Logs deleted
+
+  /access-logs/export:
+    get:
+      tags: [Access Logs]
+      summary: Export access logs as CSV
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /access-logs/stats:
+    get:
+      tags: [Access Logs]
+      summary: Get access log statistics
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Access log statistics
+
+  # ==================== App Logs ====================
+  /app-logs/export:
+    get:
+      tags: [Audit Logs]
+      summary: Export application logs
+      description: Requires can:logs.export permission
+      security:
+        - sanctum: []
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: level
+          in: query
+          schema:
+            type: string
+        - name: correlation_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Log file
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # ==================== Log Retention ====================
+  /log-retention:
+    get:
+      tags: [Settings]
+      summary: Get log retention settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Log retention settings
+    put:
+      tags: [Settings]
+      summary: Update log retention settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hipaa_logging_enabled:
+                  type: boolean
+                retention_days:
+                  type: integer
+      responses:
+        '200':
+          description: Settings updated
+
+  # ==================== Suspicious Activity ====================
+  /suspicious-activity:
+    get:
+      tags: [Audit Logs]
+      summary: List suspicious activity
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Suspicious activity alerts
+
+  # ==================== Email Templates ====================
+  /email-templates:
+    get:
+      tags: [Email Templates]
+      summary: List email templates
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EmailTemplate'
+
+  /email-templates/{key}:
+    get:
+      tags: [Email Templates]
+      summary: Get email template
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template details
+    put:
+      tags: [Email Templates]
+      summary: Update email template
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject:
+                  type: string
+                body_html:
+                  type: string
+                body_text:
+                  type: string
+      responses:
+        '200':
+          description: Template updated
+
+  /email-templates/{key}/preview:
+    post:
+      tags: [Email Templates]
+      summary: Preview email template
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                variables:
+                  type: object
+                subject:
+                  type: string
+                body_html:
+                  type: string
+                body_text:
+                  type: string
+      responses:
+        '200':
+          description: Rendered preview
+
+  /email-templates/{key}/test:
+    post:
+      tags: [Email Templates]
+      summary: Send test email
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Test email sent
+
+  /email-templates/{key}/reset:
+    post:
+      tags: [Email Templates]
+      summary: Reset template to default
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template reset
+
+  # ==================== Notification Templates ====================
+  /notification-templates:
+    get:
+      tags: [Notification Templates]
+      summary: List notification templates
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: List of templates
+
+  /notification-templates/{id}:
+    get:
+      tags: [Notification Templates]
+      summary: Get notification template
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Template details
+    put:
+      tags: [Notification Templates]
+      summary: Update notification template
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Template updated
+
+  /notification-templates/{id}/preview:
+    post:
+      tags: [Notification Templates]
+      summary: Preview notification template
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                variables:
+                  type: object
+                title:
+                  type: string
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Rendered preview
+
+  /notification-templates/{id}/reset:
+    post:
+      tags: [Notification Templates]
+      summary: Reset template to default
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Template reset
+
+  # ==================== Settings ====================
+  /settings:
+    get:
+      tags: [Settings]
+      summary: List all settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Settings list
+    put:
+      tags: [Settings]
+      summary: Update settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /settings/{group}:
+    get:
+      tags: [Settings]
+      summary: Get settings by group
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Group settings
+    put:
+      tags: [Settings]
+      summary: Update settings group
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /system-settings/public:
+    get:
+      tags: [Settings]
+      summary: Get public system settings (no auth)
+      responses:
+        '200':
+          description: Public settings and feature flags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    type: object
+                    description: Public settings (e.g. general.app_name, general.app_url)
+                  features:
+                    type: object
+                    properties:
+                      email_configured:
+                        type: boolean
+                      password_reset_available:
+                        type: boolean
+                      email_verification_mode:
+                        type: string
+                        enum: [disabled, optional, required]
+                      two_factor_mode:
+                        type: string
+                        enum: [disabled, optional, required]
+
+  /system-settings/{group}:
+    get:
+      tags: [Settings]
+      summary: Get system settings for a specific group
+      security:
+        - sanctum: []
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mail
+      responses:
+        '200':
+          description: Group settings
+          content:
+            application/json:
+              schema:
+                type: object
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /system-settings:
+    get:
+      tags: [Settings]
+      summary: Get all system settings (grouped)
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: System settings
+    put:
+      tags: [Settings]
+      summary: Update system settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /auth-settings:
+    get:
+      tags: [Settings]
+      summary: Get auth settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Auth feature toggles
+    put:
+      tags: [Settings]
+      summary: Update auth settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /sso-settings:
+    get:
+      tags: [Settings]
+      summary: Get SSO settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: SSO provider configurations
+    put:
+      tags: [Settings]
+      summary: Update SSO settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /sso-settings/test/{provider}:
+    post:
+      tags: [Settings]
+      summary: Test SSO provider
+      security:
+        - sanctum: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test result
+
+  /mail-settings:
+    get:
+      tags: [Settings]
+      summary: Get mail settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Mail configuration
+    put:
+      tags: [Settings]
+      summary: Update mail settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /mail-settings/test:
+    post:
+      tags: [Settings]
+      summary: Send test email
+      security:
+        - sanctum: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Test email sent
+
+  # NOTE: /notification-settings endpoints are defined above under "Notification Settings (Admin)" section
+
+  /llm-settings:
+    get:
+      tags: [LLM]
+      summary: Get LLM settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: LLM configuration
+    put:
+      tags: [LLM]
+      summary: Update LLM settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /llm-settings/test-key:
+    post:
+      tags: [LLM]
+      summary: Validate API key
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider:
+                  type: string
+                api_key:
+                  type: string
+                host:
+                  type: string
+      responses:
+        '200':
+          description: Key validation result
+
+  /llm-settings/discover-models:
+    post:
+      tags: [LLM]
+      summary: Discover available models
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider]
+              properties:
+                provider:
+                  type: string
+                api_key:
+                  type: string
+                host:
+                  type: string
+      responses:
+        '200':
+          description: Available models
+
+  /llm-settings/keys/{key}:
+    delete:
+      tags: [LLM]
+      summary: Reset one LLM setting to default
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Setting reset
+
+  /llm/test/{provider}:
+    post:
+      tags: [LLM]
+      summary: Test provider connection
+      security:
+        - sanctum: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [claude, openai, gemini, ollama, azure, bedrock]
+      responses:
+        '200':
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  error:
+                    type: string
+
+  # ==================== Stripe ====================
+  /stripe/webhook:
+    post:
+      tags: [Stripe]
+      summary: Stripe webhook receiver
+      description: Public endpoint — no auth required. Signature verified via STRIPE_WEBHOOK_SECRET.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook handled
+
+  /stripe/connect/status:
+    get:
+      tags: [Stripe]
+      summary: Get Stripe Connect account status
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Connect account status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: boolean
+                  account_id:
+                    type: string
+                  details_submitted:
+                    type: boolean
+                  charges_enabled:
+                    type: boolean
+
+  /stripe/connect/oauth-link:
+    post:
+      tags: [Stripe]
+      summary: Generate OAuth link for Stripe Connect onboarding
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: OAuth URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+
+  /stripe/connect/account-link:
+    post:
+      tags: [Stripe]
+      summary: Generate account link for returning Connect user
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Account link URL
+
+  /stripe/connect/login-link:
+    post:
+      tags: [Stripe]
+      summary: Generate Stripe Express Dashboard login link
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Login link URL
+
+  /stripe/connect/disconnect:
+    delete:
+      tags: [Stripe]
+      summary: Disconnect Stripe Connect account
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Account disconnected
+
+  /stripe/settings:
+    get:
+      tags: [Stripe]
+      summary: Get Stripe settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Stripe settings (keys masked)
+    put:
+      tags: [Stripe]
+      summary: Update Stripe settings
+      security:
+        - sanctum: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                secret_key:
+                  type: string
+                publishable_key:
+                  type: string
+                webhook_secret:
+                  type: string
+                mode:
+                  type: string
+                  enum: [test, live]
+                currency:
+                  type: string
+      responses:
+        '200':
+          description: Settings updated
+
+  /stripe/settings/test:
+    post:
+      tags: [Stripe]
+      summary: Test Stripe API key connection
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Connection test result
+
+  /stripe/settings/keys/{key}:
+    delete:
+      tags: [Stripe]
+      summary: Reset one Stripe setting to default
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Setting reset
+
+  /payments:
+    get:
+      tags: [Stripe]
+      summary: List current user's payments
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Paginated payments list
+
+  /payments/intent:
+    post:
+      tags: [Stripe]
+      summary: Create a payment intent
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+                  description: Amount in smallest currency unit (e.g. cents)
+                currency:
+                  type: string
+                  default: usd
+                metadata:
+                  type: object
+      responses:
+        '200':
+          description: Payment intent created
+
+  /payments/admin:
+    get:
+      tags: [Stripe]
+      summary: List all payments (admin)
+      description: Requires can:payments.manage
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Paginated payments list
+
+  /payments/{payment}:
+    get:
+      tags: [Stripe]
+      summary: Get a single payment
+      security:
+        - sanctum: []
+      parameters:
+        - name: payment
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Payment details
+
+  # ==================== Integration Usage ====================
+  /usage/stats:
+    get:
+      tags: [Usage]
+      summary: Get aggregated usage statistics
+      description: Requires can:usage.view
+      security:
+        - sanctum: []
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: integration
+          in: query
+          schema:
+            type: string
+            enum: [llm, email, sms, storage, broadcasting, payments]
+        - name: provider
+          in: query
+          schema:
+            type: string
+        - name: group_by
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+            default: day
+      responses:
+        '200':
+          description: Usage statistics
+
+  /usage/breakdown:
+    get:
+      tags: [Usage]
+      summary: Get detailed breakdown for one integration
+      description: Requires can:usage.view
+      security:
+        - sanctum: []
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: integration
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [llm, email, sms, storage, broadcasting, payments]
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Integration breakdown
+
+  /usage/export:
+    get:
+      tags: [Usage]
+      summary: Export usage data as CSV
+      description: Requires can:logs.export. Returns streamed CSV file.
+      security:
+        - sanctum: []
+      parameters:
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: integration
+          in: query
+          schema:
+            type: string
+            enum: [llm, email, sms, storage, broadcasting, payments]
+        - name: provider
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /backup-settings:
+    get:
+      tags: [Backup]
+      summary: Get backup settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Backup configuration
+    put:
+      tags: [Backup]
+      summary: Update backup settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /backup-settings/reset/{key}:
+    post:
+      tags: [Backup]
+      summary: Reset backup setting to default
+      security:
+        - sanctum: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Setting reset
+
+  /backup-settings/test/{destination}:
+    post:
+      tags: [Backup]
+      summary: Test backup destination
+      security:
+        - sanctum: []
+      parameters:
+        - name: destination
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [s3, sftp, google_drive]
+      responses:
+        '200':
+          description: Test result
+
+  # ==================== Storage ====================
+  /storage-settings:
+    get:
+      tags: [Storage]
+      summary: Get storage settings
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Storage configuration
+    put:
+      tags: [Storage]
+      summary: Update storage settings
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Settings updated
+
+  /storage-settings/test:
+    post:
+      tags: [Storage]
+      summary: Test storage connection
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Test result
+
+  /storage-settings/stats:
+    get:
+      tags: [Storage]
+      summary: Get storage statistics
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Storage usage stats
+
+  /storage-settings/analytics:
+    get:
+      tags: [Storage]
+      summary: Get storage analytics
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: File types, growth trends
+
+  /storage-settings/cleanup-suggestions:
+    get:
+      tags: [Storage]
+      summary: Get cleanup suggestions
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Cleanup recommendations
+
+  /storage-settings/cleanup:
+    post:
+      tags: [Storage]
+      summary: Run storage cleanup
+      security:
+        - sanctum: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Cleanup completed
+
+  /storage-settings/paths:
+    get:
+      tags: [Storage]
+      summary: List storage paths
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Storage paths
+
+  /storage-settings/health:
+    get:
+      tags: [Storage]
+      summary: Storage health check
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Health status
+
+  /storage/files:
+    get:
+      tags: [Storage]
+      summary: List files
+      security:
+        - sanctum: []
+      parameters:
+        - name: path
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: File listing
+    post:
+      tags: [Storage]
+      summary: Upload file
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: One or more files to upload
+                path:
+                  type: string
+                  description: Target directory path (optional)
+      responses:
+        '201':
+          description: File(s) uploaded
+
+  /storage/files/{path}:
+    get:
+      tags: [Storage]
+      summary: Get file metadata
+      security:
+        - sanctum: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File metadata
+    delete:
+      tags: [Storage]
+      summary: Delete file
+      security:
+        - sanctum: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File deleted
+
+  /storage/files/{path}/download:
+    get:
+      tags: [Storage]
+      summary: Download file
+      security:
+        - sanctum: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /storage/files/{path}/rename:
+    put:
+      tags: [Storage]
+      summary: Rename file
+      security:
+        - sanctum: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: File renamed
+
+  /storage/files/{path}/move:
+    put:
+      tags: [Storage]
+      summary: Move file
+      security:
+        - sanctum: []
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [destination]
+              properties:
+                destination:
+                  type: string
+      responses:
+        '200':
+          description: File moved
+
+  # ==================== Search Admin ====================
+  /admin/search/stats:
+    get:
+      tags: [Search]
+      summary: Get search index statistics
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Index stats per model
+
+  /admin/search/health:
+    get:
+      tags: [Search]
+      summary: Check Meilisearch health
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Health status
+
+  /admin/search/test-connection:
+    post:
+      tags: [Search]
+      summary: Test Meilisearch connection
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [host]
+              properties:
+                host:
+                  type: string
+                  example: http://localhost:7700
+                api_key:
+                  type: string
+      responses:
+        '200':
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  version:
+                    type: string
+
+  /admin/search/reindex:
+    post:
+      tags: [Search]
+      summary: Reindex search data
+      security:
+        - sanctum: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                model:
+                  type: string
+                  description: Model to reindex (omit for all)
+                  enum: [users, user_groups, notifications, email_templates, notification_templates, api_tokens, ai_providers, webhooks, pages]
+      responses:
+        '200':
+          description: Reindex started
+
+  # ==================== Jobs ====================
+  /jobs/scheduled:
+    get:
+      tags: [Jobs]
+      summary: List scheduled tasks
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Scheduled tasks with last/next run
+
+  /jobs/run/{command}:
+    post:
+      tags: [Jobs]
+      summary: Run scheduled task manually
+      description: Whitelist only - backup:run, log:cleanup, log:check-suspicious
+      security:
+        - sanctum: []
+      parameters:
+        - name: command
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task executed
+
+  /jobs/queue:
+    get:
+      tags: [Jobs]
+      summary: Get queue status
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Queue statistics
+
+  /jobs/failed:
+    get:
+      tags: [Jobs]
+      summary: List failed jobs
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Failed jobs list
+
+  /jobs/failed/{id}/retry:
+    post:
+      tags: [Jobs]
+      summary: Retry failed job
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Job retried
+
+  /jobs/failed/{id}:
+    delete:
+      tags: [Jobs]
+      summary: Delete failed job
+      security:
+        - sanctum: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Job deleted
+
+  /jobs/failed/retry-all:
+    post:
+      tags: [Jobs]
+      summary: Retry all failed jobs
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Jobs retried
+
+  /jobs/failed/clear:
+    delete:
+      tags: [Jobs]
+      summary: Clear all failed jobs
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Jobs cleared
+
+  # ==================== Webhooks ====================
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhooks
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Webhook list
+    post:
+      tags: [Webhooks]
+      summary: Create webhook
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, url, events]
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                url:
+                  type: string
+                  format: uri
+                events:
+                  type: array
+                  items:
+                    type: string
+                secret:
+                  type: string
+                active:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Webhook created (secret returned only at creation)
+
+  /webhooks/{webhook}:
+    get:
+      tags: [Webhooks]
+      summary: Get a single webhook
+      security:
+        - sanctum: []
+      parameters:
+        - name: webhook
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Webhook details
+    put:
+      tags: [Webhooks]
+      summary: Update webhook
+      security:
+        - sanctum: []
+      parameters:
+        - name: webhook
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                events:
+                  type: array
+                  items:
+                    type: string
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: Webhook updated
+    delete:
+      tags: [Webhooks]
+      summary: Delete webhook
+      security:
+        - sanctum: []
+      parameters:
+        - name: webhook
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Webhook deleted
+
+  /webhooks/{webhook}/deliveries:
+    get:
+      tags: [Webhooks]
+      summary: List webhook deliveries
+      security:
+        - sanctum: []
+      parameters:
+        - name: webhook
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Delivery attempts
+
+  /webhooks/{webhook}/test:
+    post:
+      tags: [Webhooks]
+      summary: Send test webhook
+      security:
+        - sanctum: []
+      parameters:
+        - name: webhook
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Test sent
+
+  # ==================== Branding ====================
+  /branding/update:
+    put:
+      tags: [Branding]
+      summary: Update branding
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                app_name:
+                  type: string
+                primary_color:
+                  type: string
+      responses:
+        '200':
+          description: Branding updated
+
+  /branding/logo:
+    post:
+      tags: [Branding]
+      summary: Upload logo
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [logo]
+              properties:
+                logo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Logo uploaded
+    delete:
+      tags: [Branding]
+      summary: Remove logo
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Logo removed
+
+  /branding/favicon:
+    post:
+      tags: [Branding]
+      summary: Upload favicon
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [favicon]
+              properties:
+                favicon:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Favicon uploaded
+    delete:
+      tags: [Branding]
+      summary: Remove favicon
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Favicon removed
+
+  # ==================== Notifications (additional) ====================
+  /notifications/test/{channel}:
+    post:
+      tags: [Notifications]
+      summary: Send test notification
+      security:
+        - sanctum: []
+      parameters:
+        - name: channel
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Test sent
+
+  /notifications/{notification}:
+    delete:
+      tags: [Notifications]
+      summary: Delete notification
+      security:
+        - sanctum: []
+      parameters:
+        - name: notification
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Notification deleted
+
+  # ==================== Admin Notification Channels ====================
+  /admin/notification-channels:
+    get:
+      tags: [Settings]
+      summary: Get admin notification channel config
+      security:
+        - sanctum: []
+      responses:
+        '200':
+          description: Channel configuration
+    put:
+      tags: [Settings]
+      summary: Update admin notification channels
+      security:
+        - sanctum: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Configuration updated
+
+components:
+  securitySchemes:
+    sanctum:
+      type: http
+      scheme: bearer
+      description: Laravel Sanctum session-based authentication
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        avatar:
+          type: string
+          nullable: true
+        email_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_admin:
+          type: boolean
+          description: Computed from admin group membership (no longer a stored column).
+        two_factor_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    UserProfile:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          properties:
+            social_accounts:
+              type: array
+              items:
+                type: object
+                properties:
+                  provider:
+                    type: string
+                  nickname:
+                    type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        message:
+          type: string
+        two_factor_required:
+          type: boolean
+
+    UserResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+
+    SSOProvider:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        icon:
+          type: string
+        color:
+          type: string
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    LLMProvider:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        supports_vision:
+          type: boolean
+        supports_tools:
+          type: boolean
+
+    LLMProviderConfig:
+      type: object
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        is_enabled:
+          type: boolean
+        is_primary:
+          type: boolean
+
+    LLMResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        response:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        mode:
+          type: string
+        tokens:
+          type: object
+          properties:
+            input:
+              type: integer
+            output:
+              type: integer
+            total:
+              type: integer
+        total_duration_ms:
+          type: integer
+
+    Backup:
+      type: object
+      properties:
+        filename:
+          type: string
+        size:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    PaginationMeta:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        last_page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+
+  responses:
+    Unauthorized:
+      description: Unauthenticated
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Unauthenticated.
+
+    Forbidden:
+      description: Forbidden - Admin access required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: This action is unauthorized.
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: The given data was invalid.
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+
+    Passkey:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        credential_id:
+          type: string
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ApiToken:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        abilities:
+          type: array
+          items:
+            type: string
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    SearchResults:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+              title:
+                type: string
+              subtitle:
+                type: string
+              url:
+                type: string
+              highlight:
+                type: string
+        meta:
+          type: object
+          properties:
+            query:
+              type: string
+            total:
+              type: integer
+            page:
+              type: integer
+            per_page:
+              type: integer
+
+    UserGroup:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_system:
+          type: boolean
+        is_default:
+          type: boolean
+        members_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+          nullable: true
+        action:
+          type: string
+        auditable_type:
+          type: string
+          nullable: true
+          description: Polymorphic model type (e.g. "App\\Models\\User")
+        auditable_id:
+          type: integer
+          nullable: true
+          description: Polymorphic model ID
+        old_values:
+          type: object
+          nullable: true
+          description: Previous values (sensitive keys masked)
+        new_values:
+          type: object
+          nullable: true
+          description: New values (sensitive keys masked)
+        severity:
+          type: string
+          enum: [info, warning, error, critical]
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        correlation_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+          nullable: true
+          description: Loaded when available (list and stats endpoints)
+
+    AuditStats:
+      type: object
+      properties:
+        total_actions:
+          type: integer
+        by_severity:
+          type: object
+          additionalProperties:
+            type: integer
+        daily_trends:
+          type: object
+          additionalProperties:
+            type: integer
+        recent_warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+        actions_by_type:
+          type: object
+          additionalProperties:
+            type: integer
+        actions_by_user:
+          type: object
+          additionalProperties:
+            type: integer
+
+    EmailTemplate:
+      type: object
+      properties:
+        id:
+          type: integer
+        key:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        subject:
+          type: string
+        body_html:
+          type: string
+        body_text:
+          type: string
+        variables:
+          type: array
+          items:
+            type: string
+        is_system:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time

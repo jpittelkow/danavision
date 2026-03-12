@@ -1,0 +1,36 @@
+---
+description: Keep notification template variables reference and preview in sync when adding or changing templates
+globs:
+  - "backend/app/Http/Controllers/Api/NotificationTemplateController.php"
+  - "backend/database/seeders/NotificationTemplateSeeder.php"
+  - "frontend/app/**/notification-templates/**/*.tsx"
+---
+
+# Notification Template Variables Reference
+
+When adding or changing notification template types or variables, keep the admin "Available Variables" panel and preview in sync.
+
+## When You Change Templates or Variables
+
+1. **New notification type** (new entries in `NotificationTemplateSeeder::defaults()`):
+   - Add any **new variable names** to `NotificationTemplateController::variableDescriptions()` so the editor "Available Variables" card shows descriptions.
+   - Add a branch in `NotificationTemplateController::sampleVariables()` so preview works for the new type.
+
+2. **New variable name** in an existing type (new key in a template’s `variables` array in the seeder):
+   - Add that variable to `NotificationTemplateController::variableDescriptions()`.
+   - If the type uses sample variables for preview, add the new key to the corresponding `sampleVariables()` branch.
+
+3. **Renaming or removing a variable**:
+   - Update or remove the entry in `variableDescriptions()`.
+   - Update `sampleVariables()` if that type is present.
+
+## Quick Checklist
+
+- [ ] Every variable name in `NotificationTemplateSeeder::defaults()` (across all templates) has an entry in `NotificationTemplateController::variableDescriptions()` (or accept the fallback "Available when sending.").
+- [ ] Every notification type that should support preview has a branch in `NotificationTemplateController::sampleVariables()` with sample values for its variables.
+
+## Related
+
+- [Recipe: Add Notification Template](docs/ai/recipes/add-notification-template.md) — Step 5 (variable descriptions), Step 6 (sample variables).
+- [Recipe: Keep Notification Template Variables Reference Up to Date](docs/ai/recipes/keep-notification-template-variables-up-to-date.md).
+- [Patterns: Notification Template Admin UI](docs/ai/patterns/notification-template-service.md).

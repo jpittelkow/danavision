@@ -1,0 +1,9 @@
+export { WelcomeWidget } from "./welcome-widget";
+export { StatsWidget } from "./stats-widget";
+export { QuickActionsWidget } from "./quick-actions-widget";
+export { RecentActivityWidget } from "./recent-activity-widget";
+export { SystemHealthWidget } from "./system-health-widget";
+export { StorageOverviewWidget } from "./storage-overview-widget";
+export { UpcomingTasksWidget } from "./upcoming-tasks-widget";
+export { NotificationsWidget } from "./notifications-widget";
+export { EnvironmentWidget } from "./environment-widget";

@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sourdough — Production-Ready Full-Stack Framework</title>
+  <meta name="description" content="A full-stack starter framework with auth, notifications, AI integration, backups, and more — all in a single Docker container.">
+  <style>
+    :root {
+      --bg-0: #110a03;
+      --bg-1: #1c1108;
+      --bg-2: #251608;
+      --bg-3: #301e0c;
+      --bg-4: #3d2611;
+      --border: #4a2e13;
+      --border-hi: #7a4a24;
+      --amber: #f59e0b;
+      --amber-hi: #fbbf24;
+      --amber-lo: #d97706;
+      --amber-glow: rgba(245,158,11,0.13);
+      --amber-glow-hi: rgba(245,158,11,0.22);
+      --cream: #fdf0cc;
+      --text: #e0ccaa;
+      --text-mid: #a07850;
+      --text-lo: #6b4e30;
+      --green: #22c55e;
+      --blue: #60a5fa;
+      --red: #f87171;
+
+      --font-serif: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+      --font-sans: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'Cascadia Code', 'Fira Code', 'Consolas', 'Courier New', monospace;
+
+      --r: 6px;
+      --r-lg: 12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg-0);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 16px;
+      line-height: 1.65;
+      overflow-x: hidden;
+    }
+
+    /* Grain overlay */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='250' height='250'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='250' height='250' filter='url(%23n)'/%3E%3C/svg%3E");
+      opacity: 0.035;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    a { color: var(--amber); text-decoration: none; transition: color .2s; }
+    a:hover { color: var(--amber-hi); }
+
+    /* ─── NAV ─────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      padding: .9rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(17,10,3,.82);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      transition: border-color .3s;
+    }
+    nav.scrolled { border-bottom-color: var(--border-hi); }
+
+    .nav-logo {
+      display: flex; align-items: center; gap: .65rem;
+      font-family: var(--font-serif); font-size: 1.25rem;
+      color: var(--cream); text-decoration: none;
+    }
+    .nav-ver {
+      font-family: var(--font-mono); font-size: .65rem;
+      background: var(--amber-glow); border: 1px solid var(--amber-lo);
+      color: var(--amber); padding: .15rem .55rem; border-radius: 999px;
+    }
+    .nav-links {
+      display: flex; align-items: center; gap: 1.75rem;
+    }
+    .nav-links a {
+      color: var(--text-mid); font-size: .875rem;
+      transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--cream); }
+
+    /* ─── BUTTONS ─────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      padding: .6rem 1.25rem; border-radius: var(--r);
+      font-size: .875rem; font-family: var(--font-sans);
+      font-weight: 600; cursor: pointer; border: none;
+      text-decoration: none; transition: all .2s;
+    }
+    .btn-amber {
+      background: var(--amber); color: #160800;
+    }
+    .btn-amber:hover {
+      background: var(--amber-hi); color: #160800;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(245,158,11,.35);
+    }
+    .btn-ghost {
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border-hi);
+    }
+    .btn-ghost:hover {
+      background: var(--bg-3); color: var(--cream);
+      border-color: var(--amber-lo);
+    }
+
+    /* ─── SECTION LAYOUT ──────────────────────────── */
+    .section-wrap {
+      padding: 5.5rem 2rem;
+      max-width: 1160px; margin: 0 auto;
+    }
+    .section-label {
+      font-family: var(--font-mono); font-size: .7rem;
+      color: var(--amber); letter-spacing: .18em;
+      text-transform: uppercase; margin-bottom: .9rem;
+    }
+    h2.section-title {
+      font-family: var(--font-serif); font-weight: normal;
+      font-size: clamp(1.8rem, 3vw, 2.5rem);
+      color: var(--cream); margin-bottom: .6rem;
+    }
+    .section-sub {
+      color: var(--text-mid); font-size: 1rem;
+      max-width: 560px; margin-bottom: 3rem;
+    }
+    hr.sep {
+      border: none; height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      max-width: 1160px; margin: 0 auto;
+    }
+
+    /* ─── HERO ────────────────────────────────────── */
+    #hero {
+      min-height: 100vh; display: flex;
+      flex-direction: column; align-items: center;
+      justify-content: center; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .hero-glow {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 90% 55% at 50% -10%, rgba(245,158,11,.11) 0%, transparent 55%),
+        radial-gradient(ellipse 55% 35% at 15% 85%, rgba(180,90,15,.07) 0%, transparent 50%),
+        radial-gradient(ellipse 55% 35% at 85% 85%, rgba(200,110,20,.06) 0%, transparent 50%);
+    }
+    .hero-inner {
+      position: relative; padding: 8rem 2rem 7rem;
+      max-width: 860px;
+    }
+    .hero-pill {
+      display: inline-flex; align-items: center; gap: .55rem;
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 999px; padding: .35rem 1rem;
+      font-family: var(--font-mono); font-size: .7rem;
+      color: var(--amber); margin-bottom: 2.25rem;
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: livepulse 2.2s ease-in-out infinite;
+    }
+    @keyframes livepulse {
+      0%,100% { opacity: 1; box-shadow: 0 0 8px var(--green); }
+      50% { opacity: .4; box-shadow: 0 0 3px var(--green); }
+    }
+    h1.hero-title {
+      font-family: var(--font-serif); font-weight: normal;
+      font-size: clamp(2.8rem, 6.5vw, 5.2rem);
+      line-height: 1.08; letter-spacing: -.02em;
+      color: var(--cream); margin-bottom: 1.6rem;
+    }
+    h1.hero-title em { font-style: italic; color: var(--amber); }
+    .hero-desc {
+      font-size: clamp(.95rem, 1.8vw, 1.2rem);
+      color: var(--text-mid); max-width: 580px;
+      margin: 0 auto 2.75rem; line-height: 1.75;
+    }
+    .hero-ctas {
+      display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+    }
+    .hero-scroll-hint {
+      position: absolute; bottom: 2.25rem; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: .4rem;
+      color: var(--text-lo); font-size: .7rem; font-family: var(--font-mono);
+      letter-spacing: .1em; animation: scrollhint 2.4s ease-in-out infinite;
+    }
+    .scroll-line {
+      width: 1px; height: 36px;
+      background: linear-gradient(to bottom, var(--amber-lo), transparent);
+    }
+    @keyframes scrollhint {
+      0%,100% { transform: translateX(-50%) translateY(0); }
+      55% { transform: translateX(-50%) translateY(7px); }
+    }
+
+    /* ─── STATS BAR ───────────────────────────────── */
+    .stats-bar {
+      background: var(--bg-1);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 1.6rem 2rem;
+    }
+    .stats-inner {
+      max-width: 1160px; margin: 0 auto;
+      display: flex; justify-content: center;
+      gap: 3.5rem; flex-wrap: wrap;
+    }
+    .stat { text-align: center; }
+    .stat-n {
+      font-family: var(--font-serif);
+      font-size: 1.9rem; color: var(--amber);
+      line-height: 1;
+    }
+    .stat-l {
+      font-size: .7rem; color: var(--text-mid);
+      font-family: var(--font-mono); letter-spacing: .05em;
+      margin-top: .25rem;
+    }
+
+    /* ─── ARCHITECTURE ────────────────────────────── */
+    .arch-wrap {
+      background: var(--bg-1);
+      border: 1px solid var(--border); border-radius: var(--r-lg);
+      padding: 2.5rem; overflow-x: auto;
+      position: relative;
+    }
+    .arch-wrap::before {
+      content: 'DOCKER CONTAINER';
+      position: absolute; top: -.6em; left: 1.75rem;
+      background: var(--bg-0); padding: 0 .75rem;
+      font-family: var(--font-mono); font-size: .65rem;
+      color: var(--amber); letter-spacing: .15em;
+    }
+    .arch-flow {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 0;
+    }
+    .arch-row {
+      display: flex; align-items: center;
+      justify-content: center; gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .arch-box {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: .7rem 1.3rem;
+      text-align: center; transition: all .22s;
+      cursor: default;
+    }
+    .arch-box:hover {
+      border-color: var(--amber-lo); background: var(--bg-3);
+      box-shadow: 0 0 16px rgba(245,158,11,.08);
+    }
+    .arch-box .ab-name {
+      font-family: var(--font-sans); font-weight: 600;
+      font-size: .8rem; color: var(--cream);
+    }
+    .arch-box .ab-sub {
+      font-size: .65rem; color: var(--text-mid);
+      font-family: var(--font-mono); margin-top: .2rem;
+    }
+    .arch-port {
+      background: var(--bg-3); border: 1px solid var(--border-hi);
+      border-radius: var(--r); padding: .35rem .8rem;
+      font-family: var(--font-mono); font-size: .75rem;
+      color: var(--amber);
+    }
+    .arch-arr {
+      color: var(--amber-lo); font-size: 1rem;
+      font-family: var(--font-mono); line-height: 1;
+    }
+    .arch-arr-v {
+      display: flex; flex-direction: column;
+      align-items: center; color: var(--amber-lo);
+      font-family: var(--font-mono); font-size: .85rem;
+      padding: .2rem 0; gap: 0; line-height: 1;
+    }
+    .arch-split-row {
+      display: flex; align-items: flex-start;
+      justify-content: center; gap: 2.5rem; flex-wrap: wrap;
+    }
+    .arch-split-branch {
+      display: flex; flex-direction: column;
+      align-items: center; gap: .3rem;
+    }
+    .arch-split-label {
+      font-family: var(--font-mono); font-size: .62rem;
+      color: var(--text-lo); letter-spacing: .05em;
+    }
+    .arch-db-row {
+      display: flex; gap: 1.25rem; justify-content: center;
+      flex-wrap: wrap; padding-top: .2rem;
+    }
+    .arch-db-item {
+      display: flex; flex-direction: column;
+      align-items: center; gap: .45rem;
+    }
+    .arch-db-icon { font-size: 1.4rem; }
+    .arch-db-name {
+      font-family: var(--font-mono); font-size: .65rem;
+      color: var(--text-mid); text-align: center;
+    }
+
+    /* ─── FEATURES ────────────────────────────────── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 1.25rem; margin-top: 0;
+    }
+    .feat-card {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 1.6rem;
+      position: relative; overflow: hidden;
+      transition: all .25s;
+    }
+    .feat-card::after {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(to right, transparent, var(--amber-lo), transparent);
+      opacity: 0; transition: opacity .25s;
+    }
+    .feat-card:hover {
+      border-color: var(--border-hi); background: var(--bg-2);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 36px rgba(0,0,0,.45), 0 0 0 1px rgba(245,158,11,.08);
+    }
+    .feat-card:hover::after { opacity: 1; }
+    .feat-icon { font-size: 1.9rem; margin-bottom: .9rem; display: block; }
+    .feat-title {
+      font-size: .95rem; font-weight: 700;
+      color: var(--cream); margin-bottom: .45rem;
+    }
+    .feat-desc { font-size: .82rem; color: var(--text-mid); line-height: 1.65; }
+    .feat-tags {
+      display: flex; gap: .4rem; flex-wrap: wrap; margin-top: 1rem;
+    }
+    .tag {
+      background: var(--bg-3); border: 1px solid var(--border);
+      color: var(--text-mid); font-family: var(--font-mono);
+      font-size: .62rem; padding: .18rem .5rem; border-radius: 4px;
+    }
+
+    /* ─── SCREENSHOTS ─────────────────────────────── */
+    .screens-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 1.75rem;
+    }
+    .screen-frame {
+      border: 1px solid var(--border); border-radius: var(--r-lg);
+      overflow: hidden; background: var(--bg-1);
+      box-shadow: 0 28px 56px rgba(0,0,0,.55);
+      transition: transform .25s, box-shadow .25s;
+    }
+    .screen-frame:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 36px 72px rgba(0,0,0,.6);
+    }
+    .sc-chrome {
+      background: var(--bg-3); border-bottom: 1px solid var(--border);
+      padding: .55rem 1rem;
+      display: flex; align-items: center; gap: .75rem;
+    }
+    .sc-dots { display: flex; gap: .35rem; }
+    .sc-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .sc-dot.r { background: #ff5f57; }
+    .sc-dot.y { background: #febc2e; }
+    .sc-dot.g { background: #28c840; }
+    .sc-url {
+      flex: 1; background: var(--bg-2);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: .22rem .7rem;
+      font-family: var(--font-mono); font-size: .67rem;
+      color: var(--text-mid); white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sc-body {
+      padding: 1.1rem; min-height: 210px;
+      font-family: var(--font-mono); font-size: .72rem;
+    }
+    /* Mock UI inside screenshots */
+    .m-topbar {
+      display: flex; align-items: center; gap: .85rem;
+      padding-bottom: .65rem; border-bottom: 1px solid var(--border);
+      margin-bottom: .75rem;
+    }
+    .m-tab {
+      font-size: .67rem; color: var(--text-mid); padding-bottom: 3px;
+    }
+    .m-tab.on {
+      color: var(--amber);
+      border-bottom: 2px solid var(--amber);
+    }
+    .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+    .m-card {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: .6rem .7rem;
+    }
+    .m-card-lbl { font-size: .58rem; color: var(--text-mid); text-transform: uppercase; letter-spacing: .05em; }
+    .m-card-val { font-size: 1.05rem; color: var(--amber); margin-top: .2rem; }
+    .m-card-wide { grid-column: span 2; }
+    .m-action {
+      display: inline-flex; align-items: center; gap: .3rem;
+      background: var(--amber-glow); border: 1px solid var(--amber-lo);
+      color: var(--amber); font-size: .6rem;
+      padding: .18rem .5rem; border-radius: 4px; margin-top: .4rem;
+    }
+    .m-action2 {
+      display: inline-flex; align-items: center; gap: .3rem;
+      background: var(--bg-3); border: 1px solid var(--border);
+      color: var(--text-mid); font-size: .6rem;
+      padding: .18rem .5rem; border-radius: 4px; margin-top: .4rem; margin-left: .35rem;
+    }
+    .m-row {
+      display: flex; align-items: center; gap: .5rem;
+      padding: .38rem 0; border-bottom: 1px solid var(--border);
+      font-size: .68rem;
+    }
+    .m-row:last-child { border-bottom: none; }
+    .m-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+    .m-dot.a { background: var(--amber); }
+    .m-dot.r { background: var(--red); }
+    .m-badge {
+      font-size: .58rem; color: var(--green);
+      border: 1px solid currentColor;
+      padding: .1rem .38rem; border-radius: 999px; margin-left: auto;
+    }
+    .m-badge.a { color: var(--amber); }
+    .m-badge.na { color: var(--text-mid); }
+    .m-pill {
+      background: var(--bg-3); border: 1px solid var(--border);
+      color: var(--text-mid); font-size: .58rem;
+      padding: .1rem .4rem; border-radius: 4px; margin-left: auto;
+    }
+    .m-heading { font-size: .62rem; color: var(--text-lo); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .4rem; }
+    .m-mode-pill {
+      display: inline-block; background: var(--amber-glow);
+      border: 1px solid var(--amber-lo); color: var(--amber);
+      font-size: .6rem; padding: .15rem .5rem; border-radius: 4px;
+      margin-bottom: .7rem;
+    }
+    .m-audit-row {
+      display: flex; align-items: center; gap: .5rem;
+      padding: .32rem 0; border-bottom: 1px solid var(--border);
+      font-size: .63rem; color: var(--text-mid);
+    }
+    .m-audit-row:last-child { border-bottom: none; }
+    .m-audit-sev { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .m-audit-sev.info { background: var(--blue); }
+    .m-audit-sev.warn { background: var(--amber); }
+    .m-audit-sev.crit { background: var(--red); }
+    .m-ts { color: var(--text-lo); font-size: .6rem; margin-left: auto; }
+
+    /* ─── TECH STACK ──────────────────────────────── */
+    .tech-groups {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.5rem;
+    }
+    .tech-group {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 1.4rem;
+    }
+    .tech-group-lbl {
+      font-family: var(--font-mono); font-size: .67rem;
+      color: var(--amber); letter-spacing: .12em;
+      text-transform: uppercase; padding-bottom: .6rem;
+      border-bottom: 1px solid var(--border); margin-bottom: .9rem;
+    }
+    .tech-pills { display: flex; flex-wrap: wrap; gap: .45rem; }
+    .tpill {
+      background: var(--bg-3); border: 1px solid var(--border);
+      color: var(--text); font-family: var(--font-mono); font-size: .72rem;
+      padding: .28rem .7rem; border-radius: var(--r);
+      transition: all .18s; cursor: default;
+    }
+    .tpill:hover { border-color: var(--amber-lo); color: var(--amber); }
+
+    /* ─── QUICK START ─────────────────────────────── */
+    .qs-list { display: grid; gap: 1.4rem; }
+    .qs-step { display: grid; grid-template-columns: 2.2rem 1fr; gap: 1.1rem; align-items: start; }
+    .qs-num {
+      width: 2.2rem; height: 2.2rem; border-radius: 50%;
+      background: var(--amber-glow); border: 1px solid var(--amber-lo);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: .77rem; color: var(--amber);
+      flex-shrink: 0; margin-top: .1rem;
+    }
+    .qs-card {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--r-lg); overflow: hidden;
+    }
+    .qs-card-head {
+      background: var(--bg-2); border-bottom: 1px solid var(--border);
+      padding: .65rem 1.2rem; font-size: .82rem;
+      font-weight: 600; color: var(--cream);
+    }
+    .qs-code {
+      padding: .9rem 1.2rem; font-family: var(--font-mono);
+      font-size: .78rem; line-height: 1.85; overflow-x: auto;
+    }
+    .c { color: var(--text-lo); } /* comment */
+    .k { color: var(--amber); }   /* keyword/cmd */
+    .a { color: var(--cream); }   /* arg */
+    .o { color: var(--text-mid); } /* output */
+    .s { color: var(--green); }   /* success */
+
+    .qs-req {
+      margin-top: 2rem; padding: 1.4rem;
+      background: var(--amber-glow);
+      border: 1px solid var(--amber-lo); border-radius: var(--r-lg);
+    }
+    .qs-req-title { font-size: .85rem; font-weight: 700; color: var(--cream); margin-bottom: .5rem; }
+    .qs-req-list {
+      display: flex; gap: 1.75rem; flex-wrap: wrap;
+      font-size: .8rem; color: var(--text-mid);
+    }
+
+    /* ─── TECH STACK ─────────────────────────────── */
+    .stack-foundation {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1.25rem; margin-bottom: 1.25rem;
+    }
+    @media (max-width: 700px) { .stack-foundation { grid-template-columns: 1fr; } }
+    .stack-found-card {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 2rem;
+      position: relative; overflow: hidden;
+    }
+    .stack-found-card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(to right, var(--amber-lo), var(--amber), var(--amber-lo));
+    }
+    .stack-found-header {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .stack-found-name {
+      font-family: var(--font-serif); font-size: 1.5rem;
+      color: var(--cream); line-height: 1.1;
+    }
+    .stack-found-ver {
+      font-family: var(--font-mono); font-size: .65rem;
+      color: var(--amber-lo); margin-top: .25rem;
+    }
+    .stack-found-desc {
+      font-size: .83rem; color: var(--text-mid);
+      line-height: 1.65; margin-bottom: 1.4rem;
+    }
+    .stack-ecosystem {
+      display: flex; flex-direction: column; gap: .55rem;
+    }
+    .stack-eco-lbl {
+      font-family: var(--font-mono); font-size: .6rem;
+      color: var(--text-lo); letter-spacing: .1em;
+      text-transform: uppercase; margin-bottom: .1rem;
+    }
+    .stack-eco-items { display: flex; flex-wrap: wrap; gap: .45rem; }
+    .eco-pill {
+      display: inline-flex; align-items: center; gap: .35rem;
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: var(--r); padding: .3rem .7rem;
+      font-size: .75rem; color: var(--text);
+      font-family: var(--font-sans);
+      transition: all .18s; cursor: default;
+    }
+    .eco-pill:hover { border-color: var(--amber-lo); color: var(--amber); }
+    .eco-pill .eco-badge {
+      font-family: var(--font-mono); font-size: .55rem;
+      padding: .1rem .35rem; border-radius: 3px;
+      letter-spacing: .06em; text-transform: uppercase;
+    }
+    .eco-badge.laravel {
+      background: rgba(255, 80, 50, 0.15);
+      color: #ff7a60; border: 1px solid rgba(255,80,50,.25);
+    }
+    .eco-badge.opt {
+      background: rgba(100,100,100,.15);
+      color: var(--text-lo); border: 1px solid var(--border);
+    }
+
+    .stack-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 1.25rem; margin-bottom: 1.25rem;
+    }
+    .stack-detail-card {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 1.5rem;
+      transition: all .22s;
+    }
+    .stack-detail-card:hover {
+      border-color: var(--border-hi); background: var(--bg-2);
+    }
+    .sdc-head {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: .75rem;
+    }
+    .sdc-name-row { display: flex; align-items: center; gap: .6rem; }
+    .sdc-icon { font-size: 1.25rem; }
+    .sdc-name {
+      font-size: .95rem; font-weight: 700; color: var(--cream);
+    }
+    .sdc-badge {
+      font-family: var(--font-mono); font-size: .58rem;
+      padding: .15rem .45rem; border-radius: 3px;
+      letter-spacing: .07em; text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .sdc-badge.laravel {
+      background: rgba(255,80,50,.13);
+      color: #ff7a60; border: 1px solid rgba(255,80,50,.22);
+    }
+    .sdc-badge.opt {
+      background: rgba(160,120,80,.1);
+      color: var(--text-lo); border: 1px solid var(--border);
+    }
+    .sdc-desc {
+      font-size: .8rem; color: var(--text-mid); line-height: 1.65;
+      margin-bottom: .9rem;
+    }
+    .sdc-detail {
+      font-family: var(--font-mono); font-size: .7rem;
+      color: var(--text-lo); border-top: 1px solid var(--border);
+      padding-top: .7rem; line-height: 1.6;
+    }
+    .sdc-detail strong { color: var(--amber-lo); font-weight: normal; }
+
+    .stack-db-card {
+      background: var(--bg-1); border: 1px solid var(--amber-lo);
+      border-radius: var(--r-lg); padding: 1.75rem;
+      position: relative; overflow: hidden;
+    }
+    .stack-db-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(to right, transparent, var(--amber), transparent);
+    }
+    .stack-db-layout {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      gap: 1.5rem; align-items: center;
+    }
+    @media (max-width: 700px) {
+      .stack-db-layout { grid-template-columns: 1fr; }
+      .stack-db-arrow { transform: rotate(90deg); }
+    }
+    .stack-db-left {}
+    .stack-db-arrow {
+      color: var(--amber-lo); font-family: var(--font-mono);
+      font-size: 1.5rem; text-align: center;
+    }
+    .stack-db-right {}
+    .stack-db-title {
+      font-family: var(--font-serif); font-size: 1.1rem;
+      color: var(--cream); margin-bottom: .4rem;
+    }
+    .stack-db-sub {
+      font-size: .78rem; color: var(--text-mid); line-height: 1.6;
+      margin-bottom: .9rem;
+    }
+    .stack-db-options {
+      display: flex; flex-wrap: wrap; gap: .45rem;
+    }
+    .stack-db-opt {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: var(--r); padding: .28rem .65rem;
+      font-family: var(--font-mono); font-size: .7rem;
+      color: var(--text-mid);
+    }
+    .stack-db-opt.default {
+      border-color: var(--amber-lo); color: var(--amber);
+      background: var(--amber-glow);
+    }
+
+    .stack-optional-note {
+      display: flex; align-items: flex-start; gap: .9rem;
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 1.25rem 1.5rem;
+      margin-top: 1.25rem;
+    }
+    .stack-optional-icon { font-size: 1.25rem; flex-shrink: 0; margin-top: .1rem; }
+    .stack-optional-text { font-size: .82rem; color: var(--text-mid); line-height: 1.65; }
+    .stack-optional-text strong { color: var(--cream); }
+
+    /* ─── AI DEV SECTION ─────────────────────────── */
+    .ai-hero-callout {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--r-lg); overflow: hidden; margin-bottom: 3rem;
+    }
+    .ai-hero-split {
+      display: grid; grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 800px) {
+      .ai-hero-split { grid-template-columns: 1fr; }
+    }
+    .ai-hero-left {
+      padding: 2.5rem; border-right: 1px solid var(--border);
+    }
+    @media (max-width: 800px) {
+      .ai-hero-left { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+    .ai-hero-right { padding: 2.5rem; }
+    .ai-convo {
+      display: flex; flex-direction: column; gap: .75rem;
+    }
+    .ai-msg {
+      display: flex; flex-direction: column; gap: .25rem;
+    }
+    .ai-msg-role {
+      font-family: var(--font-mono); font-size: .6rem;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text-lo);
+    }
+    .ai-msg-bubble {
+      padding: .65rem .9rem; border-radius: var(--r);
+      font-size: .78rem; line-height: 1.55;
+    }
+    .ai-msg.user .ai-msg-bubble {
+      background: var(--bg-3); border: 1px solid var(--border-hi);
+      color: var(--cream); align-self: flex-end; max-width: 85%;
+      font-family: var(--font-mono);
+    }
+    .ai-msg.ai .ai-msg-bubble {
+      background: var(--amber-glow); border: 1px solid var(--amber-lo);
+      color: var(--text); align-self: flex-start; max-width: 100%;
+    }
+    .ai-msg.ai .ai-msg-bubble strong { color: var(--amber); }
+    .ai-wizard-steps {
+      margin-top: .5rem; display: flex; flex-direction: column; gap: .3rem;
+    }
+    .ai-wizard-step {
+      display: flex; gap: .5rem; align-items: baseline;
+      font-size: .75rem; color: var(--text-mid);
+    }
+    .ai-wizard-step-n {
+      font-family: var(--font-mono); font-size: .62rem;
+      color: var(--amber); min-width: 1rem;
+    }
+    .ai-doc-table {
+      width: 100%; border-collapse: collapse;
+    }
+    .ai-doc-table th {
+      font-family: var(--font-mono); font-size: .65rem;
+      color: var(--amber); letter-spacing: .1em; text-transform: uppercase;
+      text-align: left; padding: .5rem .75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .ai-doc-table td {
+      font-size: .78rem; padding: .55rem .75rem;
+      border-bottom: 1px solid var(--border); vertical-align: top;
+    }
+    .ai-doc-table tr:last-child td { border-bottom: none; }
+    .ai-doc-table .path {
+      font-family: var(--font-mono); font-size: .72rem;
+      color: var(--amber-lo);
+    }
+    .ai-doc-table .desc { color: var(--text-mid); }
+
+    .ai-three-col {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem; margin-bottom: 2rem;
+    }
+    .ai-col-card {
+      background: var(--bg-1); border: 1px solid var(--border);
+      border-radius: var(--r-lg); padding: 1.5rem; overflow: hidden;
+    }
+    .ai-col-head {
+      display: flex; align-items: center; gap: .6rem;
+      margin-bottom: 1rem;
+    }
+    .ai-col-icon { font-size: 1.4rem; }
+    .ai-col-title {
+      font-size: .9rem; font-weight: 700; color: var(--cream);
+    }
+    .ai-col-sub { font-size: .7rem; color: var(--text-mid); }
+    .ai-recipe-list {
+      display: flex; flex-direction: column; gap: .3rem;
+    }
+    .ai-recipe-item {
+      display: flex; align-items: center; gap: .5rem;
+      font-family: var(--font-mono); font-size: .68rem;
+      color: var(--text-mid); padding: .28rem 0;
+      border-bottom: 1px solid rgba(74,46,19,.4);
+    }
+    .ai-recipe-item:last-child { border-bottom: none; }
+    .ai-recipe-item::before {
+      content: '→'; color: var(--amber-lo); font-size: .65rem;
+    }
+    .ai-recipe-more {
+      font-family: var(--font-mono); font-size: .65rem;
+      color: var(--text-lo); margin-top: .5rem; text-align: right;
+    }
+    .ai-ide-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem;
+    }
+    .ai-ide-card {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: var(--r); padding: .7rem .85rem;
+    }
+    .ai-ide-name {
+      font-size: .8rem; font-weight: 600; color: var(--cream);
+      margin-bottom: .2rem;
+    }
+    .ai-ide-file {
+      font-family: var(--font-mono); font-size: .63rem;
+      color: var(--amber-lo);
+    }
+    .ai-ide-note {
+      font-size: .63rem; color: var(--text-lo); margin-top: .2rem;
+    }
+
+    /* ─── FOOTER ──────────────────────────────────── */
+    footer {
+      background: var(--bg-1); border-top: 1px solid var(--border);
+      padding: 3.5rem 2rem; text-align: center;
+    }
+    .ft-logo {
+      font-family: var(--font-serif); font-size: 1.6rem;
+      color: var(--cream); margin-bottom: .65rem;
+    }
+    .ft-tagline { color: var(--text-mid); font-size: .875rem; margin-bottom: 2rem; }
+    .ft-links {
+      display: flex; gap: 2rem; justify-content: center;
+      flex-wrap: wrap; margin-bottom: 2rem;
+    }
+    .ft-links a { color: var(--text-mid); font-size: .875rem; transition: color .2s; }
+    .ft-links a:hover { color: var(--cream); }
+    .ft-copy {
+      color: var(--text-lo); font-size: .72rem;
+      font-family: var(--font-mono);
+    }
+
+    /* ─── ANIMATIONS ──────────────────────────────── */
+    .rise {
+      opacity: 0; transform: translateY(22px);
+      transition: opacity .6s ease, transform .6s ease;
+    }
+    .rise.show { opacity: 1; transform: translateY(0); }
+    .rise:nth-child(2)  { transition-delay: .08s; }
+    .rise:nth-child(3)  { transition-delay: .16s; }
+    .rise:nth-child(4)  { transition-delay: .24s; }
+    .rise:nth-child(5)  { transition-delay: .32s; }
+    .rise:nth-child(6)  { transition-delay: .40s; }
+    .rise:nth-child(7)  { transition-delay: .48s; }
+    .rise:nth-child(8)  { transition-delay: .56s; }
+    .rise:nth-child(9)  { transition-delay: .64s; }
+    .rise:nth-child(10) { transition-delay: .72s; }
+
+    /* ─── RESPONSIVE ──────────────────────────────── */
+    @media (max-width: 700px) {
+      nav { padding: .75rem 1rem; }
+      .nav-links { display: none; }
+      .section-wrap { padding: 4rem 1rem; }
+      .screens-grid { grid-template-columns: 1fr; }
+      .stats-inner { gap: 1.75rem; }
+      .arch-split-row { gap: 1.25rem; }
+      h1.hero-title { font-size: 2.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav id="nav">
+  <a href="#" class="nav-logo">
+    <span>🍞</span>
+    <span>sourdough</span>
+    <span class="nav-ver" data-ver>v0.8.3</span>
+  </a>
+  <div class="nav-links">
+    <a href="#architecture">Architecture</a>
+    <a href="#features">Features</a>
+    <a href="#screenshots">Screens</a>
+    <a href="#stack">Stack</a>
+    <a href="#ai-dev">AI Dev</a>
+    <a href="#quickstart">Start Cooking</a>
+    <a href="https://github.com/Sourdough-start/sourdough" class="btn btn-amber" style="margin-left:.5rem;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+      Fork on GitHub
+    </a>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<section id="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-inner">
+    <div class="hero-pill">
+      <span class="live-dot"></span>
+      <span data-ver>v0.8.3</span> — Latest Release
+    </div>
+    <h1 class="hero-title">
+      Ship faster.<br>Skip the <em>boring parts.</em>
+    </h1>
+    <p class="hero-desc">
+      A production-ready full-stack starter with auth, notifications, AI integration,
+      backups, search, audit logs, and more — all configured through a polished admin UI,
+      all inside a single Docker container.
+    </p>
+    <div class="hero-ctas">
+      <a href="https://github.com/Sourdough-start/sourdough" class="btn btn-amber">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
+        Fork on GitHub
+      </a>
+      <a href="#quickstart" class="btn btn-ghost">Start cooking →</a>
+    </div>
+  </div>
+  <div class="hero-scroll-hint">
+    <div class="scroll-line"></div>
+    <span>scroll</span>
+  </div>
+</section>
+
+<!-- ── Stats Bar ── -->
+<div class="stats-bar">
+  <div class="stats-inner">
+    <div class="stat"><div class="stat-n">10+</div><div class="stat-l">Notification Channels</div></div>
+    <div class="stat"><div class="stat-n">6</div><div class="stat-l">AI/LLM Providers</div></div>
+    <div class="stat"><div class="stat-n">5</div><div class="stat-l">SSO Providers</div></div>
+    <div class="stat"><div class="stat-n">1</div><div class="stat-l">Docker Container</div></div>
+    <div class="stat"><div class="stat-n">40+</div><div class="stat-l">API Controllers</div></div>
+    <div class="stat"><div class="stat-n">0</div><div class="stat-l">Config File Edits Needed</div></div>
+  </div>
+</div>
+
+<!-- ── Architecture ── -->
+<div class="section-wrap" id="architecture">
+  <div class="section-label">// how it fits together</div>
+  <h2 class="section-title">One container. Everything inside.</h2>
+  <p class="section-sub">All services start automatically via Supervisor — Nginx, PHP-FPM, Next.js, Meilisearch, and WebSockets. No orchestration complexity required.</p>
+
+  <div class="arch-wrap">
+    <div class="arch-flow">
+
+      <!-- Entry -->
+      <div class="arch-row">
+        <div class="arch-port">:8080</div>
+        <div class="arch-arr">──────►</div>
+        <div class="arch-box">
+          <div class="ab-name">🔀 Nginx</div>
+          <div class="ab-sub">Reverse Proxy</div>
+        </div>
+      </div>
+
+      <!-- Down arrow with fork labels -->
+      <div style="display:flex; flex-direction:column; align-items:center; padding:.3rem 0; gap:0; font-family:var(--font-mono); font-size:.8rem; color:var(--amber-lo); line-height:1.1;">
+        <span>│</span>
+        <span style="font-size:.62rem; color:var(--text-lo); white-space:nowrap;">├── /api/* ──────── /*</span>
+        <span>│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│</span>
+      </div>
+
+      <!-- Split: PHP + Next.js -->
+      <div class="arch-split-row">
+        <div class="arch-split-branch">
+          <div class="arch-split-label">/api/*</div>
+          <div class="arch-box">
+            <div class="ab-name">⚙️ PHP-FPM</div>
+            <div class="ab-sub">Laravel 11 API</div>
+          </div>
+        </div>
+        <div class="arch-split-branch">
+          <div class="arch-split-label">/*</div>
+          <div class="arch-box">
+            <div class="ab-name">⚛️ Next.js</div>
+            <div class="ab-sub">React 18 · TypeScript</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Down arrow -->
+      <div class="arch-arr-v" style="padding:.3rem 0;">
+        <span>│</span><span>▼</span>
+      </div>
+
+      <!-- Data/services layer -->
+      <div class="arch-db-row">
+        <div class="arch-db-item">
+          <span class="arch-db-icon">🗄️</span>
+          <div class="arch-box" style="min-width:100px;">
+            <div class="ab-name">SQLite</div>
+            <div class="ab-sub">Default · MySQL/PG ok</div>
+          </div>
+        </div>
+        <div class="arch-db-item">
+          <span class="arch-db-icon">🔍</span>
+          <div class="arch-box" style="min-width:100px;">
+            <div class="ab-name">Meilisearch</div>
+            <div class="ab-sub">Full-text Search</div>
+          </div>
+        </div>
+        <div class="arch-db-item">
+          <span class="arch-db-icon">📡</span>
+          <div class="arch-box" style="min-width:100px;">
+            <div class="ab-name">Reverb</div>
+            <div class="ab-sub">WebSockets</div>
+          </div>
+        </div>
+        <div class="arch-db-item">
+          <span class="arch-db-icon">🔄</span>
+          <div class="arch-box" style="min-width:100px;">
+            <div class="ab-name">Supervisor</div>
+            <div class="ab-sub">Process Manager</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <p style="text-align:center; font-family:var(--font-mono); font-size:.72rem; color:var(--text-lo); margin-top:1.25rem;">
+    Session-based auth via HTTP-only cookies &nbsp;·&nbsp; Nginx routes /api/* → PHP-FPM, everything else → Next.js
+  </p>
+</div>
+
+<hr class="sep">
+
+<!-- ── Features ── -->
+<div class="section-wrap" id="features">
+  <div class="section-label">// batteries included</div>
+  <h2 class="section-title">Everything your app needs, pre-built.</h2>
+  <p class="section-sub">Stop reimplementing auth and notifications on every new project. All infrastructure-level features are pre-built, tested, and configurable from the admin UI.</p>
+
+  <div class="features-grid">
+
+    <div class="feat-card rise">
+      <span class="feat-icon">🔐</span>
+      <div class="feat-title">Authentication &amp; Users</div>
+      <p class="feat-desc">Email/password, SSO via Google, GitHub, Microsoft, Apple, and Discord. TOTP two-factor auth with recovery codes, and WebAuthn/FIDO2 passkeys. Group-based permissions with granular controls.</p>
+      <div class="feat-tags">
+        <span class="tag">Sanctum</span><span class="tag">OAuth2/OIDC</span>
+        <span class="tag">2FA + Passkeys</span><span class="tag">RBAC Groups</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">🔔</span>
+      <div class="feat-title">Multi-Channel Notifications</div>
+      <p class="feat-desc">10+ delivery channels: email (SMTP/Mailgun/SES), SMS (Twilio/Vonage/SNS), Slack, Telegram, Discord, Signal, Matrix, ntfy, Web Push, and in-app. Per-user preferences and delivery diagnostics.</p>
+      <div class="feat-tags">
+        <span class="tag">Email</span><span class="tag">SMS</span>
+        <span class="tag">Slack</span><span class="tag">Telegram</span><span class="tag">Web Push</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">🤖</span>
+      <div class="feat-title">AI / LLM Integration</div>
+      <p class="feat-desc">Multi-provider support for Claude, OpenAI, Gemini, Ollama, AWS Bedrock, and Azure OpenAI. Three orchestration modes: Single (direct query), Aggregation (synthesized results), and Council (consensus voting).</p>
+      <div class="feat-tags">
+        <span class="tag">Claude</span><span class="tag">OpenAI</span>
+        <span class="tag">Gemini</span><span class="tag">Ollama</span><span class="tag">Bedrock</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">💾</span>
+      <div class="feat-title">Backup &amp; Restore</div>
+      <p class="feat-desc">Automated full backups (database + files + settings) on a configurable schedule. Remote destinations: S3-compatible, SFTP, Google Drive, and local storage. Optional encryption and configurable retention policies.</p>
+      <div class="feat-tags">
+        <span class="tag">S3</span><span class="tag">SFTP</span>
+        <span class="tag">Google Drive</span><span class="tag">Encrypted</span><span class="tag">Scheduled</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">🔍</span>
+      <div class="feat-title">Full-Text Search</div>
+      <p class="feat-desc">Meilisearch-powered global search with a Cmd+K shortcut. Searches both navigation pages and database records simultaneously. Falls back to database LIKE queries when Meilisearch is unavailable.</p>
+      <div class="feat-tags">
+        <span class="tag">Meilisearch</span><span class="tag">Cmd+K</span>
+        <span class="tag">Laravel Scout</span><span class="tag">Fuse.js</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">📋</span>
+      <div class="feat-title">Audit Logging</div>
+      <p class="feat-desc">Real-time streaming audit logs via Server-Sent Events. HIPAA-compliant access logging, suspicious activity detection, and structured application logs with correlation IDs. Configurable retention.</p>
+      <div class="feat-tags">
+        <span class="tag">Real-time SSE</span><span class="tag">HIPAA</span>
+        <span class="tag">Correlation IDs</span><span class="tag">Live Stream</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">📱</span>
+      <div class="feat-title">Progressive Web App</div>
+      <p class="feat-desc">Full PWA: offline capability, install prompts, background sync, and share target API. Service Worker via Workbox 7 (bundled locally). Web Push with VAPID keys. Custom install banner with dismissal tracking.</p>
+      <div class="feat-tags">
+        <span class="tag">Workbox 7</span><span class="tag">Offline</span>
+        <span class="tag">Background Sync</span><span class="tag">Web Push</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">⚙️</span>
+      <div class="feat-title">Admin Configuration UI</div>
+      <p class="feat-desc">Every setting is manageable through the admin dashboard — no config file edits, no container restarts. Settings are stored in the database with environment variable fallback for defaults.</p>
+      <div class="feat-tags">
+        <span class="tag">No Restarts</span><span class="tag">DB-backed</span>
+        <span class="tag">Env Fallback</span><span class="tag">Live Updates</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">🗂️</span>
+      <div class="feat-title">Multi-Provider Storage</div>
+      <p class="feat-desc">File storage with Amazon S3 (and S3-compatible services), Google Cloud Storage, Azure Blob Storage, and local filesystem. Includes a file manager UI for browsing and managing uploads.</p>
+      <div class="feat-tags">
+        <span class="tag">S3</span><span class="tag">GCS</span>
+        <span class="tag">Azure Blob</span><span class="tag">File Manager</span>
+      </div>
+    </div>
+
+    <div class="feat-card rise">
+      <span class="feat-icon">💳</span>
+      <div class="feat-title">Payments (Optional Module)</div>
+      <p class="feat-desc">Stripe Connect integration with platform application fees, destination charges, OAuth onboarding, idempotent webhook handling, and a payment history admin view. Available as an optional module.</p>
+      <div class="feat-tags">
+        <span class="tag">Stripe Connect</span><span class="tag">Webhooks</span>
+        <span class="tag">Optional</span><span class="tag">Idempotent</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<hr class="sep">
+
+<!-- ── Screenshots ── -->
+<div class="section-wrap" id="screenshots">
+  <div class="section-label">// preview</div>
+  <h2 class="section-title">A complete admin experience.</h2>
+  <p class="section-sub">Every feature is accessible through a polished Next.js interface. No terminal commands or config file editing after initial setup.</p>
+
+  <div class="screens-grid">
+
+    <!-- Dashboard -->
+    <div class="screen-frame">
+      <div class="sc-chrome">
+        <div class="sc-dots">
+          <div class="sc-dot r"></div><div class="sc-dot y"></div><div class="sc-dot g"></div>
+        </div>
+        <div class="sc-url">localhost:8080/dashboard</div>
+      </div>
+      <div class="sc-body">
+        <div class="m-topbar">
+          <span class="m-tab on">Dashboard</span>
+          <span class="m-tab">Users</span>
+          <span class="m-tab">Configuration</span>
+          <span style="margin-left:auto; font-size:.62rem; color:var(--text-lo);">⌘K Search</span>
+        </div>
+        <div style="font-size:.67rem; color:var(--text-mid); margin-bottom:.7rem;">Welcome back, Admin ✦</div>
+        <div class="m-grid">
+          <div class="m-card">
+            <div class="m-card-lbl">Total Users</div>
+            <div class="m-card-val">42</div>
+          </div>
+          <div class="m-card">
+            <div class="m-card-lbl">Storage Used</div>
+            <div class="m-card-val">1.2 GB</div>
+          </div>
+          <div class="m-card m-card-wide">
+            <div class="m-card-lbl">Quick Actions</div>
+            <div>
+              <span class="m-action">+ New User</span>
+              <span class="m-action2">Run Backup</span>
+              <span class="m-action2">Reindex Search</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notifications Config -->
+    <div class="screen-frame">
+      <div class="sc-chrome">
+        <div class="sc-dots">
+          <div class="sc-dot r"></div><div class="sc-dot y"></div><div class="sc-dot g"></div>
+        </div>
+        <div class="sc-url">localhost:8080/configuration/notifications</div>
+      </div>
+      <div class="sc-body">
+        <div class="m-topbar">
+          <span class="m-tab">← Config</span>
+          <span class="m-tab on">Notifications</span>
+        </div>
+        <div style="font-size:.63rem; color:var(--text-mid); margin-bottom:.65rem;">Delivery channels · 4 of 10 enabled</div>
+        <div class="m-row"><div class="m-dot"></div><span>Email (SMTP)</span><span class="m-badge">enabled</span></div>
+        <div class="m-row"><div class="m-dot"></div><span>Slack Webhook</span><span class="m-badge">enabled</span></div>
+        <div class="m-row"><div class="m-dot"></div><span>Web Push (VAPID)</span><span class="m-badge">enabled</span></div>
+        <div class="m-row"><div class="m-dot"></div><span>In-App</span><span class="m-badge">enabled</span></div>
+        <div class="m-row"><div class="m-dot a"></div><span>Telegram Bot</span><span class="m-badge a">configure</span></div>
+        <div class="m-row"><div class="m-dot a"></div><span>Twilio SMS</span><span class="m-badge na">disabled</span></div>
+      </div>
+    </div>
+
+    <!-- AI Config -->
+    <div class="screen-frame">
+      <div class="sc-chrome">
+        <div class="sc-dots">
+          <div class="sc-dot r"></div><div class="sc-dot y"></div><div class="sc-dot g"></div>
+        </div>
+        <div class="sc-url">localhost:8080/configuration/ai</div>
+      </div>
+      <div class="sc-body">
+        <div class="m-topbar">
+          <span class="m-tab">← Config</span>
+          <span class="m-tab on">AI / LLM</span>
+        </div>
+        <div class="m-mode-pill">Mode: Council (consensus voting)</div>
+        <div class="m-row"><div class="m-dot"></div><span>Anthropic Claude</span><span class="m-pill">claude-3-5-sonnet</span></div>
+        <div class="m-row"><div class="m-dot"></div><span>OpenAI</span><span class="m-pill">gpt-4o</span></div>
+        <div class="m-row"><div class="m-dot"></div><span>Google Gemini</span><span class="m-pill">gemini-1.5-pro</span></div>
+        <div class="m-row"><div class="m-dot a"></div><span>Ollama (local)</span><span style="font-size:.6rem; color:var(--text-lo); margin-left:auto;">not configured</span></div>
+        <div class="m-row"><div class="m-dot a"></div><span>AWS Bedrock</span><span style="font-size:.6rem; color:var(--text-lo); margin-left:auto;">not configured</span></div>
+      </div>
+    </div>
+
+    <!-- Audit Log -->
+    <div class="screen-frame">
+      <div class="sc-chrome">
+        <div class="sc-dots">
+          <div class="sc-dot r"></div><div class="sc-dot y"></div><div class="sc-dot g"></div>
+        </div>
+        <div class="sc-url">localhost:8080/configuration/audit</div>
+      </div>
+      <div class="sc-body">
+        <div class="m-topbar">
+          <span class="m-tab">← Config</span>
+          <span class="m-tab on">Audit Logs</span>
+          <span style="margin-left:auto; font-size:.6rem; color:var(--green);">● Live stream</span>
+        </div>
+        <div class="m-audit-row"><div class="m-audit-sev info"></div><span>user.login</span><span style="color:var(--text); margin-left:.3rem;">admin@example.com</span><span class="m-ts">just now</span></div>
+        <div class="m-audit-row"><div class="m-audit-sev info"></div><span>backup.completed</span><span style="color:var(--text); margin-left:.3rem;">full · 24.3 MB</span><span class="m-ts">2m ago</span></div>
+        <div class="m-audit-row"><div class="m-audit-sev warn"></div><span>auth.failed</span><span style="color:var(--text); margin-left:.3rem;">unknown@x.com</span><span class="m-ts">5m ago</span></div>
+        <div class="m-audit-row"><div class="m-audit-sev info"></div><span>settings.updated</span><span style="color:var(--text); margin-left:.3rem;">notifications.slack</span><span class="m-ts">12m ago</span></div>
+        <div class="m-audit-row"><div class="m-audit-sev crit"></div><span>suspicious.activity</span><span style="color:var(--text); margin-left:.3rem;">5 failed logins</span><span class="m-ts">1h ago</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<hr class="sep">
+
+<!-- ── Tech Stack ── -->
+<div class="section-wrap" id="stack">
+  <div class="section-label">// the stack</div>
+  <h2 class="section-title">Built on Laravel &amp; Next.js.</h2>
+  <p class="section-sub">Two of the most productive full-stack frameworks available, with the full Laravel and React ecosystems at your disposal. Everything included — nothing mandatory.</p>
+
+  <!-- Foundation cards -->
+  <div class="stack-foundation">
+
+    <div class="stack-found-card">
+      <div class="stack-found-header">
+        <div>
+          <div class="stack-found-name">⚙️ Laravel 11</div>
+          <div class="stack-found-ver">PHP 8.3+ · The API backbone</div>
+        </div>
+      </div>
+      <p class="stack-found-desc">
+        A mature, expressive PHP framework with an enormous ecosystem. Sourdough uses Laravel for all API routes, business logic, auth, queuing, notifications, and database access — with the full ecosystem already wired up and ready to extend.
+      </p>
+      <div class="stack-ecosystem">
+        <div class="stack-eco-lbl">Included Laravel packages</div>
+        <div class="stack-eco-items">
+          <span class="eco-pill"><span class="eco-badge laravel">Laravel</span> Sanctum</span>
+          <span class="eco-pill"><span class="eco-badge laravel">Laravel</span> Scout</span>
+          <span class="eco-pill"><span class="eco-badge laravel">Laravel</span> Reverb</span>
+          <span class="eco-pill"><span class="eco-badge laravel">Laravel</span> Eloquent</span>
+          <span class="eco-pill"><span class="eco-badge laravel">Laravel</span> Notifications</span>
+          <span class="eco-pill"><span class="eco-badge laravel">Laravel</span> Queue</span>
+          <span class="eco-pill"><span class="eco-badge laravel">Laravel</span> Mail</span>
+          <span class="eco-pill"><span class="eco-badge opt">Optional</span> Horizon</span>
+          <span class="eco-pill"><span class="eco-badge opt">Optional</span> Lighthouse GraphQL</span>
+          <span class="eco-pill">Pest PHP</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack-found-card">
+      <div class="stack-found-header">
+        <div>
+          <div class="stack-found-name">⚛️ Next.js 16</div>
+          <div class="stack-found-ver">React 18 · TypeScript · The frontend</div>
+        </div>
+      </div>
+      <p class="stack-found-desc">
+        A production-grade React framework with file-based routing, server components, and a rich ecosystem. Sourdough's frontend is a fully-typed TypeScript application with a complete component library, state management, and form handling already configured.
+      </p>
+      <div class="stack-ecosystem">
+        <div class="stack-eco-lbl">Included frontend packages</div>
+        <div class="stack-eco-items">
+          <span class="eco-pill">Tailwind CSS</span>
+          <span class="eco-pill">shadcn/ui + Radix</span>
+          <span class="eco-pill">TanStack Query</span>
+          <span class="eco-pill">Zustand</span>
+          <span class="eco-pill">React Hook Form</span>
+          <span class="eco-pill">Zod</span>
+          <span class="eco-pill">Workbox PWA</span>
+          <span class="eco-pill">Fuse.js</span>
+          <span class="eco-pill">Playwright</span>
+          <span class="eco-pill">Vitest</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Laravel tools detail cards -->
+  <div class="stack-detail-grid">
+
+    <div class="stack-detail-card">
+      <div class="sdc-head">
+        <div class="sdc-name-row">
+          <span class="sdc-icon">🔐</span>
+          <div class="sdc-name">Laravel Sanctum</div>
+        </div>
+        <span class="sdc-badge laravel">Laravel</span>
+      </div>
+      <p class="sdc-desc">First-party Laravel package for session-based authentication. Sourdough uses HTTP-only cookie sessions — no Bearer tokens, no JWT management. Secure by default, works seamlessly with SSO and 2FA.</p>
+      <div class="sdc-detail"><strong>Used for:</strong> API auth, session management, CSRF protection, SPA authentication</div>
+    </div>
+
+    <div class="stack-detail-card">
+      <div class="sdc-head">
+        <div class="sdc-name-row">
+          <span class="sdc-icon">🔍</span>
+          <div class="sdc-name">Laravel Scout</div>
+        </div>
+        <span class="sdc-badge laravel">Laravel</span>
+      </div>
+      <p class="sdc-desc">Laravel's official full-text search abstraction. Models are decorated with <code style="font-family:var(--font-mono);font-size:.75em;color:var(--amber-lo)">Searchable</code> and Scout handles indexing, querying, and syncing — currently backed by Meilisearch, swappable to Algolia or Typesense.</p>
+      <div class="sdc-detail"><strong>Driver:</strong> Meilisearch (included) &nbsp;·&nbsp; <strong>Fallback:</strong> database LIKE queries</div>
+    </div>
+
+    <div class="stack-detail-card">
+      <div class="sdc-head">
+        <div class="sdc-name-row">
+          <span class="sdc-icon">📡</span>
+          <div class="sdc-name">Laravel Reverb</div>
+        </div>
+        <span class="sdc-badge laravel">Laravel</span>
+      </div>
+      <p class="sdc-desc">Laravel's first-party WebSocket server — runs inside the same container, no third-party service required. Powers real-time audit log streaming, live notifications, and any event broadcasting you add to your app.</p>
+      <div class="sdc-detail"><strong>Used for:</strong> real-time audit logs, in-app notifications, live dashboard updates</div>
+    </div>
+
+    <div class="stack-detail-card">
+      <div class="sdc-head">
+        <div class="sdc-name-row">
+          <span class="sdc-icon">🔔</span>
+          <div class="sdc-name">Laravel Notifications</div>
+        </div>
+        <span class="sdc-badge laravel">Laravel</span>
+      </div>
+      <p class="sdc-desc">Laravel's notification system extended with 10+ custom channels: Telegram, Slack, Discord, Twilio SMS, Web Push, and more. Adding a new channel means implementing one interface and registering it — the rest is wired.</p>
+      <div class="sdc-detail"><strong>Channels:</strong> email, SMS, Slack, Telegram, Discord, Signal, Matrix, ntfy, Web Push, in-app</div>
+    </div>
+
+    <div class="stack-detail-card">
+      <div class="sdc-head">
+        <div class="sdc-name-row">
+          <span class="sdc-icon">⚡</span>
+          <div class="sdc-name">Laravel Queue</div>
+        </div>
+        <span class="sdc-badge laravel">Laravel</span>
+      </div>
+      <p class="sdc-desc">Background job processing for backups, notifications, and heavy operations. Uses the database driver out of the box — no Redis required to get started. Swap to Redis or SQS when you need to scale.</p>
+      <div class="sdc-detail"><strong>Default driver:</strong> database &nbsp;·&nbsp; <strong>Also supports:</strong> Redis, SQS, Beanstalkd</div>
+    </div>
+
+    <div class="stack-detail-card">
+      <div class="sdc-head">
+        <div class="sdc-name-row">
+          <span class="sdc-icon">🧩</span>
+          <div class="sdc-name">Lighthouse GraphQL</div>
+        </div>
+        <span class="sdc-badge opt">Optional</span>
+      </div>
+      <p class="sdc-desc">A full GraphQL API alongside the REST API, powered by Lighthouse — a schema-first GraphQL server for Laravel. Use it if your clients prefer GraphQL; leave it out if they don't. The REST API works independently.</p>
+      <div class="sdc-detail"><strong>Remove it:</strong> uninstall the package, drop the schema file — REST API is unaffected</div>
+    </div>
+
+  </div>
+
+  <!-- Database / Eloquent story -->
+  <div class="stack-db-card">
+    <div class="stack-db-layout">
+      <div class="stack-db-left">
+        <div class="stack-db-title">🗄️ Eloquent ORM</div>
+        <p class="stack-db-sub">Laravel's built-in ORM means the database is an implementation detail. Sourdough ships with <strong style="color:var(--amber)">SQLite by default</strong> — zero setup, file-based, works immediately. When you're ready to scale, change one env var.</p>
+        <div class="stack-db-options">
+          <span class="stack-db-opt default">SQLite ← default</span>
+          <span class="stack-db-opt">MySQL</span>
+          <span class="stack-db-opt">PostgreSQL</span>
+          <span class="stack-db-opt">Supabase</span>
+          <span class="stack-db-opt">PlanetScale</span>
+        </div>
+      </div>
+      <div class="stack-db-arrow">→</div>
+      <div class="stack-db-right">
+        <div class="stack-db-title">Change <code style="font-family:var(--font-mono);font-size:.85em">DB_CONNECTION</code></div>
+        <p class="stack-db-sub">That's literally it. Eloquent handles the rest. All migrations, relationships, and queries work identically across every supported database driver.</p>
+        <div style="font-family:var(--font-mono); font-size:.73rem; line-height:2; color:var(--text-mid);">
+          <span style="color:var(--text-lo)"># .env</span><br>
+          <span style="color:var(--amber-lo)">DB_CONNECTION</span>=<span style="color:var(--cream)">pgsql</span><br>
+          <span style="color:var(--amber-lo)">DB_DATABASE</span>=<span style="color:var(--cream)">my_app</span><br>
+          <span style="color:var(--text-lo)"># Run migrations. Done.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stack-optional-note">
+    <span class="stack-optional-icon">🧱</span>
+    <p class="stack-optional-text">
+      <strong>Everything is included, nothing is required.</strong> Don't need GraphQL? Remove Lighthouse. Don't need payments? Drop the Stripe module. Don't need search? Remove Scout and Meilisearch. The codebase is modular — features are self-contained and documented in the AI recipes so your assistant knows exactly what to remove and what to leave alone.
+    </p>
+  </div>
+
+</div>
+
+<hr class="sep">
+
+<!-- ── Quick Start ── -->
+<div class="section-wrap" id="quickstart">
+  <div class="section-label">// start cooking</div>
+  <h2 class="section-title">Fork it. Start it. Build your app.</h2>
+  <p class="section-sub">Three commands and you're in a fully running dev environment. Your AI assistant handles the rest.</p>
+
+  <div class="qs-list">
+
+    <div class="qs-step">
+      <div class="qs-num">1</div>
+      <div class="qs-card">
+        <div class="qs-card-head">Fork on GitHub &amp; clone your fork</div>
+        <div class="qs-code">
+          <span class="c"># Fork the repo on GitHub, then:</span><br>
+          <span class="k">git clone</span> <span class="a">https://github.com/your-org/your-app-name</span><br>
+          <span class="k">cd</span> <span class="a">your-app-name</span><br>
+          <span class="k">cp</span> <span class="a">.env.example .env</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="qs-step">
+      <div class="qs-num">2</div>
+      <div class="qs-card">
+        <div class="qs-card-head">Start the dev environment</div>
+        <div class="qs-code">
+          <span class="k">docker-compose</span> <span class="a">up -d</span><br>
+          <br>
+          <span class="o">✓ Container sourdough-dev  Started</span><br>
+          <span class="o">✓ Nginx · PHP-FPM · Next.js · Meilisearch ready</span><br>
+          <span class="s">✓ App running at http://localhost:8080</span><br>
+          <br>
+          <span class="c"># That's it. All services start automatically via Supervisor.</span><br>
+          <span class="c"># No configuring individual services. No port juggling.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="qs-step">
+      <div class="qs-num">3</div>
+      <div class="qs-card">
+        <div class="qs-card-head">Tell your AI assistant: "Get cooking"</div>
+        <div class="qs-code">
+          <span class="c"># Open the project in Cursor, VS Code, Claude Code, etc.</span><br>
+          <span class="c"># The AI config files load automatically. Then say:</span><br>
+          <br>
+          <span class="a">"Get cooking"</span><br>
+          <br>
+          <span class="o">Your AI assistant will walk you through a guided setup wizard:</span><br>
+          <span class="o">  → Name your app, set colors &amp; fonts</span><br>
+          <span class="o">  → Choose which features to keep or remove</span><br>
+          <span class="o">  → Configure your auth model and database</span><br>
+          <span class="s">  → Your app is now yours. Start building features.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="qs-step">
+      <div class="qs-num">4</div>
+      <div class="qs-card">
+        <div class="qs-card-head">Build your features with 47 AI recipes</div>
+        <div class="qs-code">
+          <span class="c"># Your AI already knows the codebase patterns.</span><br>
+          <span class="c"># Just describe what you want:</span><br>
+          <br>
+          <span class="a">"Add a config page for managing webhooks"</span><br>
+          <span class="a">"Add a dashboard widget showing active sessions"</span><br>
+          <span class="a">"Add email notifications when a user signs up"</span><br>
+          <br>
+          <span class="o">→ AI follows the recipe, creates backend + frontend,</span><br>
+          <span class="o">  registers routes, adds nav entry, wires it all up.</span><br>
+          <span class="s">✓ Ship in hours, not days.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="qs-req">
+    <div class="qs-req-title">📌 Minimum Requirements</div>
+    <div class="qs-req-list">
+      <span>🐳 Docker</span>
+      <span>💾 1 GB RAM (2 GB+ recommended)</span>
+      <span>💽 2 GB disk (5 GB+ recommended)</span>
+      <span>🖥️ 1 CPU core (2+ recommended)</span>
+    </div>
+  </div>
+</div>
+
+<hr class="sep">
+
+<!-- ── AI-First Development ── -->
+<div class="section-wrap" id="ai-dev">
+  <div class="section-label">// built for agentic development</div>
+  <h2 class="section-title">Your AI already knows this codebase.</h2>
+  <p class="section-sub">Sourdough ships with deep AI documentation — recipes, patterns, anti-patterns, and IDE-specific config files — so any AI assistant can hit the ground running on day one.</p>
+
+  <!-- Get Cooking callout -->
+  <div class="ai-hero-callout">
+    <div class="ai-hero-split">
+      <div class="ai-hero-left">
+        <div style="font-family:var(--font-mono); font-size:.65rem; color:var(--amber); letter-spacing:.12em; text-transform:uppercase; margin-bottom:1.1rem;">The setup wizard</div>
+        <div class="ai-convo">
+          <div class="ai-msg user">
+            <div class="ai-msg-role">You</div>
+            <div class="ai-msg-bubble">Get cooking</div>
+          </div>
+          <div class="ai-msg ai">
+            <div class="ai-msg-role">AI Assistant</div>
+            <div class="ai-msg-bubble">
+              <strong>Let's set up your app.</strong> I'll walk you through this in 3 tiers — you can pause and resume anytime.<br><br>
+              <strong>Tier 1 — Identity</strong>
+              <div class="ai-wizard-steps">
+                <div class="ai-wizard-step"><span class="ai-wizard-step-n">1.</span> What's your app called?</div>
+                <div class="ai-wizard-step"><span class="ai-wizard-step-n">2.</span> Pick a primary color / brand theme</div>
+                <div class="ai-wizard-step"><span class="ai-wizard-step-n">3.</span> Which features do you need? (auth, payments, AI, notifications...)</div>
+              </div>
+            </div>
+          </div>
+          <div class="ai-msg user">
+            <div class="ai-msg-bubble">My app is called Acme. Keep auth and notifications, remove payments. Primary color: indigo.</div>
+          </div>
+          <div class="ai-msg ai">
+            <div class="ai-msg-bubble">
+              <strong>Got it.</strong> Renaming to Acme, removing the Stripe module, setting indigo as primary. Moving to Tier 2 — auth model and database...
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ai-hero-right">
+        <div style="font-family:var(--font-mono); font-size:.65rem; color:var(--amber); letter-spacing:.12em; text-transform:uppercase; margin-bottom:1.1rem;">Documentation structure</div>
+        <table class="ai-doc-table">
+          <thead>
+            <tr><th>File / Path</th><th>What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="path">CLAUDE.md</td>
+              <td class="desc">Always-loaded context: stack, architecture, commands, task lookup</td>
+            </tr>
+            <tr>
+              <td class="path">FORK-ME.md</td>
+              <td class="desc">"Get cooking" wizard entry point and full feature guide</td>
+            </tr>
+            <tr>
+              <td class="path">docs/ai/README.md</td>
+              <td class="desc">Dev workflows index — which recipe to use for which task</td>
+            </tr>
+            <tr>
+              <td class="path">docs/ai/recipes/</td>
+              <td class="desc">47 step-by-step implementation guides</td>
+            </tr>
+            <tr>
+              <td class="path">docs/ai/patterns/</td>
+              <td class="desc">Copy-paste code patterns for every layer</td>
+            </tr>
+            <tr>
+              <td class="path">docs/ai/anti-patterns/</td>
+              <td class="desc">Common mistakes and what to do instead</td>
+            </tr>
+            <tr>
+              <td class="path">docs/adr/</td>
+              <td class="desc">26 Architecture Decision Records — the "why" behind every choice</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three columns -->
+  <div class="ai-three-col">
+
+    <!-- Recipes -->
+    <div class="ai-col-card">
+      <div class="ai-col-head">
+        <span class="ai-col-icon">📖</span>
+        <div>
+          <div class="ai-col-title">47 Recipes</div>
+          <div class="ai-col-sub">Step-by-step guides for every common task</div>
+        </div>
+      </div>
+      <div class="ai-recipe-list">
+        <div class="ai-recipe-item">add-full-stack-feature</div>
+        <div class="ai-recipe-item">add-config-page</div>
+        <div class="ai-recipe-item">add-notification-channel</div>
+        <div class="ai-recipe-item">add-dashboard-widget</div>
+        <div class="ai-recipe-item">add-api-endpoint</div>
+        <div class="ai-recipe-item">add-searchable-model</div>
+        <div class="ai-recipe-item">add-llm-provider</div>
+        <div class="ai-recipe-item">add-new-permission</div>
+        <div class="ai-recipe-item">add-backup-destination</div>
+        <div class="ai-recipe-item">add-email-template</div>
+      </div>
+      <div class="ai-recipe-more">+ 37 more recipes →</div>
+    </div>
+
+    <!-- Patterns & Anti-patterns -->
+    <div class="ai-col-card">
+      <div class="ai-col-head">
+        <span class="ai-col-icon">🧱</span>
+        <div>
+          <div class="ai-col-title">Patterns &amp; Anti-patterns</div>
+          <div class="ai-col-sub">Consistent code, no surprises</div>
+        </div>
+      </div>
+      <div style="font-size:.78rem; color:var(--text-mid); line-height:1.65; margin-bottom:1rem;">
+        Every feature follows the same structure: service layer for business logic, controllers for routing, TanStack Query on the frontend. The AI knows the pattern and won't deviate.
+      </div>
+      <div style="font-family:var(--font-mono); font-size:.7rem; color:var(--text-lo); border-top:1px solid var(--border); padding-top:.75rem;">
+        <div style="color:var(--green); margin-bottom:.3rem;">✓ Always scope queries by user_id</div>
+        <div style="color:var(--green); margin-bottom:.3rem;">✓ Business logic in Services/, not Controllers</div>
+        <div style="color:var(--red); margin-bottom:.3rem;">✗ Never use is_admin column (use groups)</div>
+        <div style="color:var(--red);">✗ Never add Bearer token auth (session-based only)</div>
+      </div>
+    </div>
+
+    <!-- IDE Configs -->
+    <div class="ai-col-card">
+      <div class="ai-col-head">
+        <span class="ai-col-icon">🔌</span>
+        <div>
+          <div class="ai-col-title">IDE Auto-configuration</div>
+          <div class="ai-col-sub">Opens with context. No setup needed.</div>
+        </div>
+      </div>
+      <div class="ai-ide-grid">
+        <div class="ai-ide-card">
+          <div class="ai-ide-name">Cursor</div>
+          <div class="ai-ide-file">.cursor/rules/*.mdc</div>
+          <div class="ai-ide-note">Auto-loads on open</div>
+        </div>
+        <div class="ai-ide-card">
+          <div class="ai-ide-name">GitHub Copilot</div>
+          <div class="ai-ide-file">.github/copilot-instructions.md</div>
+          <div class="ai-ide-note">Auto-loads on open</div>
+        </div>
+        <div class="ai-ide-card">
+          <div class="ai-ide-name">Windsurf</div>
+          <div class="ai-ide-file">.windsurfrules</div>
+          <div class="ai-ide-note">Auto-loads on open</div>
+        </div>
+        <div class="ai-ide-card">
+          <div class="ai-ide-name">Claude Code</div>
+          <div class="ai-ide-file">CLAUDE.md</div>
+          <div class="ai-ide-note">Always-loaded context</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Footer ── -->
+<footer>
+  <div class="ft-logo">🍞 sourdough</div>
+  <p class="ft-tagline">A production-ready full-stack framework. Fork it. Build it. Ship it.</p>
+  <div class="ft-links">
+    <a href="https://github.com/Sourdough-start/sourdough">GitHub</a>
+    <a href="#">Documentation</a>
+    <a href="#">Changelog</a>
+    <a href="#">FORK-ME.md</a>
+    <a href="#">Architecture ADRs</a>
+  </div>
+  <div class="ft-copy"><span data-ver>v0.8.3</span> &nbsp;·&nbsp; Laravel 11 + Next.js 16 &nbsp;·&nbsp; Single Docker Container &nbsp;·&nbsp; MIT Licensed</div>
+</footer>
+
+<script>
+  // Scroll-triggered fade-in
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('show'); });
+  }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.rise').forEach(el => observer.observe(el));
+
+  // Nav border on scroll
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 60);
+  }, { passive: true });
+
+  // Dynamic version from GitHub releases API
+  fetch('https://api.github.com/repos/Sourdough-start/sourdough/releases/latest', {
+    headers: { Accept: 'application/vnd.github+json' }
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data?.tag_name) return;
+      const ver = data.tag_name.startsWith('v') ? data.tag_name : 'v' + data.tag_name;
+      document.querySelectorAll('[data-ver]').forEach(el => el.textContent = ver);
+    })
+    .catch(() => {}); // silently keep the hardcoded fallback on failure
+</script>
+
+</body>
+</html>

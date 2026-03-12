@@ -1,0 +1,28 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/
+
+    # Start at level 5, increase gradually as codebase improves
+    level: 5
+
+    excludePaths:
+        - vendor/
+        - storage/
+        - bootstrap/cache/
+
+    ignoreErrors:
+        # Laravel-specific patterns that are safe
+        - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Builder::#'
+        - '#Call to an undefined method Illuminate\\Database\\Query\\Builder::#'
+        - '#Call to an undefined method Illuminate\\Database\\Eloquent\\Relations\\#'
+        # Ignore mixed type errors initially
+        - '#has no return type#'
+        - '#type has no value type#'
+        - '#with no typehint#'
+
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false
+    reportUnmatchedIgnoredErrors: false

@@ -1,0 +1,87 @@
+# Sourdough Development Docker Compose
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        APP_VERSION: "0.1.0-dev"
+        BUILD_SHA: "development"
+    container_name: ${CONTAINER_NAME:-sourdough-dev}
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      # Mount source code for development
+      - ./backend:/var/www/html/backend
+      - ./frontend:/var/www/html/frontend
+      # Mount CHANGELOG for the in-app changelog page
+      - ./CHANGELOG.md:/var/www/html/CHANGELOG.md:ro
+      # Use named volumes to avoid host/container conflicts
+      - frontend_node_modules:/var/www/html/frontend/node_modules
+      - frontend_next_cache:/var/www/html/frontend/.next
+      # Persist data
+      - sourdough_data:/var/www/html/data
+      - sourdough_storage:/var/www/html/backend/storage/app
+      - meilisearch_data:/var/lib/meilisearch
+      # Development PHP config with opcache that detects file changes
+      - ./docker/php-dev.ini:/usr/local/etc/php/conf.d/app.ini:ro
+      # Development nginx config (override image config)
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    environment:
+      # Enable file watching polling for Docker on Windows
+      - WATCHPACK_POLLING=true
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://localhost:${APP_PORT:-8080}
+      # FRONTEND_URL and SANCTUM_STATEFUL_DOMAINS are auto-derived from APP_URL
+      - LOG_CHANNEL=stack
+      - LOG_STACK=daily,broadcast
+      - LOG_BROADCAST_ENABLED=true
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/data/database.sqlite
+      - CACHE_STORE=file
+      - SESSION_DRIVER=file
+      - QUEUE_CONNECTION=database
+      # Meilisearch (search - runs inside container; key auto-generated if not set)
+      - MEILISEARCH_HOST=http://127.0.0.1:7700
+      - MEILI_ENV=development
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY:-}
+      - SCOUT_DRIVER=meilisearch
+      # Auth: passkey mode (disabled | optional | required; requires HTTPS in production)
+      - AUTH_PASSKEY_MODE=${AUTH_PASSKEY_MODE:-disabled}
+      # Broadcasting (Laravel Reverb — real-time WebSocket updates)
+      - BROADCAST_CONNECTION=reverb
+      - REVERB_APP_ID=sourdough
+      - REVERB_APP_KEY=sourdough-key
+      - REVERB_APP_SECRET=sourdough-secret
+      - REVERB_HOST=127.0.0.1
+      - REVERB_PORT=6001
+      - REVERB_SCHEME=http
+      - REVERB_SERVER_HOST=0.0.0.0
+      - REVERB_SERVER_PORT=6001
+      # Frontend Reverb config (passed to Next.js)
+      # NEXT_PUBLIC_REVERB_HOST and NEXT_PUBLIC_REVERB_PORT are intentionally omitted —
+      # clients connect via window.location (hostname + port) through the Nginx /app proxy
+      - NEXT_PUBLIC_REVERB_APP_KEY=sourdough-key
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  sourdough_data:
+    driver: local
+  sourdough_storage:
+    driver: local
+  frontend_node_modules:
+    driver: local
+  frontend_next_cache:
+    driver: local
+  meilisearch_data:
+    driver: local

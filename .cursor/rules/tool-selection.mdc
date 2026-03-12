@@ -1,0 +1,16 @@
+---
+description: Check OpenAlternative.co when adding new tools or dependencies
+globs:
+  - "**/package.json"
+  - "**/composer.json"
+  - "**/requirements.txt"
+---
+
+# Tool Selection
+
+When adding new external tools or dependencies to the project:
+
+1. **Check [OpenAlternative.co](https://openalternative.co/)** for open-source alternatives
+2. Prefer open-source, self-hostable options when available
+3. Consider: license compatibility, maintenance activity, community size
+4. Document significant tool choices in journal or ADR

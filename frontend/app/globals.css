@@ -1,0 +1,242 @@
+/* Theme CSS files are imported OUTSIDE @layer so they always beat @layer base fallbacks.
+   Do NOT wrap these imports in @layer — theme overrides depend on unlayered specificity. */
+@import "../styles/themes/default.css";
+@import "../styles/themes/bubblegum.css";
+@import "../styles/themes/cyberpunk.css";
+@import "../styles/themes/dracula.css";
+@import "../styles/themes/forest.css";
+@import "../styles/themes/sunset.css";
+@import "../styles/themes/ocean.css";
+@import "../styles/themes/rose.css";
+@import "../styles/themes/lavender.css";
+@import "../styles/themes/midnight.css";
+@import "../styles/themes/mono.css";
+@import "../styles/themes/coffee.css";
+@import "../styles/themes/catppuccin.css";
+@import "../styles/themes/nord.css";
+@import "../styles/themes/solarized.css";
+@import "../styles/themes/sakura.css";
+@import "../styles/themes/amber.css";
+@import "../styles/themes/slate.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Bare defaults for variables that themes can override.
+     These act as fallbacks when no theme explicitly sets them,
+     and also as the `:root` baseline before a `[data-theme]` selector applies. */
+  :root {
+    /* Colors — copied from Default theme so the app works before data-theme is set */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+
+    /* Radius */
+    --radius: 0.5rem;
+    --radius-sm: 0.25rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-full: 9999px;
+
+    /* Font families — set by Next.js font loader via className on <body>.
+       Themes can override these to change font families. */
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+    /* Font sizes */
+    --text-xs: 0.75rem;
+    --text-sm: 0.875rem;
+    --text-base: 1rem;
+    --text-lg: 1.125rem;
+    --text-xl: 1.25rem;
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.875rem;
+
+    /* Font weights */
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    /* Spacing scale */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+
+    /* Layout sizing */
+    --sidebar-width: 16rem;
+    --header-height: 3.5rem;
+    --container-max-width: 80rem;
+    --card-padding: 1.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading, var(--font-body), system-ui, sans-serif);
+  }
+}
+
+/* Help article prose spacing overrides */
+.help-article-prose h1 {
+  margin-bottom: 1.25rem;
+}
+.help-article-prose h2 {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+.help-article-prose h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.help-article-prose p {
+  margin-bottom: 1rem;
+}
+.help-article-prose ul,
+.help-article-prose ol {
+  margin-bottom: 1rem;
+}
+.help-article-prose li {
+  margin-bottom: 0.375rem;
+}
+
+/* Help article code blocks — scrollable with styled content */
+.help-article-prose pre {
+  overflow-x: auto;
+  max-width: 100%;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+/* Help article tables — horizontal scroll for wide tables */
+.help-article-prose table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  word-break: normal;
+}
+
+/* Syntax highlighting — theme-aware token colors via highlight.js classes */
+.help-article-prose pre code.hljs {
+  background: transparent;
+  color: hsl(var(--foreground));
+}
+.help-article-prose pre code {
+  color: hsl(var(--foreground));
+}
+.help-article-prose .hljs-comment,
+.help-article-prose .hljs-quote {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+.help-article-prose .hljs-keyword,
+.help-article-prose .hljs-selector-tag,
+.help-article-prose .hljs-built_in {
+  color: hsl(var(--primary));
+  font-weight: 500;
+}
+.help-article-prose .hljs-string,
+.help-article-prose .hljs-attr {
+  color: hsl(142 71% 35%);
+}
+.dark .help-article-prose .hljs-string,
+.dark .help-article-prose .hljs-attr {
+  color: hsl(142 71% 65%);
+}
+.help-article-prose .hljs-number,
+.help-article-prose .hljs-literal {
+  color: hsl(25 95% 45%);
+}
+.dark .help-article-prose .hljs-number,
+.dark .help-article-prose .hljs-literal {
+  color: hsl(25 95% 65%);
+}
+.help-article-prose .hljs-title,
+.help-article-prose .hljs-section,
+.help-article-prose .hljs-name {
+  color: hsl(var(--primary));
+}
+.help-article-prose .hljs-variable,
+.help-article-prose .hljs-template-variable {
+  color: hsl(var(--foreground));
+}
+.help-article-prose .hljs-type,
+.help-article-prose .hljs-tag {
+  color: hsl(220 80% 50%);
+}
+.dark .help-article-prose .hljs-type,
+.dark .help-article-prose .hljs-tag {
+  color: hsl(220 80% 70%);
+}
+.help-article-prose .hljs-meta {
+  color: hsl(var(--muted-foreground));
+}
+.help-article-prose .hljs-deletion {
+  color: hsl(0 84% 60%);
+}
+.help-article-prose .hljs-addition {
+  color: hsl(142 71% 45%);
+}
+
+/* PWA standalone mode: prevent pull-to-refresh overscroll bounce */
+@media (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* iOS safe area support (notch, home indicator) */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

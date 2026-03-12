@@ -1,0 +1,356 @@
+---
+description: When user says "Get cooking" - walk through tiered new project setup wizard
+globs: []
+---
+
+# Get Cooking — New Project Setup Wizard
+
+When the user says **"Get cooking"** (or variations like "get cooking", "let's cook", "start cooking"), begin the tiered setup wizard.
+
+## Before Starting
+
+1. Read the master setup recipe: `docs/ai/recipes/setup-new-project.md`
+2. Read the current environment: `.env.example`, `frontend/config/app.ts`, `frontend/config/fonts.ts`
+3. Read `FORK-ME.md` for context on what Sourdough provides
+
+## Step 0: Pre-Flight Validation
+
+Before showing the welcome or asking any questions, verify the environment is ready. Run these checks and surface any failures clearly before proceeding.
+
+**Check 1 — Docker is running:**
+```bash
+docker ps
+```
+If this fails: *"Docker is not running. Please start Docker Desktop and try again."* Do not proceed.
+
+**Check 2 — Git is installed:**
+```bash
+git --version
+```
+If this fails: *"Git is not installed. Please install Git and try again."* Do not proceed.
+
+**Check 3 — Node.js and npm are available (for frontend installs):**
+```bash
+node --version && npm --version
+```
+If either fails: warn the user but don't block — some tiers don't need npm locally.
+
+**Check 4 — State file:**
+Check if `.sourdough-setup.json` exists. If it does, read it now so you know where to resume. If it doesn't, this is a fresh run.
+
+If all required checks pass, proceed to Step 1.
+
+---
+
+## Step 1: Welcome & Orient the User
+
+**Before asking any tier questions**, present this to the user:
+
+### Wizard Overview
+
+Greet the user and explain the setup process conversationally. Cover these points:
+
+> "Let's get your project set up! This is a **tiered wizard** — I'll ask you some questions, make the changes, and then you can decide if you want to keep going or pause and come back later."
+
+Present the wizard outline so the user knows what to expect:
+
+| Tier | Focus | What Happens |
+|------|-------|-------------|
+| **1. Identity & Branding** | Name, colors, fonts, logo | Renames "Sourdough" everywhere, sets your look & feel |
+| **2. Features & Auth** | Which features to keep, auth model | Removes what you don't need, configures login |
+| **3. Infrastructure & Repo** | Database, ports, git setup | Configures the runtime and prepares the repo |
+| **4. AI Configs & Docs** *(optional)* | AI tool configs, help text, docs | Updates Cursor/Copilot/Windsurf and documentation |
+
+Tell them: *"You can stop after any tier and pick up where you left off later. Each tier takes effect immediately, so your app is usable after every step."*
+
+### Quick Tips
+
+Then share the Quick Tips so the user knows the key shortcuts from the start. Present these conversationally using the "just say..." tone:
+
+**Releasing code:**
+
+| Just say | What happens |
+|----------|-------------|
+| **"push"** | Commits all changes, bumps patch version, tags, and pushes |
+| **"push minor"** | Same but bumps minor version (new feature set) |
+| **"push major"** | Same but bumps major version (breaking change) |
+| **"push — added user dashboard"** | Uses your message as the commit message |
+
+**Planning features:**
+- Say **"Add ___ to the roadmap"** — I'll create a plan file and track it
+- Say **"Work on ___"** — I'll load the plan and start building
+- Say **"What's on the roadmap?"** — I'll review what's active, next, and planned
+
+**Building things:**
+
+| Just say | What I'll do |
+|----------|-------------|
+| "Add an API endpoint for widgets" | Follow the API endpoint recipe |
+| "Add a config page for my feature" | Follow the config page recipe |
+| "Add a dashboard widget for stats" | Follow the dashboard widget recipe |
+| "Review my code" | Run the full code review checklist |
+
+There are **47 step-by-step recipes** — you don't need to know which one, just describe what you want.
+
+**How I work:** This codebase is built for AI-assisted development. I automatically load context, follow tested recipes, run code reviews, and keep docs updated.
+
+### Presentation Guidelines
+
+Present the welcome section as **one cohesive message** — not multiple separate messages. Structure it as:
+1. Greeting + brief overview
+2. Wizard outline table
+3. Quick Tips (the four subsections above)
+4. Ask: "Ready to start with Tier 1?"
+
+**Wait for explicit confirmation** before proceeding to Tier 1. Valid responses: "Yes", "Ready", "Let's go", "Go ahead" → start Tier 1. If the user says "no" or "wait" → tell them: *"You can say 'Get cooking' again whenever you're ready, and I'll pick up where you left off."*
+
+### Then proceed
+
+After presenting the overview and Quick Tips, say: **"Ready to start with Tier 1?"** and wait for confirmation before proceeding to the Tier 1 questions below.
+
+---
+
+## How the Tiers Work
+
+The wizard has **four tiers** of questions (Tier 4 is optional). After each tier, execute the corresponding recipe **immediately** before moving to the next tier. This lets the user stop at any tier boundary and continue later.
+
+At each tier boundary, ask: **"Ready for the next round, or want to stop here and continue later?"**
+
+If the user stops early, tell them which tier they completed and what's left.
+
+### Wizard State File
+
+The wizard tracks progress in `.sourdough-setup.json` at the project root. Write this file before executing each recipe and update it when each tier completes. This enables reliable resumption without guesswork.
+
+**File format:**
+```json
+{
+  "version": "1.0",
+  "started_at": "<ISO timestamp>",
+  "last_updated": "<ISO timestamp>",
+  "tiers": {
+    "1": {
+      "status": "complete",
+      "completed_at": "<ISO timestamp>",
+      "answers": {
+        "app_name": "MyApp",
+        "short_name": "MA",
+        "description": "My app",
+        "brand_color": "#3b82f6",
+        "font_style": "clean_modern",
+        "logo": "text"
+      }
+    },
+    "2": {
+      "status": "in_progress",
+      "started_at": "<ISO timestamp>",
+      "answers": { "features": ["llm", "notifications"], "auth_model": "email_sso" },
+      "steps_completed": ["llm_removal"]
+    },
+    "3": { "status": "not_started" },
+    "4": { "status": "not_started" }
+  }
+}
+```
+
+**Status values:** `not_started` | `in_progress` | `complete` | `skipped`
+
+**When to write:**
+- Wizard start (fresh run): create file, all tiers `not_started`
+- Before executing a tier recipe: set tier to `in_progress`, store the user's answers
+- After recipe verification passes: set tier to `complete`
+- If user skips Tier 4: set to `skipped` (don't prompt again on resume)
+- Update `last_updated` on every write
+
+**Step-level tracking:** Each recipe should instruct the AI to append completed step names to `steps_completed` so mid-tier recovery is possible if the context window resets.
+
+---
+
+## Tier 1: Identity & Branding
+
+**Ask these questions first** (present conversationally, not as a wall of text):
+
+1. **App name?** — Used in title bar, emails, auth pages, PWA manifest, sidebar, everywhere. (Default: Sourdough)
+2. **Short name / abbreviation?** — 1-3 characters for collapsed sidebar and PWA icon text. (Default: SD)
+3. **One-line description?** — For README, meta tags, PWA manifest description.
+4. **Primary brand color?** — Hex code, color name, or "describe it." (Default: `#3b82f6` blue)
+5. **Font style preference?** — Show this table:
+
+| Style | Body Font | Heading Font |
+|-------|-----------|--------------|
+| Clean & modern (default) | Inter | Newsreader |
+| Geometric & modern | DM Sans | DM Serif Display |
+| Friendly & warm | Plus Jakarta Sans | Lora |
+| Techy / developer | Geist Sans | Geist Mono |
+| Corporate & classic | Source Sans 3 | Playfair Display |
+| Creative & bold | Poppins | Abril Fatface |
+| Soft & readable | Nunito | Merriweather |
+
+6. **Logo file, or text for now?** — Can always upload later via Configuration > Branding.
+
+**Special handling — Geist fonts:** If the user selected "Techy / developer" (Geist Sans + Geist Mono), run this **before** updating `frontend/config/fonts.ts`:
+```bash
+docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npm install geist"
+```
+Wait for it to complete. If it fails, tell the user to check their Docker container is running. Do not proceed to font file edits until the package is installed.
+
+**Before executing recipe:** Write `.sourdough-setup.json` with Tier 1 status `in_progress` and the user's answers.
+**After recipe + verification:** Update Tier 1 status to `complete`.
+
+**Execute `docs/ai/recipes/setup-identity-branding.md`**
+
+---
+
+## Tier 2: Features & Auth
+
+**Ask these questions next:**
+
+1. **Which features to keep?** Present as a checklist (defaults = keep all):
+   - [ ] AI/LLM integration (multi-provider, 3 orchestration modes)
+   - [ ] Payments / Stripe Connect (subscriptions, billing)
+   - [ ] Notification channels — which ones? (Email, Telegram, Discord, Slack, SMS via Twilio/Vonage/SNS, Signal, Matrix, ntfy, Web Push/FCM, In-App)
+   - [ ] Backup/restore — which destinations? (Local, S3, SFTP, Google Drive)
+   - [ ] PWA (installable app, offline support)
+   - [ ] Full-text search (Meilisearch)
+   - [ ] HIPAA/access logging (warn: this is woven into core middleware — removal is deeper surgery)
+
+2. **Auth model?** Each tier builds on the previous:
+   - Email/password only (simplest)
+   - \+ SSO (adds OAuth login buttons)
+   - \+ 2FA (adds TOTP + recovery codes)
+   - \+ Passkeys (adds WebAuthn/FIDO2 passwordless login)
+   - Default: Email/password + optional SSO
+
+3. **Which SSO providers?** (only if SSO selected): Google, GitHub, Microsoft, Apple, Discord, GitLab
+
+**Before executing recipe:** Update `.sourdough-setup.json` with Tier 2 status `in_progress` and the user's answers.
+**After recipe + verification:** Update Tier 2 status to `complete`.
+
+**Execute `docs/ai/recipes/setup-features-auth.md`**
+
+---
+
+## Tier 3: Infrastructure & Repository
+
+**Ask these questions last:**
+
+1. **Database?** — SQLite (simplest, default), MySQL, or PostgreSQL. All migrations are database-agnostic.
+2. **Dev port?** — Default 8080. Change if it conflicts with other services.
+3. **Target deployment?** — Docker local (default), cloud VPS, or NAS (Unraid/Synology). Affects PUID/PGID guidance.
+4. **Timezone?** — Default UTC. Set to your local timezone if preferred (e.g., `America/Chicago`).
+5. **Mail from address?** — e.g., `hello@yourdomain.com`. Or skip for now.
+6. **GitHub repo URL?** — Or "later."
+7. **Reset git history or keep Sourdough's?** — Default: fresh start (`git init`).
+
+**Before executing recipe:** Update `.sourdough-setup.json` with Tier 3 status `in_progress` and the user's answers.
+**After recipe + verification:** Update Tier 3 status to `complete`.
+
+**Execute `docs/ai/recipes/setup-infrastructure-repo.md`**
+
+---
+
+## Tier 4: AI Configs & Documentation (Optional)
+
+After Tier 3 completes, ask:
+
+> *"Your project is fully functional! There's one optional step: I can update AI assistant configurations (Cursor rules, GitHub Copilot, Windsurf), help text, README, and documentation to match your new app name. This takes ~5 minutes. Want to do it now?"*
+
+Options: **Yes** | **No, skip for now** | **I'll do it manually** (→ point them to `docs/ai/recipes/` for the relevant guide)
+
+**If user says Yes, ask:**
+1. Update AI configs? (Cursor rules, Copilot, Windsurf) — Default: Yes
+2. Update help/welcome text? — Default: Yes
+3. Update README, CHANGELOG, docs? — Default: Yes
+4. Add Sourdough credit in docs? — Default: Yes (recommended for attribution)
+
+**Before executing recipe:** Update `.sourdough-setup.json` with Tier 4 status `in_progress` and answers.
+**After recipe completes:** Update Tier 4 status to `complete`.
+**If user skips:** Set Tier 4 status to `skipped` — don't prompt again on future resumes.
+
+**Execute `docs/ai/recipes/update-ai-configs-and-docs.md`**
+
+---
+
+## After All Tiers
+
+Run the verification steps from `docs/ai/recipes/setup-infrastructure-repo.md` Step 7.
+
+Then **remind the user** of the Quick Tips you showed at the start (brief recap — don't repeat the full tables) and present the **Key Documentation** and **Working with Roadmaps** details below.
+
+Recap example: *"As a reminder — just say **"push"** to release code, **"Add ___ to the roadmap"** to plan features, and describe what you want to build and I'll find the right recipe. Here's where to find key docs..."*
+
+### Key Documentation
+
+| Doc | What's there |
+|-----|-------------|
+| `docs/ai/README.md` | AI development guide — recipes, patterns, gotchas |
+| `docs/roadmaps.md` | Development plans and progress tracking |
+| `docs/features.md` | What's currently implemented |
+| `docs/ai/patterns/` | Code patterns with copy-paste examples |
+| `docs/ai/anti-patterns/` | Common mistakes to avoid |
+
+---
+
+## Working with Roadmaps (Details)
+
+The roadmap system at `docs/roadmaps.md` tracks all planned, in-progress, and completed work. This section has the behind-the-scenes details for how the AI manages roadmaps.
+
+### Adding a New Feature
+
+1. **Create a plan file** at `docs/plans/<feature-name>-roadmap.md` with phased implementation steps
+2. **Add an entry** to the appropriate section in `docs/roadmaps.md`:
+   - **Active Development** — Currently being worked on (limit this to avoid context-switching)
+   - **Next Up** — Ready to start, unblocked
+   - **Planned Features** — Requires planning or foundation work
+3. Include a checkbox `- [ ]` and a brief description with a link to the plan file
+
+### Working from the Roadmap
+
+1. **Check `docs/roadmaps.md`** before starting new work — is it already planned?
+2. **Move the item to Active Development** when you start working on it
+3. **Read the plan file** for detailed phases and implementation steps
+4. **Follow the development workflow**: load context, find applicable recipes, implement, update docs
+5. **Journal your work** in `docs/journal/YYYY-MM-DD-description.md` when completing significant changes
+
+### Completing Roadmap Items
+
+1. **Move the item** from Active to **Completed (Core Done)** or **Completed (Fully Done)**
+2. Add the completion date and note any remaining optional work
+3. **Update `docs/features.md`** if the feature is user-facing
+4. **Update `docs/ai/context-loading.md`** if new files were created that future tasks should know about
+5. **Update recipes/patterns** if new patterns emerged during implementation
+
+### Roadmap Structure
+
+```
+docs/roadmaps.md           # Master tracking file
+docs/plans/                 # Detailed plan files (one per feature/initiative)
+docs/journal/               # Implementation history (one entry per significant change)
+docs/adr/                   # Architecture Decision Records (for significant design choices)
+```
+
+---
+
+## Resuming
+
+If the user says "Get cooking" again (or "continue setup", "resume cooking"):
+
+1. **Check for `.sourdough-setup.json`** at the project root
+2. **If found:** Read it and present a clear resume summary:
+   - Show each completed tier with key answers (e.g., "✅ Tier 1 — named 'MyApp', Inter/Newsreader fonts")
+   - Show the in-progress tier and which steps are done
+   - Show remaining tiers as "⏳ not started"
+   - Ask: *"Ready to continue with Tier N?"* — don't re-ask questions already answered
+3. **If not found:** Check if `frontend/config/app.ts` still shows "Sourdough" to determine if this is a fresh fork, then start fresh and create the state file
+4. **If a tier is `in_progress`:** Resume from the first step not in `steps_completed` — don't re-run completed steps
+
+**Never re-ask questions the user already answered.** Their answers are stored in the state file — use them.
+
+## Reference
+
+- Master recipe: [docs/ai/recipes/setup-new-project.md](../../docs/ai/recipes/setup-new-project.md)
+- Tier 1 recipe: [docs/ai/recipes/setup-identity-branding.md](../../docs/ai/recipes/setup-identity-branding.md)
+- Tier 2 recipe: [docs/ai/recipes/setup-features-auth.md](../../docs/ai/recipes/setup-features-auth.md)
+- Tier 3 recipe: [docs/ai/recipes/setup-infrastructure-repo.md](../../docs/ai/recipes/setup-infrastructure-repo.md)
+- Tier 4 recipe: [docs/ai/recipes/update-ai-configs-and-docs.md](../../docs/ai/recipes/update-ai-configs-and-docs.md)
+- Customization checklist: [docs/customization-checklist.md](../../docs/customization-checklist.md)

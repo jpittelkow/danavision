@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Sourdough</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #f8fafc;
+      color: #1e293b;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .icon {
+      width: 64px;
+      height: 64px;
+      background: #3b82f6;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+      font-size: 2rem;
+      font-weight: bold;
+      color: white;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      color: #64748b;
+      margin-bottom: 1.5rem;
+      max-width: 320px;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+    button, .btn {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 0.625rem 1.25rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    button:hover, .btn:hover {
+      background: #2563eb;
+    }
+    .btn-outline {
+      background: transparent;
+      color: #3b82f6;
+      border: 1px solid #3b82f6;
+    }
+    .btn-outline:hover {
+      background: #eff6ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="icon">S</div>
+  <h1>You're offline</h1>
+  <p>It looks like you've lost your connection. Check your network and try again. If you've visited the app before, you may be able to open the dashboard from cache.</p>
+  <div class="actions">
+    <button type="button" id="retry">Try Again</button>
+    <a href="/dashboard" class="btn btn-outline">Go to Dashboard</a>
+  </div>
+  <script>
+    document.getElementById('retry').onclick = function () { window.location.reload(); };
+    window.addEventListener('online', function () { window.location.reload(); });
+  </script>
+</body>
+</html>

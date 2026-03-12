@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@44454db4f0199b8b9685a5d763dc37cbf79108e1
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, gd, zip, bcmath
+          coverage: none
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+        working-directory: backend
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+        working-directory: backend
+
+      - name: Copy environment file
+        run: cp .env.example .env
+        working-directory: backend
+
+      - name: Generate application key
+        run: php artisan key:generate
+        working-directory: backend
+
+      - name: Create database
+        run: touch database/database.sqlite
+        working-directory: backend
+
+      - name: Run migrations
+        run: php artisan migrate --force
+        working-directory: backend
+        env:
+          SCOUT_DRIVER: collection
+
+      - name: Run tests
+        run: ./vendor/bin/pest
+        working-directory: backend
+        env:
+          SCOUT_DRIVER: collection
+
+      - name: Audit dependencies
+        run: composer audit --abandoned=report
+        working-directory: backend
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Cache Next.js build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: frontend/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/**/*.ts', 'frontend/**/*.tsx', 'frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.css') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-
+            ${{ runner.os }}-nextjs-
+
+      - name: Run linter
+        run: npm run lint
+        working-directory: frontend
+
+      - name: Run tests
+        run: npm test
+        working-directory: frontend
+
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+        working-directory: frontend
+
+  security-scan:
+    name: Security Scan (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep
+        # Excluded rules are false positives for our architecture:
+        # - missing-user: supervisord needs root; child processes run as www-data
+        # - h2c-smuggling: mitigated via conditional Upgrade header forwarding
+        # - request-host-used: internal reverse proxy to local Next.js/PHP-FPM only
+        # - header-redefinition: intentional — security headers shared via include file
+        run: >-
+          semgrep scan
+          --config p/security-audit
+          --config p/php-laravel
+          --config p/typescript
+          --config p/owasp-top-ten
+          --exclude-rule dockerfile.security.missing-user.missing-user
+          --exclude-rule dockerfile.security.missing-user-entrypoint.missing-user-entrypoint
+          --exclude-rule generic.nginx.security.possible-h2c-smuggling.possible-nginx-h2c-smuggling
+          --exclude-rule generic.nginx.security.request-host-used.request-host-used
+          --exclude-rule generic.nginx.security.header-redefinition.header-redefinition
+          --error
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [backend-tests, frontend-tests, security-scan]
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set build time
+        id: build-time
+        run: echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build Docker image
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          tags: sourdough:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TIME=${{ steps.build-time.outputs.time }}

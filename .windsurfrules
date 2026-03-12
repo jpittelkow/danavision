@@ -1,0 +1,105 @@
+# Sourdough Development Rules
+
+Sourdough is a Laravel 11 + Next.js 14 starter framework optimized for AI-assisted development.
+
+## Documentation First
+
+Before any implementation:
+1. Read CLAUDE.md -> docs/overview.md -> docs/ai/README.md
+2. Check docs/ai/context-loading.md for task-specific files
+3. Find recipes in docs/ai/recipes/ (47 step-by-step guides)
+4. Follow patterns in docs/ai/patterns/README.md
+
+## Project Structure
+
+- backend/app/Services/ - Business logic (NOT in controllers)
+- backend/app/Http/Controllers/Api/ - REST endpoints (validation only)
+- frontend/app/(dashboard)/ - Protected pages
+- frontend/components/ - Reusable components (ui/ for shadcn)
+- frontend/lib/ - Utilities (api.ts, auth.ts, utils.ts)
+- docs/ai/ - AI development guide with recipes and patterns
+
+## Critical Rules
+
+### User Data Scoping
+- Filter queries by user_id for user-scoped data
+- Admin routes need auth:sanctum + admin middleware
+- Admin status is group-based: $user->isAdmin() or $user->inGroup('admin')
+
+### Service Layer
+- Business logic in backend/app/Services/, never in controllers
+- Controllers validate and delegate to services
+
+### No Duplicate Logic
+- Use shared components from frontend/components/
+- Use utilities from frontend/lib/
+- Never duplicate functionality across pages
+
+### Settings
+- Use SettingService for schema-backed settings (not SystemSetting::get)
+- Schema defined in backend/config/settings-schema.php
+
+### Authentication
+- Laravel Sanctum session cookies (not Bearer tokens)
+- Include credentials: 'include' in fetch
+- User password has hashed cast - pass plaintext, don't Hash::make()
+
+## Logging Requirements
+
+### Access Logging (HIPAA)
+Routes accessing user data need log.access middleware
+
+### Audit Logging
+Use AuditService::log() for: auth events, settings changes, admin actions
+
+### Application Logging
+```php
+Log::info('Operation completed', ['user_id' => $id]);
+Log::warning('Recoverable failure', ['provider' => $name]);
+Log::error('Operation failed', ['error' => $message]);
+```
+
+### Frontend Errors
+Use errorLogger from frontend/lib/error-logger.ts, not console.error
+
+## Code Review (Must Pass)
+
+- No debug code (dd(), dump(), console.log, debugger)
+- No hardcoded secrets (use config() and env)
+- User scoping applied (filter by user_id)
+- Admin routes protected
+- Appropriate logging added
+
+## Docker Development
+
+```bash
+# Start
+docker-compose up -d
+
+# Rebuild
+docker-compose up -d --build
+
+# Artisan commands
+docker-compose exec app php /var/www/html/backend/artisan <command>
+
+# Logs
+docker-compose logs -f
+```
+
+Never use docker run directly - use docker-compose.
+
+## Common Gotchas
+
+- API routes are under /api/ prefix
+- SQLite default (supports MySQL/PostgreSQL)
+- shadcn/ui components in frontend/components/ui/ are CLI-managed
+- Config page fields should be optional unless required
+
+## Documentation
+
+- docs/ai/README.md - AI development guide (start here)
+- docs/ai/context-loading.md - Files to read per task type
+- docs/ai/recipes/ - 47 step-by-step implementation guides
+- docs/ai/patterns/README.md - Code patterns with examples
+- docs/architecture.md - ADRs and architecture decisions
+- docs/quick-reference.md - Commands and conventions

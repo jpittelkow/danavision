@@ -1,0 +1,58 @@
+---
+description: When user says "push" - commit, version bump, tag, and push to trigger release
+globs: []
+---
+
+# Push Shortcut
+
+When the user says **"push"** (with or without additional context), perform a full commit-and-release cycle.
+
+## Interpretation
+
+| User says | Version bump | Notes |
+|-----------|-------------|-------|
+| "push" | `patch` | Default — most common |
+| "push minor" | `minor` | New feature set |
+| "push major" | `major` | Breaking change |
+| "push 1.2.3" | exact `1.2.3` | Explicit version |
+
+If the user provides a commit message (e.g., "push — added new feature"), use it. Otherwise, analyze the staged/unstaged changes and write an appropriate conventional-commits-style message.
+
+## Steps (execute in order)
+
+1. **Pre-flight checks** (AI-specific safety — the script does not do these)
+   - Run `git status` and `git diff --stat` to understand what will be committed
+   - Scan for debug code (`dd(`, `dump(`, `console.log`, `debugger`) — abort and warn if found
+   - Scan for secrets/credentials — abort and warn if found
+   - Read `VERSION` to confirm the current version
+
+2. **Generate commit message**
+   - Analyze the staged/unstaged changes and write a conventional-commits-style message
+   - If the user provided a message (e.g., "push — added new feature"), use theirs instead
+
+3. **Run the release script**
+   - `./scripts/push.ps1 <bump> "<commit-message>"`
+   - Example: `./scripts/push.ps1 minor "feat: add dashboard widgets"`
+   - The script handles: `git add -A`, commit, version bump (VERSION + package.json + sw.js), release commit, tag, and push
+   - If push is rejected (remote ahead), fetch and rebase:
+     - `git fetch origin`
+     - `git pull --rebase origin <branch>`
+     - Set `$env:GIT_EDITOR = "true"` if rebase needs continue (PowerShell terminals are "dumb")
+     - Then run the tag push again: `git push origin <branch> vX.Y.Z`
+
+4. **Verify**
+   - Run `gh run list --limit 3` to confirm the release workflow was triggered
+   - Report the new version and workflow status to the user
+
+## Critical Rules
+
+- **Always pass the commit message** — The script accepts it as the second parameter. Never rely on the interactive `Read-Host` prompt from Cursor.
+- **Never skip hooks** — Do not use `--no-verify`.
+- **Never force push** — Unless the user explicitly asks.
+
+## Reference
+
+- **Release script: [scripts/push.ps1](../../scripts/push.ps1)** — Primary tool for releases
+- Full release recipe: [docs/ai/recipes/commit-and-release.md](../../docs/ai/recipes/commit-and-release.md)
+- Release workflow: [.github/workflows/release.yml](../../.github/workflows/release.yml)
+- Version bump script (bash, used by CI): [scripts/bump-version.sh](../../scripts/bump-version.sh)
