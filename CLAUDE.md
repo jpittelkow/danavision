@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-**PHP is not available locally** — run all backend commands via Docker (`sourdough-dev` container).
+**PHP is not available locally** — run all backend commands via Docker (`danavision-dev` container).
 
 ```bash
 # Start/rebuild dev environment
@@ -22,32 +22,32 @@ docker-compose up -d
 docker-compose up -d --build
 
 # Backend tests (Pest) — all tests
-docker exec sourdough-dev bash -c "cd /var/www/html/backend && php artisan test"
+docker exec danavision-dev bash -c "cd /var/www/html/backend && php artisan test"
 
 # Backend — single test file
-docker exec sourdough-dev bash -c "cd /var/www/html/backend && php artisan test --filter=AuthTest"
+docker exec danavision-dev bash -c "cd /var/www/html/backend && php artisan test --filter=AuthTest"
 
 # Backend — single test method
-docker exec sourdough-dev bash -c "cd /var/www/html/backend && php artisan test --filter='it can login with valid credentials'"
+docker exec danavision-dev bash -c "cd /var/www/html/backend && php artisan test --filter='it can login with valid credentials'"
 
 # Backend — Laravel commands
-docker exec sourdough-dev bash -c "cd /var/www/html/backend && php artisan migrate"
-docker exec sourdough-dev bash -c "cd /var/www/html/backend && php artisan route:list"
+docker exec danavision-dev bash -c "cd /var/www/html/backend && php artisan migrate"
+docker exec danavision-dev bash -c "cd /var/www/html/backend && php artisan route:list"
 
 # Frontend tests (Vitest)
-docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npm test"
+docker exec danavision-dev bash -c "cd /var/www/html/frontend && npm test"
 
 # Frontend lint
-docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npm run lint"
+docker exec danavision-dev bash -c "cd /var/www/html/frontend && npm run lint"
 
 # Frontend build
-docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npm run build"
+docker exec danavision-dev bash -c "cd /var/www/html/frontend && npm run build"
 
 # E2E tests (Playwright)
-docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npm run test:e2e"
+docker exec danavision-dev bash -c "cd /var/www/html/frontend && npm run test:e2e"
 
 # Add shadcn component (from frontend/)
-docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npx shadcn@latest add <component>"
+docker exec danavision-dev bash -c "cd /var/www/html/frontend && npx shadcn@latest add <component>"
 
 # Release (bumps version, runs tests, tags, pushes)
 ./scripts/push.ps1 patch "feat: description of changes"
@@ -88,6 +88,12 @@ docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npx shadcn@lates
 | Webhooks | [ADR-028](docs/adr/028-webhook-system.md), `backend/app/Services/WebhookService.php`, [add-webhook recipe](docs/ai/recipes/add-webhook.md) |
 | Usage Tracking | [ADR-029](docs/adr/029-usage-tracking-alerts.md), `backend/app/Services/UsageTrackingService.php`, [add-usage-tracking recipe](docs/ai/recipes/add-usage-tracking.md) |
 | File Manager | [ADR-030](docs/adr/030-file-manager.md), `backend/app/Http/Controllers/Api/FileManagerController.php`, [add-file-manager-feature recipe](docs/ai/recipes/add-file-manager-feature.md) |
+| Shopping Lists | [ADR-031](docs/adr/031-shopping-list-price-search.md), `backend/app/Services/Shopping/`, `backend/app/Http/Controllers/Api/ShoppingListController.php` |
+| Price Search | [ADR-031](docs/adr/031-shopping-list-price-search.md), `backend/app/Services/PriceSearch/`, `backend/app/Http/Controllers/Api/ProductSearchController.php` |
+| Stores | [ADR-031](docs/adr/031-shopping-list-price-search.md), `backend/app/Services/Shopping/StoreService.php`, `backend/app/Http/Controllers/Api/StoreController.php` |
+| Deals | [ADR-031](docs/adr/031-shopping-list-price-search.md), `backend/app/Services/Deals/`, `backend/app/Http/Controllers/Api/DealScanController.php` |
+| Ask Dana | [ADR-032](docs/adr/032-ask-dana-conversational-ai.md), `backend/app/Services/AskDana/`, `frontend/app/(dashboard)/ask-dana/` |
+| Web Crawling | [ADR-033](docs/adr/033-web-crawling-system.md), `backend/app/Services/Crawler/`, `backend/app/Jobs/CrawlStorePriceJob.php` |
 | Passkeys | [ADR-018](docs/adr/018-passkey-webauthn.md), `backend/app/Services/Auth/PasskeyService.php`, [add-passkey-support recipe](docs/ai/recipes/add-passkey-support.md) |
 | Onboarding | `backend/app/Http/Controllers/Api/OnboardingController.php`, [extend-onboarding recipe](docs/ai/recipes/extend-onboarding.md) |
 | Changelog | `backend/app/Services/ChangelogService.php`, [add-changelog-entry recipe](docs/ai/recipes/add-changelog-entry.md), [changelog-entries pattern](docs/ai/patterns/changelog-entries.md) |
@@ -136,4 +142,4 @@ docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npx shadcn@lates
 | [Architecture ADRs](docs/architecture.md) | Design decisions |
 | [Roadmaps](docs/roadmaps.md) | What's planned |
 
-**Using as a Template**: See [FORK-ME.md](FORK-ME.md) for instructions on using Sourdough as a base for your own project.
+**Using as a Template**: See [FORK-ME.md](FORK-ME.md) for instructions on using DanaVision as a base for your own project.

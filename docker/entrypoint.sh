@@ -4,26 +4,14 @@ set -e
 # ASCII Art Banner
 cat << 'BANNER'
 
-   ____                      _                   _
-  / ___|  ___  _   _ _ __ __| | ___  _   _  __ _| |__
-  \___ \ / _ \| | | | '__/ _` |/ _ \| | | |/ _` | '_ \
-   ___) | (_) | |_| | | | (_| | (_) | |_| | (_| | | | |
-  |____/ \___/ \__,_|_|  \__,_|\___/ \__,_|\__, |_| |_|
-                                            |___/
-                    (  )  (  )
-                     (  )  (  )
-                      ~ ~  ~ ~
-                   .-----------.
-                  /   ~~~~~~~   \
-                 /  ~~~~~~~~~~~  \
-                /  ~~~~ ~~~~ ~~~  \
-               |  ~ ~~~ ~~~~ ~~   |
-               |  ~~~ ~~~~ ~~~~ ~ |
-               |  ~ ~~~ ~~~~ ~~   |
-                \_________________/
+   ____                  __     ___     _
+  |  _ \  __ _ _ __   __ \ \   / (_)___(_) ___  _ __
+  | | | |/ _` | '_ \ / _` \ \ / /| / __| |/ _ \| '_ \
+  | |_| | (_| | | | | (_| |\ V / | \__ \ | (_) | | | |
+  |____/ \__,_|_| |_|\__,_| \_/  |_|___/_|\___/|_| |_|
 
 BANNER
-echo "  ${APP_NAME:-Sourdough} - powered by Sourdough ${APP_VERSION:-unknown}"
+echo "  ${APP_NAME:-DanaVision} v${APP_VERSION:-unknown}"
 echo "  Build: ${APP_BUILD_SHA:-development}"
 echo ""
 
@@ -134,6 +122,13 @@ fi
 chown www-data:www-data ${DB_PATH}
 chmod 664 ${DB_PATH}
 
+# Install Composer dependencies if vendor is missing (dev bind-mount overwrites built vendor)
+if [ ! -f "${BACKEND_DIR}/vendor/autoload.php" ]; then
+    echo "Installing Composer dependencies (vendor missing from bind mount)..."
+    cd ${BACKEND_DIR}
+    composer install --no-interaction --prefer-dist
+fi
+
 # Ensure .env exists (needed before any artisan commands)
 cd ${BACKEND_DIR}
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
@@ -167,7 +162,7 @@ if [ -z "${APP_KEY}" ]; then
         echo "=========================================="
         echo "  IMPORTANT: APP_KEY has been generated."
         echo "  Back it up with:"
-        echo "    docker exec sourdough cat ${KEY_FILE}"
+        echo "    docker exec danavision cat ${KEY_FILE}"
         echo "  Then set APP_KEY in your environment to"
         echo "  avoid data loss if the volume is lost."
         echo "=========================================="
@@ -291,7 +286,7 @@ chmod -R 775 ${BACKEND_DIR}/storage
 chown -R www-data:www-data ${BACKEND_DIR}/bootstrap/cache
 chmod -R 775 ${BACKEND_DIR}/bootstrap/cache
 
-echo "  === ${APP_NAME:-Sourdough} is Ready! ==="
+echo "  === ${APP_NAME:-DanaVision} is Ready! ==="
 echo ""
 
 # Execute the main command

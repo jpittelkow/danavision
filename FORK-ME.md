@@ -48,7 +48,7 @@ A complete full-stack application framework with enterprise-grade features ready
 
 Sourdough is **opinionated but modular**:
 
-- Architecture decisions are documented in `docs/adr/` (26 ADRs)
+- Architecture decisions are documented in `docs/adr/` (33 ADRs)
 - Features can be removed if you don't need them
 - Patterns and structure should remain consistent
 - Code follows established conventions (see `docs/ai/patterns/`)
@@ -63,7 +63,7 @@ This codebase is **optimized for AI coding assistants**. The documentation struc
 |----------|---------|
 | `docs/ai/README.md` | Development workflows and quick links |
 | `docs/ai/context-loading.md` | Which files to read for each task type |
-| `docs/ai/recipes/` | 49 step-by-step implementation guides |
+| `docs/ai/recipes/` | 55 step-by-step implementation guides |
 | `docs/ai/patterns/` | Code patterns with copy-paste examples |
 | `docs/ai/anti-patterns/` | Common mistakes to avoid |
 

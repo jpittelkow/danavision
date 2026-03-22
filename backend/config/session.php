@@ -24,7 +24,7 @@ return [
 
     'cookie' => env(
         'SESSION_COOKIE',
-        Str::slug(env('APP_NAME', 'sourdough'), '_').'_session'
+        Str::slug(env('APP_NAME', 'danavision'), '_').'_session'
     ),
 
     'path' => env('SESSION_PATH', '/'),

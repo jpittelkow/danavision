@@ -100,7 +100,7 @@ Edit `.env` to configure:
 |----------|---------|---------|
 | `APP_PORT` | `8080` | Host port |
 | `APP_URL` | `http://localhost` | Public URL (set to your domain when behind a reverse proxy) |
-| `CONTAINER_NAME` | `sourdough-dev` | Container name |
+| `CONTAINER_NAME` | `danavision-dev` | Container name |
 | `TRUSTED_PROXIES` | *(empty)* | Proxy IPs or `*` for all (Cloudflare Tunnel, Traefik) |
 
 ## NAS Deployment (Unraid, Synology, TrueNAS)

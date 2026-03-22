@@ -4,7 +4,7 @@ Step-by-step guide to add a new notification delivery channel.
 
 ## Architecture Overview
 
-Sourdough uses a **two-layer notification configuration**:
+The application uses a **two-layer notification configuration**:
 
 1. **Admin layer** (Configuration > Notifications): Enable which channels are available to users
 2. **User layer** (User Preferences): Users configure their own settings (webhooks, phone numbers) and enable channels

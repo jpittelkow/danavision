@@ -53,7 +53,7 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
   const isAdmin = user ? isAdminUser(user) : false;
   const [techOpen, setTechOpen] = useState(isAdmin);
 
-  const displayName = appName || "Sourdough";
+  const displayName = appName || "DanaVision";
   const shortSha = buildSha && buildSha !== "development"
     ? buildSha.substring(0, 7)
     : buildSha;

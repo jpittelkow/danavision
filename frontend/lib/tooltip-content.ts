@@ -102,6 +102,42 @@ export const TOOLTIP_CONTENT = {
       "The display name shown as the sender alongside the email address.",
   },
 
+  // Price Search Settings
+  price_search: {
+    serpapi_key:
+      "API key for SerpAPI, used for Google Shopping price lookups. Get one at serpapi.com.",
+    firecrawl_key:
+      "API key for Firecrawl, used for scraping store product pages. Get one at firecrawl.dev.",
+    firecrawl_enabled:
+      "Enable Firecrawl-powered web scraping for store discovery and price extraction.",
+    google_places_key:
+      "Google Places API key for discovering nearby local stores. Get one from Google Cloud Console.",
+    default_search_radius_miles:
+      "Default radius in miles for finding local stores near users. Users can override in their preferences.",
+    price_check_interval_hours:
+      "How often to automatically re-check prices for tracked items. Lower values increase API usage.",
+    max_vendor_prices_per_item:
+      "Maximum number of vendor price results to store per item. Higher values provide more comparison options.",
+    kroger_client_id:
+      "OAuth2 Client ID from the Kroger Developer Portal (developer.kroger.com). Covers all Kroger-owned brands.",
+    kroger_client_secret:
+      "OAuth2 Client Secret from the Kroger Developer Portal. Keep this confidential.",
+    walmart_api_key:
+      "API key from the Walmart Affiliate Program (walmart.io). Provides product search, pricing, and availability for Walmart.com.",
+    bestbuy_api_key:
+      "Free API key from the Best Buy Developer Portal (developer.bestbuy.com). Provides product search, pricing, store inventory, and reviews.",
+    crawl4ai_enabled:
+      "Enable the self-hosted Crawl4AI web crawler for scraping store product pages. Requires the crawl4ai Docker Compose profile.",
+    crawl4ai_base_url:
+      "Base URL for the Crawl4AI service. Default is http://crawl4ai:11235 when running in Docker Compose.",
+    crawl4ai_api_token:
+      "Optional API token for authenticating with the Crawl4AI service.",
+    store_crawl_enabled:
+      "Enable scheduled background crawling to keep store prices fresh automatically. Requires Crawl4AI to be enabled and running.",
+    store_crawl_max_products_per_store:
+      "Maximum number of products to check per store during each crawl cycle. Higher values increase crawl time and resource usage.",
+  },
+
   // Notification Settings
   notifications: {
     telegram_bot_token:

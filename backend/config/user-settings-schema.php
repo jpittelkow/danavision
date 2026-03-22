@@ -15,4 +15,5 @@ return [
     'appearance',
     'notifications',
     'defaults',
+    'shopping',
 ];

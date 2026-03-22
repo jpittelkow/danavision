@@ -1,12 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ClipboardList, Users, Settings, Shield } from "lucide-react";
+import { Sparkles, TrendingDown } from "lucide-react";
 
 const actions = [
-  { label: "Audit Logs", href: "/configuration/audit", icon: ClipboardList },
-  { label: "Users", href: "/configuration/users", icon: Users },
-  { label: "Settings", href: "/configuration/system", icon: Settings },
-  { label: "Security", href: "/configuration/security", icon: Shield },
+  { label: "Smart Add", href: "/smart-add", icon: Sparkles },
+  { label: "Top Deals", href: "/search", icon: TrendingDown },
 ];
 
 export function QuickActionsWidget() {

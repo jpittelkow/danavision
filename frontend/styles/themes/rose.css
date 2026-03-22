@@ -5,26 +5,26 @@
   /* Font families */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Colors — frosted blush/pink background, deep crimson accents */
-  --background: 348 55% 89%;
-  --foreground: 350 50% 9%;
-  --card: 348 48% 92%;
-  --card-foreground: 350 50% 9%;
-  --popover: 348 48% 92%;
-  --popover-foreground: 350 50% 9%;
-  --primary: 347 77% 35%;
+  /* Colors — clean blush-white background, bold crimson accents */
+  --background: 348 25% 97%;
+  --foreground: 350 45% 10%;
+  --card: 348 18% 100%;
+  --card-foreground: 350 45% 10%;
+  --popover: 348 18% 100%;
+  --popover-foreground: 350 45% 10%;
+  --primary: 347 80% 38%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 350 55% 82%;
+  --secondary: 350 28% 91%;
   --secondary-foreground: 347 65% 15%;
-  --muted: 350 30% 83%;
-  --muted-foreground: 348 22% 35%;
-  --accent: 340 50% 82%;
-  --accent-foreground: 340 55% 16%;
+  --muted: 350 15% 93%;
+  --muted-foreground: 348 22% 42%;
+  --accent: 340 55% 48%;
+  --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 348 45% 74%;
-  --input: 348 45% 74%;
-  --ring: 347 77% 35%;
+  --border: 348 22% 87%;
+  --input: 348 22% 84%;
+  --ring: 347 80% 38%;
 
   /* Radius */
   --radius: 0.5rem;
@@ -70,7 +70,7 @@
   --card-foreground: 350 60% 92%;
   --popover: 350 30% 7%;
   --popover-foreground: 350 60% 92%;
-  --primary: 347 77% 68%;
+  --primary: 347 80% 65%;
   --primary-foreground: 350 35% 5%;
   --secondary: 348 30% 14%;
   --secondary-foreground: 350 60% 90%;
@@ -82,5 +82,5 @@
   --destructive-foreground: 0 0% 98%;
   --border: 348 25% 16%;
   --input: 348 25% 16%;
-  --ring: 347 77% 68%;
+  --ring: 347 80% 65%;
 }

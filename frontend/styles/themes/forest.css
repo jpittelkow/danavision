@@ -5,26 +5,26 @@
   /* Font families */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Colors — frosted green/parchment background, deep emerald accents */
-  --background: 80 35% 87%;
+  /* Colors — clean parchment background, deep emerald accents */
+  --background: 90 18% 97%;
   --foreground: 140 50% 8%;
-  --card: 80 30% 90%;
+  --card: 90 12% 100%;
   --card-foreground: 140 50% 8%;
-  --popover: 80 30% 90%;
+  --popover: 90 12% 100%;
   --popover-foreground: 140 50% 8%;
-  --primary: 142 72% 22%;
+  --primary: 142 72% 26%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 120 35% 80%;
+  --secondary: 120 22% 90%;
   --secondary-foreground: 142 60% 12%;
-  --muted: 120 22% 82%;
-  --muted-foreground: 140 20% 35%;
-  --accent: 90 40% 80%;
-  --accent-foreground: 90 50% 15%;
+  --muted: 120 12% 92%;
+  --muted-foreground: 140 20% 40%;
+  --accent: 80 50% 42%;
+  --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 120 28% 72%;
-  --input: 120 28% 72%;
-  --ring: 142 72% 22%;
+  --border: 120 18% 86%;
+  --input: 120 18% 83%;
+  --ring: 142 72% 26%;
 
   /* Radius */
   --radius: 0.5rem;

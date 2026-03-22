@@ -7,3 +7,10 @@ export { StorageOverviewWidget } from "./storage-overview-widget";
 export { UpcomingTasksWidget } from "./upcoming-tasks-widget";
 export { NotificationsWidget } from "./notifications-widget";
 export { EnvironmentWidget } from "./environment-widget";
+export {
+  ShoppingStatCards,
+  ShoppingOverviewCards,
+  RecentDropsWidget,
+  PriceActivityChart,
+  StoreLeaderboard,
+} from "./shopping-stats-widget";

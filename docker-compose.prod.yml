@@ -1,16 +1,16 @@
-# Sourdough Production Docker Compose
+# DanaVision Production Docker Compose
 
 services:
   app:
-    image: ghcr.io/sourdough-start/sourdough:latest
-    container_name: ${CONTAINER_NAME:-sourdough}
+    image: ghcr.io/danavision/danavision:latest
+    container_name: ${CONTAINER_NAME:-danavision}
     ports:
       - "${APP_PORT:-80}:80"
     volumes:
       # Persist data only (no source code mounts)
-      - sourdough_data:/var/www/html/data
-      - sourdough_storage:/var/www/html/backend/storage/app
-      - sourdough_backups:/var/www/html/backend/storage/app/backups
+      - danavision_data:/var/www/html/data
+      - danavision_storage:/var/www/html/backend/storage/app
+      - danavision_backups:/var/www/html/backend/storage/app/backups
       - meilisearch_data:/var/lib/meilisearch
     environment:
       - APP_ENV=production
@@ -63,12 +63,30 @@ services:
       retries: 3
       start_period: 60s
 
+  # Crawl4AI — self-hosted web crawler for store price scraping (optional)
+  # Enable with: docker compose --profile crawl4ai up -d
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: ${CONTAINER_NAME:-danavision}-crawl4ai
+    shm_size: 3g
+    environment:
+      - CRAWL4AI_API_TOKEN=${CRAWL4AI_API_TOKEN:-}
+    restart: unless-stopped
+    profiles:
+      - crawl4ai
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 volumes:
-  sourdough_data:
+  danavision_data:
     driver: local
-  sourdough_storage:
+  danavision_storage:
     driver: local
-  sourdough_backups:
+  danavision_backups:
     driver: local
   meilisearch_data:
     driver: local

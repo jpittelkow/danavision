@@ -5,26 +5,26 @@
   /* Font families */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Colors — frosted warm peach/ivory background, burnt orange accents */
-  --background: 30 70% 88%;
-  --foreground: 20 60% 10%;
-  --card: 30 60% 91%;
-  --card-foreground: 20 60% 10%;
-  --popover: 30 60% 91%;
-  --popover-foreground: 20 60% 10%;
-  --primary: 21 90% 38%;
+  /* Colors — clean warm ivory background, bold burnt orange accents */
+  --background: 30 40% 97%;
+  --foreground: 20 55% 10%;
+  --card: 30 30% 100%;
+  --card-foreground: 20 55% 10%;
+  --popover: 30 30% 100%;
+  --popover-foreground: 20 55% 10%;
+  --primary: 21 92% 40%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 30 65% 80%;
+  --secondary: 30 30% 90%;
   --secondary-foreground: 20 70% 15%;
-  --muted: 30 40% 82%;
-  --muted-foreground: 20 30% 35%;
-  --accent: 45 65% 78%;
-  --accent-foreground: 45 70% 15%;
+  --muted: 30 18% 92%;
+  --muted-foreground: 20 25% 40%;
+  --accent: 45 75% 50%;
+  --accent-foreground: 45 80% 10%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 30 55% 72%;
-  --input: 30 55% 72%;
-  --ring: 21 90% 38%;
+  --border: 30 25% 86%;
+  --input: 30 25% 83%;
+  --ring: 21 92% 40%;
 
   /* Radius */
   --radius: 0.5rem;
@@ -70,7 +70,7 @@
   --card-foreground: 36 70% 92%;
   --popover: 20 35% 7%;
   --popover-foreground: 36 70% 92%;
-  --primary: 27 90% 60%;
+  --primary: 27 92% 55%;
   --primary-foreground: 20 40% 5%;
   --secondary: 24 35% 14%;
   --secondary-foreground: 36 70% 90%;
@@ -82,5 +82,5 @@
   --destructive-foreground: 0 0% 98%;
   --border: 24 30% 16%;
   --input: 24 30% 16%;
-  --ring: 27 90% 60%;
+  --ring: 27 92% 55%;
 }

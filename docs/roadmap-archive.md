@@ -8,6 +8,8 @@ High-priority work complete. Only optional/lower-priority items remain.
 
 | Roadmap | Completed | Remaining Work |
 |---------|-----------|----------------|
+| Shopping List Analysis by Local Store (Phases 1–5) | 2026-03-12 | Phase 6: scheduled crawling command + job + CSS selector seeding. See [docs/journal/2026-03-12-v1-v2-feature-parity.md](journal/2026-03-12-v1-v2-feature-parity.md) and plan [generic-crafting-squid.md](plans/generic-crafting-squid.md). |
+| Web Crawling Integration (CrawlAI) | 2026-03-12 | Firecrawl SaaS fallback optional. CrawlAI self-hosted Docker service integrated; CrawlAIService + CrawlAIProvider wired into PriceApiService. |
 | AI-Readable Changelog Export | 2026-03-10 | Core export (service, API, frontend dialog, tests) plus admin-configurable settings (format, detail level, instruction style). No remaining work. |
 | [Notification Permission Guided Flow](plans/notification-permission-guided-flow-roadmap.md) | 2026-03-10 | All 3 phases complete: onboarding wizard inline permission, preferences banner with browser-specific unblock instructions, contextual post-action prompt hook. |
 | [Design Review](plans/design-review-roadmap.md) | 2026-03-08 | 32 items across 4 phases: component consistency, mobile/PWA fixes, page-level improvements, typography/animation polish. All complete. |

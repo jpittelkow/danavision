@@ -11,7 +11,7 @@
  */
 return [
     'general' => [
-        'app_name' => ['env' => 'APP_NAME', 'default' => 'Sourdough', 'public' => true],
+        'app_name' => ['env' => 'APP_NAME', 'default' => 'DanaVision', 'public' => true],
         'default_timezone' => ['env' => 'APP_TIMEZONE', 'default' => 'UTC'],
         'default_locale' => ['env' => null, 'default' => 'en'],
         // app_url removed -- controlled exclusively by APP_URL env var (see config('app.url'))
@@ -38,7 +38,7 @@ return [
         'smtp_username' => ['env' => 'MAIL_USERNAME', 'default' => null],
         'smtp_password' => ['env' => 'MAIL_PASSWORD', 'default' => null, 'encrypted' => true],
         'from_address' => ['env' => 'MAIL_FROM_ADDRESS', 'default' => 'hello@example.com'],
-        'from_name' => ['env' => 'MAIL_FROM_NAME', 'default' => 'Sourdough'],
+        'from_name' => ['env' => 'MAIL_FROM_NAME', 'default' => 'DanaVision'],
         'mailgun_domain' => ['env' => 'MAILGUN_DOMAIN', 'default' => null],
         'mailgun_secret' => ['env' => 'MAILGUN_SECRET', 'default' => null, 'encrypted' => true],
         'sendgrid_api_key' => ['env' => 'SENDGRID_API_KEY', 'default' => null, 'encrypted' => true],
@@ -53,11 +53,11 @@ return [
         'telegram_bot_token' => ['env' => 'TELEGRAM_BOT_TOKEN', 'default' => null, 'encrypted' => true],
         // Discord
         'discord_webhook_url' => ['env' => 'DISCORD_WEBHOOK_URL', 'default' => null, 'encrypted' => true],
-        'discord_bot_name' => ['env' => 'DISCORD_BOT_NAME', 'default' => 'Sourdough'],
+        'discord_bot_name' => ['env' => 'DISCORD_BOT_NAME', 'default' => 'DanaVision'],
         'discord_avatar_url' => ['env' => 'DISCORD_AVATAR_URL', 'default' => null],
         // Slack
         'slack_webhook_url' => ['env' => 'SLACK_WEBHOOK_URL', 'default' => null, 'encrypted' => true],
-        'slack_bot_name' => ['env' => 'SLACK_BOT_NAME', 'default' => 'Sourdough'],
+        'slack_bot_name' => ['env' => 'SLACK_BOT_NAME', 'default' => 'DanaVision'],
         'slack_icon' => ['env' => 'SLACK_ICON', 'default' => ':robot_face:'],
         // Signal
         'signal_cli_path' => ['env' => 'SIGNAL_CLI_PATH', 'default' => null],
@@ -286,6 +286,25 @@ return [
         'export_format' => ['env' => null, 'default' => 'detailed'],         // detailed | summary
         'export_detail_level' => ['env' => null, 'default' => 'full'],       // full | changes-only
         'export_instruction_style' => ['env' => null, 'default' => 'step-by-step'], // step-by-step | checklist | minimal
+    ],
+
+    'price_search' => [
+        'serpapi_key' => ['env' => 'SERPAPI_KEY', 'default' => null, 'encrypted' => true],
+        'firecrawl_key' => ['env' => 'FIRECRAWL_KEY', 'default' => null, 'encrypted' => true],
+        'firecrawl_enabled' => ['env' => 'FIRECRAWL_ENABLED', 'default' => false],
+        'google_places_key' => ['env' => 'GOOGLE_PLACES_KEY', 'default' => null, 'encrypted' => true],
+        'default_search_radius_miles' => ['env' => 'PRICE_SEARCH_RADIUS_MILES', 'default' => 25],
+        'price_check_interval_hours' => ['env' => 'PRICE_CHECK_INTERVAL_HOURS', 'default' => 24],
+        'max_vendor_prices_per_item' => ['env' => 'PRICE_MAX_VENDORS_PER_ITEM', 'default' => 10],
+        'crawl4ai_enabled' => ['env' => 'CRAWL4AI_ENABLED', 'default' => false],
+        'crawl4ai_base_url' => ['env' => 'CRAWL4AI_BASE_URL', 'default' => 'http://crawl4ai:11235'],
+        'crawl4ai_api_token' => ['env' => 'CRAWL4AI_API_TOKEN', 'default' => null, 'encrypted' => true],
+        'kroger_client_id' => ['env' => 'KROGER_CLIENT_ID', 'default' => null, 'encrypted' => true],
+        'kroger_client_secret' => ['env' => 'KROGER_CLIENT_SECRET', 'default' => null, 'encrypted' => true],
+        'walmart_api_key' => ['env' => 'WALMART_API_KEY', 'default' => null, 'encrypted' => true],
+        'bestbuy_api_key' => ['env' => 'BESTBUY_API_KEY', 'default' => null, 'encrypted' => true],
+        'store_crawl_enabled' => ['env' => 'STORE_CRAWL_ENABLED', 'default' => false],
+        'store_crawl_max_products_per_store' => ['env' => 'STORE_CRAWL_MAX_PRODUCTS', 'default' => 50],
     ],
 
     'defaults' => [

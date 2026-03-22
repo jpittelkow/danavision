@@ -23,8 +23,8 @@ class BackupController extends Controller
     private function validateFilename(string $filename): bool
     {
         // Only allow alphanumeric, dash, underscore, and .zip extension
-        // Must match our backup naming pattern: sourdough-backup-YYYY-MM-DD_HH-ii-ss.zip
-        if (!preg_match('/^sourdough-backup-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.zip$/', $filename)) {
+        // Must match our backup naming pattern: danavision-backup-YYYY-MM-DD_HH-ii-ss.zip
+        if (!preg_match('/^danavision-backup-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.zip$/', $filename)) {
             return false;
         }
 

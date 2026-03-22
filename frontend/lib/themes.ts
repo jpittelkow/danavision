@@ -32,21 +32,21 @@ export interface ThemeDefinition {
 export const themes: ThemeDefinition[] = [
   {
     id: "default",
-    name: "Default",
-    description: "Clean neutral slate",
+    name: "DanaVision",
+    description: "Purple and gold on warm cream",
 
     preview: {
       light: {
-        primary: "#1e293b",
-        secondary: "#f1f5f9",
-        background: "#ffffff",
-        foreground: "#0f172a",
+        primary: "#6B4EAB",
+        secondary: "#E8DFF2",
+        background: "#FAF5F0",
+        foreground: "#3D2E5C",
       },
       dark: {
-        primary: "#f1f5f9",
-        secondary: "#1e293b",
-        background: "#0f172a",
-        foreground: "#f1f5f9",
+        primary: "#A78BCA",
+        secondary: "#1E1530",
+        background: "#0F0A1A",
+        foreground: "#EDE6F5",
       },
     },
   },
@@ -57,13 +57,13 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#da0b78",
-        secondary: "#eea8c8",
-        background: "#ebbaca",
-        foreground: "#240612",
+        primary: "#D40A72",
+        secondary: "#EDD4DF",
+        background: "#FAF3F5",
+        foreground: "#2B0814",
       },
       dark: {
-        primary: "#ff6ec7",
+        primary: "#E854A8",
         secondary: "#3d0f2a",
         background: "#1a0812",
         foreground: "#fce4f0",
@@ -77,10 +77,10 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#00a1c2",
-        secondary: "#a3d9e3",
-        background: "#c8e8ed",
-        foreground: "#011718",
+        primary: "#009AB8",
+        secondary: "#DBE9EC",
+        background: "#F4F8F9",
+        foreground: "#031718",
       },
       dark: {
         primary: "#00e5ff",
@@ -97,10 +97,10 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#9b5cf5",
-        secondary: "#c3aee0",
-        background: "#cec8e4",
-        foreground: "#191c24",
+        primary: "#8A3EF2",
+        secondary: "#E4DDE9",
+        background: "#F6F5F9",
+        foreground: "#171A24",
       },
       dark: {
         primary: "#bd93f9",
@@ -117,10 +117,10 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#10600f",
-        secondary: "#a8cfa8",
-        background: "#d4ddb8",
-        foreground: "#0a1e0a",
+        primary: "#126E2C",
+        secondary: "#DBE6DB",
+        background: "#F6F7F3",
+        foreground: "#0A1E0A",
       },
       dark: {
         primary: "#34d399",
@@ -137,13 +137,13 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#b84a09",
-        secondary: "#e4c08b",
-        background: "#f0d4ab",
-        foreground: "#290f0a",
+        primary: "#C44D08",
+        secondary: "#EBE2D6",
+        background: "#FBF8F3",
+        foreground: "#271009",
       },
       dark: {
-        primary: "#fb923c",
+        primary: "#F08530",
         secondary: "#3b1a08",
         background: "#1a0e04",
         foreground: "#fff1e6",
@@ -157,10 +157,10 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#1445d0",
-        secondary: "#97bade",
-        background: "#bdd0ea",
-        foreground: "#081228",
+        primary: "#1549D9",
+        secondary: "#DDE4EA",
+        background: "#F4F6F8",
+        foreground: "#0C1428",
       },
       dark: {
         primary: "#60a5fa",
@@ -177,10 +177,10 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#9e1435",
-        secondary: "#e09da8",
-        background: "#e8b8c4",
-        foreground: "#220b10",
+        primary: "#AF1535",
+        secondary: "#EDD3D6",
+        background: "#FAF3F5",
+        foreground: "#250E12",
       },
       dark: {
         primary: "#fb7185",
@@ -197,10 +197,10 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#6125cc",
-        secondary: "#c0a5e2",
-        background: "#d0bde8",
-        foreground: "#180b2a",
+        primary: "#6528D2",
+        secondary: "#E4DDEB",
+        background: "#F7F4FA",
+        foreground: "#1A0E24",
       },
       dark: {
         primary: "#a78bfa",
@@ -217,13 +217,13 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#0a1aa4",
-        secondary: "#99a6d9",
-        background: "#c0c3ea",
-        foreground: "#080c21",
+        primary: "#0B1CB4",
+        secondary: "#DDE0EA",
+        background: "#F4F4F9",
+        foreground: "#0C0F28",
       },
       dark: {
-        primary: "#a5b4fc",
+        primary: "#8DA4F8",
         secondary: "#1e1b4b",
         background: "#050414",
         foreground: "#e0e7ff",
@@ -237,14 +237,14 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#000000",
-        secondary: "#d1d1d1",
-        background: "#e6e6e6",
-        foreground: "#000000",
+        primary: "#141414",
+        secondary: "#EBEBEB",
+        background: "#FAFAFA",
+        foreground: "#0A0A0A",
       },
       dark: {
         primary: "#ffffff",
-        secondary: "#262626",
+        secondary: "#1F1F1F",
         background: "#000000",
         foreground: "#ffffff",
       },
@@ -257,13 +257,13 @@ export const themes: ThemeDefinition[] = [
 
     preview: {
       light: {
-        primary: "#762f18",
-        secondary: "#cdb68b",
-        background: "#dfc89e",
-        foreground: "#210d05",
+        primary: "#814018",
+        secondary: "#E7DFD1",
+        background: "#F9F6EF",
+        foreground: "#271208",
       },
       dark: {
-        primary: "#d4a574",
+        primary: "#D4A06A",
         secondary: "#3d2815",
         background: "#1a0f08",
         foreground: "#f5e6d3",

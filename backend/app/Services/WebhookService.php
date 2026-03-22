@@ -86,7 +86,7 @@ class WebhookService
     {
         $headers = [
             'Content-Type' => 'application/json',
-            'User-Agent' => 'Sourdough-Webhook/1.0',
+            'User-Agent' => 'DanaVision-Webhook/1.0',
         ];
 
         if (!empty($webhook->secret)) {

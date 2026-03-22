@@ -5,26 +5,26 @@
   /* Font families */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Colors — light grey background, pure black accents for max contrast */
-  --background: 0 0% 90%;
-  --foreground: 0 0% 0%;
-  --card: 0 0% 95%;
-  --card-foreground: 0 0% 0%;
-  --popover: 0 0% 95%;
-  --popover-foreground: 0 0% 0%;
-  --primary: 0 0% 0%;
+  /* Colors — clean white background, pure black accents for max contrast */
+  --background: 0 0% 98%;
+  --foreground: 0 0% 4%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 4%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 4%;
+  --primary: 0 0% 8%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 82%;
+  --secondary: 0 0% 92%;
   --secondary-foreground: 0 0% 5%;
-  --muted: 0 0% 82%;
-  --muted-foreground: 0 0% 32%;
-  --accent: 0 0% 82%;
-  --accent-foreground: 0 0% 5%;
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 38%;
+  --accent: 0 0% 40%;
+  --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 70%;
-  --input: 0 0% 70%;
-  --ring: 0 0% 0%;
+  --border: 0 0% 86%;
+  --input: 0 0% 83%;
+  --ring: 0 0% 8%;
 
   /* Radius — none for brutalist feel */
   --radius: 0rem;
@@ -76,8 +76,8 @@
   --secondary-foreground: 0 0% 95%;
   --muted: 0 0% 12%;
   --muted-foreground: 0 0% 55%;
-  --accent: 0 0% 12%;
-  --accent-foreground: 0 0% 95%;
+  --accent: 0 0% 55%;
+  --accent-foreground: 0 0% 100%;
   --destructive: 0 63% 31%;
   --destructive-foreground: 0 0% 98%;
   --border: 0 0% 18%;

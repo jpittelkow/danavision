@@ -48,10 +48,9 @@ If the user chose to remove payments:
 **Delete these files/directories:**
 - `backend/app/Services/Stripe/` (entire directory)
 - `backend/config/stripe.php`
-- `backend/app/Http/Controllers/Api/StripeCustomerController.php`
+- `backend/app/Http/Controllers/Api/StripePaymentController.php`
+- `backend/app/Http/Controllers/Api/StripeSettingController.php`
 - `backend/app/Http/Controllers/Api/StripeWebhookController.php`
-- `backend/app/Http/Controllers/Api/PaymentController.php`
-- `backend/app/Http/Controllers/Api/PaymentWebhookController.php`
 - `backend/app/Models/Payment.php`
 - `backend/app/Models/StripeCustomer.php`
 - `backend/app/Models/StripeWebhookEvent.php`
@@ -187,7 +186,7 @@ If the user chose to remove search:
 **Verification — run after deletion:**
 ```bash
 # Should return 0 results if search is fully removed
-docker exec sourdough-dev bash -c "grep -r 'SearchController\|meilisearch\|SCOUT_DRIVER' backend/app --include='*.php' 2>/dev/null | wc -l"
+docker exec danavision-dev bash -c "grep -r 'SearchController\|meilisearch\|SCOUT_DRIVER' backend/app --include='*.php' 2>/dev/null | wc -l"
 # Should return 0 results
 grep -r 'SearchProvider\|search-pages' frontend --include='*.ts' --include='*.tsx' 2>/dev/null | wc -l
 ```
@@ -391,19 +390,19 @@ After all deletions are complete, run these verification commands to confirm not
 
 **LLM removal:**
 ```bash
-docker exec sourdough-dev bash -c "grep -r 'LLMController\|LLMService\|llm' backend/app --include='*.php' 2>/dev/null | grep -v '^Binary' | wc -l"
+docker exec danavision-dev bash -c "grep -r 'LLMController\|LLMService\|llm' backend/app --include='*.php' 2>/dev/null | grep -v '^Binary' | wc -l"
 # Should return 0 (or only false positives in comments)
 ```
 
 **Stripe removal:**
 ```bash
-docker exec sourdough-dev bash -c "grep -r 'StripeCustomer\|StripeWebhook\|PaymentController' backend/app --include='*.php' 2>/dev/null | wc -l"
+docker exec danavision-dev bash -c "grep -r 'StripeCustomer\|StripeWebhook\|PaymentController' backend/app --include='*.php' 2>/dev/null | wc -l"
 # Should return 0
 ```
 
 **Search removal:**
 ```bash
-docker exec sourdough-dev bash -c "grep -r 'SearchController\|meilisearch\|SCOUT_DRIVER' backend/app --include='*.php' 2>/dev/null | wc -l"
+docker exec danavision-dev bash -c "grep -r 'SearchController\|meilisearch\|SCOUT_DRIVER' backend/app --include='*.php' 2>/dev/null | wc -l"
 grep -r 'SearchProvider\|search-pages' frontend --include='*.ts' --include='*.tsx' 2>/dev/null | wc -l
 # Both should return 0
 ```
@@ -421,7 +420,7 @@ grep -r 'ServiceWorkerSetup\|InstallPrompt' frontend --include='*.tsx' 2>/dev/nu
 
 **General lint check:**
 ```bash
-docker exec sourdough-dev bash -c "cd /var/www/html/frontend && npm run lint 2>&1 | grep -i 'cannot find\|Module not found'"
+docker exec danavision-dev bash -c "cd /var/www/html/frontend && npm run lint 2>&1 | grep -i 'cannot find\|Module not found'"
 # Should return empty (no broken imports)
 ```
 

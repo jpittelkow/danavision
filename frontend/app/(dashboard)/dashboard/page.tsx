@@ -2,26 +2,16 @@
 
 import {
   WelcomeWidget,
-  StatsWidget,
   QuickActionsWidget,
-  RecentActivityWidget,
-  SystemHealthWidget,
-  StorageOverviewWidget,
-  UpcomingTasksWidget,
-  NotificationsWidget,
-  EnvironmentWidget,
+  ShoppingStatCards,
+  RecentDropsWidget,
+  PriceActivityChart,
+  StoreLeaderboard,
 } from "@/components/dashboard/widgets";
 import { DashboardSection } from "@/components/dashboard/dashboard-section";
 import { OfflineBadge } from "@/components/offline-badge";
-import { UsageDashboardWidget } from "@/components/usage/usage-dashboard-widget";
-import { useAuth, isAdminUser } from "@/lib/auth";
 
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const canViewUsage = user
-    ? isAdminUser(user) || (user.permissions?.includes("usage.view") ?? false)
-    : false;
-
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-2 flex-wrap">
@@ -30,46 +20,25 @@ export default function DashboardPage() {
 
       <WelcomeWidget />
 
-      {/* Overview — stat cards in a 4-col grid */}
-      <DashboardSection title="Overview" columns="4">
-        <StatsWidget />
-        <NotificationsWidget />
-        <QuickActionsWidget />
-      </DashboardSection>
+      <QuickActionsWidget />
 
-      {/* Activity & System — two-column layout with list + status widgets */}
+      {/* Shopping — price tracking stats */}
       <DashboardSection
-        title="Activity & System"
-        actionHref="/configuration/audit"
-        actionLabel="View audit logs"
-        columns="3"
+        title="Shopping"
+        description="Price tracking and savings overview"
+        actionHref="/lists"
+        actionLabel="View lists"
+        columns="4"
       >
-        <RecentActivityWidget />
-        <SystemHealthWidget />
+        <ShoppingStatCards />
       </DashboardSection>
 
-      {/* Infrastructure — storage, tasks, environment */}
-      <DashboardSection
-        title="Infrastructure"
-        description="Storage, scheduled jobs, and environment details"
-        columns="3"
-      >
-        <StorageOverviewWidget />
-        <UpcomingTasksWidget />
-        <EnvironmentWidget />
+      {/* Shopping details — drops, activity, stores */}
+      <DashboardSection title="Shopping Activity" columns="3">
+        <RecentDropsWidget />
+        <PriceActivityChart />
+        <StoreLeaderboard />
       </DashboardSection>
-
-      {/* Usage & Costs — admin only */}
-      {canViewUsage && (
-        <DashboardSection
-          title="Usage & Costs"
-          actionHref="/configuration/usage"
-          actionLabel="View details"
-          columns="1"
-        >
-          <UsageDashboardWidget />
-        </DashboardSection>
-      )}
     </div>
   );
 }

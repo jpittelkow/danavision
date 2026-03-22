@@ -11,7 +11,9 @@
       "Bash(php -l:*)",
       "Bash(git status:*)",
       "Bash(composer require:*)",
-      "Bash(powershell.exe -Command \"Get-Command php -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source; Get-Command composer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")"
+      "Bash(powershell.exe -Command \"Get-Command php -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source; Get-Command composer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(find C:Usersjpitt_6932a9vcodedanavision -type f \\\\\\(-name *.tsx -o -name *.ts \\\\\\) -path */frontend/*)",
+      "Bash(grep -r \"address.*input\\\\|location.*input\\\\|home.*address\" /c/Users/jpitt_6932a9v/code/danavision-v2/frontend/app -include=*.tsx)"
     ]
   }
 }

@@ -5,26 +5,26 @@
   /* Font families */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Colors — frosted lilac background, rich purple accents */
-  --background: 270 45% 88%;
-  --foreground: 270 50% 9%;
-  --card: 270 38% 91%;
-  --card-foreground: 270 50% 9%;
-  --popover: 270 38% 91%;
-  --popover-foreground: 270 50% 9%;
-  --primary: 263 70% 48%;
+  /* Colors — clean lilac-white background, rich purple accents */
+  --background: 270 22% 97%;
+  --foreground: 270 45% 10%;
+  --card: 270 16% 100%;
+  --card-foreground: 270 45% 10%;
+  --popover: 270 16% 100%;
+  --popover-foreground: 270 45% 10%;
+  --primary: 263 72% 50%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 270 50% 82%;
+  --secondary: 270 25% 91%;
   --secondary-foreground: 271 65% 16%;
-  --muted: 270 28% 83%;
-  --muted-foreground: 270 22% 35%;
-  --accent: 290 45% 82%;
-  --accent-foreground: 290 55% 16%;
+  --muted: 270 15% 93%;
+  --muted-foreground: 270 22% 42%;
+  --accent: 290 55% 50%;
+  --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 270 38% 74%;
-  --input: 270 38% 74%;
-  --ring: 263 70% 48%;
+  --border: 270 20% 87%;
+  --input: 270 20% 84%;
+  --ring: 263 72% 50%;
 
   /* Radius — slightly more rounded */
   --radius: 0.625rem;

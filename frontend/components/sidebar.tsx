@@ -11,7 +11,7 @@ import {
   Sheet,
   SheetContent,
 } from "@/components/ui/sheet";
-import { Home, Settings, ChevronLeft } from "lucide-react";
+import { Home, Settings, ChevronLeft, ShoppingCart, Sparkles, Search, Package, TicketPercent, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -32,7 +32,7 @@ function SidebarVersionFooter({ isExpanded }: { isExpanded: boolean }) {
     return null;
   }
 
-  const displayName = appName || "Sourdough";
+  const displayName = appName || "DanaVision";
   const shortSha = buildSha && buildSha !== "development" 
     ? buildSha.substring(0, 7) 
     : null;
@@ -75,6 +75,25 @@ export function Sidebar() {
               <Logo variant="full" size="md" />
             </div>
             <div className="flex-1 flex flex-col">
+              {/* Smart Add — prominent top action */}
+              <div className="mb-3">
+                <Link href="/smart-add">
+                  <Button
+                    size="default"
+                    className={cn(
+                      "w-full justify-start gap-3 min-h-12 font-semibold text-base shadow-sm transition-all duration-150",
+                      pathname === "/smart-add"
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "bg-primary/90 text-primary-foreground hover:bg-primary hover:shadow-md"
+                    )}
+                    title="Smart Add"
+                  >
+                    <Sparkles className="h-5 w-5 flex-shrink-0" />
+                    <span>Smart Add</span>
+                  </Button>
+                </Link>
+              </div>
+              <Separator orientation="horizontal" className="mb-3" />
               <nav className="flex flex-col gap-2">
                 <Link href="/dashboard">
                   <Button
@@ -90,6 +109,86 @@ export function Sidebar() {
                   >
                     <Home className="h-5 w-5 flex-shrink-0" />
                     <span>Home</span>
+                  </Button>
+                </Link>
+                <Link href="/lists">
+                  <Button
+                    variant="ghost"
+                    size="default"
+                    className={cn(
+                      "w-full justify-start gap-3 min-h-11 transition-colors duration-150",
+                      pathname?.startsWith("/lists")
+                        ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                        : "hover:bg-accent"
+                    )}
+                    title="Shopping Lists"
+                  >
+                    <ShoppingCart className="h-5 w-5 flex-shrink-0" />
+                    <span>Shopping Lists</span>
+                  </Button>
+                </Link>
+                <Link href="/items">
+                  <Button
+                    variant="ghost"
+                    size="default"
+                    className={cn(
+                      "w-full justify-start gap-3 min-h-11 transition-colors duration-150",
+                      pathname?.startsWith("/items")
+                        ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                        : "hover:bg-accent"
+                    )}
+                    title="All Items"
+                  >
+                    <Package className="h-5 w-5 flex-shrink-0" />
+                    <span>All Items</span>
+                  </Button>
+                </Link>
+                <Link href="/search">
+                  <Button
+                    variant="ghost"
+                    size="default"
+                    className={cn(
+                      "w-full justify-start gap-3 min-h-11 transition-colors duration-150",
+                      pathname === "/search"
+                        ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                        : "hover:bg-accent"
+                    )}
+                    title="Search"
+                  >
+                    <Search className="h-5 w-5 flex-shrink-0" />
+                    <span>Search</span>
+                  </Button>
+                </Link>
+                <Link href="/deals">
+                  <Button
+                    variant="ghost"
+                    size="default"
+                    className={cn(
+                      "w-full justify-start gap-3 min-h-11 transition-colors duration-150",
+                      pathname?.startsWith("/deals")
+                        ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                        : "hover:bg-accent"
+                    )}
+                    title="Deals"
+                  >
+                    <TicketPercent className="h-5 w-5 flex-shrink-0" />
+                    <span>Deals</span>
+                  </Button>
+                </Link>
+                <Link href="/ask-dana">
+                  <Button
+                    variant="ghost"
+                    size="default"
+                    className={cn(
+                      "w-full justify-start gap-3 min-h-11 transition-colors duration-150",
+                      pathname?.startsWith("/ask-dana")
+                        ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                        : "hover:bg-accent"
+                    )}
+                    title="Ask Dana"
+                  >
+                    <Bot className="h-5 w-5 flex-shrink-0" />
+                    <span>Ask Dana</span>
                   </Button>
                 </Link>
               </nav>
@@ -131,7 +230,7 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen flex flex-col border-r bg-muted/30 z-30 transition-all duration-300",
+        "fixed left-0 top-0 h-screen flex flex-col border-r bg-card z-30 transition-all duration-300",
         isExpanded ? "w-56" : "w-16"
       )}
     >
@@ -171,6 +270,32 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 p-2 flex flex-col pt-4">
+        {/* Smart Add — prominent top action */}
+        <div className="mb-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size={isExpanded ? "default" : "icon"}
+                className={cn(
+                  "min-h-12 font-semibold shadow-sm transition-all duration-150",
+                  isExpanded ? "w-full justify-start gap-3 text-base" : "w-12 h-12 mx-auto",
+                  pathname === "/smart-add"
+                    ? "bg-primary text-primary-foreground shadow-md"
+                    : "bg-primary/90 text-primary-foreground hover:bg-primary hover:shadow-md"
+                )}
+                asChild
+              >
+                <Link href="/smart-add">
+                  <Sparkles className="h-5 w-5 flex-shrink-0" />
+                  {isExpanded && <span>Smart Add</span>}
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            {!isExpanded && <TooltipContent side="right">Smart Add</TooltipContent>}
+          </Tooltip>
+        </div>
+        <Separator orientation="horizontal" className="mb-2" />
+
         <nav className="flex flex-col">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -195,6 +320,131 @@ export function Sidebar() {
               </Button>
             </TooltipTrigger>
             {!isExpanded && <TooltipContent side="right">Home</TooltipContent>}
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size={isExpanded ? "default" : "icon"}
+                className={cn(
+                  "min-h-11 transition-colors duration-150",
+                  isExpanded ? "w-full justify-start gap-3" : "w-12 h-12 mx-auto",
+                  pathname?.startsWith("/lists")
+                    ? isExpanded
+                      ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                      : "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-accent"
+                )}
+                asChild
+              >
+                <Link href="/lists">
+                  <ShoppingCart className="h-5 w-5 flex-shrink-0" />
+                  {isExpanded && <span>Shopping Lists</span>}
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            {!isExpanded && <TooltipContent side="right">Shopping Lists</TooltipContent>}
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size={isExpanded ? "default" : "icon"}
+                className={cn(
+                  "min-h-11 transition-colors duration-150",
+                  isExpanded ? "w-full justify-start gap-3" : "w-12 h-12 mx-auto",
+                  pathname?.startsWith("/items")
+                    ? isExpanded
+                      ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                      : "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-accent"
+                )}
+                asChild
+              >
+                <Link href="/items">
+                  <Package className="h-5 w-5 flex-shrink-0" />
+                  {isExpanded && <span>All Items</span>}
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            {!isExpanded && <TooltipContent side="right">All Items</TooltipContent>}
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size={isExpanded ? "default" : "icon"}
+                className={cn(
+                  "min-h-11 transition-colors duration-150",
+                  isExpanded ? "w-full justify-start gap-3" : "w-12 h-12 mx-auto",
+                  pathname === "/search"
+                    ? isExpanded
+                      ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                      : "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-accent"
+                )}
+                asChild
+              >
+                <Link href="/search">
+                  <Search className="h-5 w-5 flex-shrink-0" />
+                  {isExpanded && <span>Search</span>}
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            {!isExpanded && <TooltipContent side="right">Search</TooltipContent>}
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size={isExpanded ? "default" : "icon"}
+                className={cn(
+                  "min-h-11 transition-colors duration-150",
+                  isExpanded ? "w-full justify-start gap-3" : "w-12 h-12 mx-auto",
+                  pathname?.startsWith("/deals")
+                    ? isExpanded
+                      ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                      : "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-accent"
+                )}
+                asChild
+              >
+                <Link href="/deals">
+                  <TicketPercent className="h-5 w-5 flex-shrink-0" />
+                  {isExpanded && <span>Deals</span>}
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            {!isExpanded && <TooltipContent side="right">Deals</TooltipContent>}
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size={isExpanded ? "default" : "icon"}
+                className={cn(
+                  "min-h-11 transition-colors duration-150",
+                  isExpanded ? "w-full justify-start gap-3" : "w-12 h-12 mx-auto",
+                  pathname?.startsWith("/ask-dana")
+                    ? isExpanded
+                      ? "bg-primary/10 text-primary font-medium border-l-2 border-primary rounded-l-none rounded-r-md"
+                      : "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-accent"
+                )}
+                asChild
+              >
+                <Link href="/ask-dana">
+                  <Bot className="h-5 w-5 flex-shrink-0" />
+                  {isExpanded && <span>Ask Dana</span>}
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            {!isExpanded && <TooltipContent side="right">Ask Dana</TooltipContent>}
           </Tooltip>
         </nav>
 

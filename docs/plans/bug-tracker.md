@@ -14,11 +14,102 @@ Each entry should include:
 
 ## Active Bugs
 
-_(No active bugs)_
+### Silent error swallowing in shopping stats widgets
+- **Where found**: `frontend/components/dashboard/widgets/shopping-stats-widget.tsx` — `ShoppingOverviewCards`, `RecentDropsWidget`, `PriceActivityChart`, `StoreLeaderboard`
+- **What's wrong**: These four components return `null` on error without calling `errorLogger.report()`. `ShoppingStatCards` in the same file correctly logs errors. API failures will be invisible in production logs.
+- **Scope**: Dashboard Shopping / Shopping Activity sections
+- **Severity**: Low
+- **Date added**: 2026-03-12
+
+### Potential NaN% badge in RecentDropsWidget when prices are null
+- **Where found**: `frontend/components/dashboard/widgets/shopping-stats-widget.tsx` lines 216–219
+- **What's wrong**: `drop.previous_price - drop.current_price` produces `NaN` if either price is `null`. The TypeScript type declares them non-optional but the underlying model allows `null`, so a malformed API response would display `NaN%` in the savings badge.
+- **Scope**: RecentDropsWidget on dashboard
+- **Severity**: Low
+- **Date added**: 2026-03-12
 
 ## Under Investigation
 
 _(Bugs currently being looked into)_
+
+## Resolved (2026-03-12 — V1→V2 Feature Parity)
+
+### ListItemController response key mismatches (×4)
+- **Where found**: `backend/app/Http/Controllers/Api/ListItemController.php` — `store()`, `update()`, `refresh()`, `markPurchased()`
+- **What's wrong**: Returned `['item' => ...]` or `['job' => ...]` instead of `['data' => ...]`. Frontend expected `response.data.data`.
+- **Scope**: All shopping item CRUD operations broken
+- **Severity**: Critical
+- **Resolution**: Changed all four methods to return `['data' => $item]` / `['data' => $job]`. Date: 2026-03-12.
+
+### ListShareController response key mismatches (×3)
+- **Where found**: `backend/app/Http/Controllers/Api/ListShareController.php` — `store()`, `update()`, `accept()`
+- **What's wrong**: Returned `['share' => ...]` instead of `['data' => ...]`.
+- **Scope**: All list sharing operations broken
+- **Severity**: Critical
+- **Resolution**: Changed all three methods to return `['data' => $share]`. Date: 2026-03-12.
+
+### Missing /search-history route
+- **Where found**: `frontend/lib/api/shopping.ts` calls `GET /search-history` but no backend route existed
+- **What's wrong**: 404 on search history fetch
+- **Scope**: Search page history tab
+- **Severity**: High
+- **Resolution**: Added `history()` method to `ProductSearchController` and `GET /search-history` route. Date: 2026-03-12.
+
+### Frontend/backend field name mismatches on ListItem
+- **Where found**: `frontend/lib/api/shopping.ts` uses `retailer`, `image_url`, `url`; backend model has `current_retailer`, `product_image_url`, `product_url`
+- **What's wrong**: Frontend showed null/undefined for retailer, image, and URL fields
+- **Scope**: All item display across lists, search, items pages
+- **Severity**: High
+- **Resolution**: Added `$appends` accessors to `ListItem` model to bridge field names. Date: 2026-03-12.
+
+### Suppressed stores filter wrong field
+- **Where found**: `frontend/app/(dashboard)/configuration/stores/page.tsx`
+- **What's wrong**: Filtered by `!s.is_active` but suppression sets `user_enabled = false`, not `is_active`
+- **Scope**: Stores config suppressed tab
+- **Severity**: Medium
+- **Resolution**: Changed filter to `s.user_enabled === false`. Date: 2026-03-12.
+
+### Priority field type mismatch in migration
+- **Where found**: `backend/database/migrations/2026_03_11_000002_create_list_items_table.php`
+- **What's wrong**: Migration defined `integer('priority')->default(0)` but controller validates as `string in:low,medium,high`
+- **Scope**: Item creation/update would fail or store wrong type
+- **Severity**: High
+- **Resolution**: Changed migration to `string('priority')->default('medium')->nullable()`. Date: 2026-03-12.
+
+### Duplicate PriceHistory records
+- **Where found**: `backend/app/Services/Shopping/PriceTrackingService.php` — `updateVendorPrices()`
+- **What's wrong**: Both `updateVendorPrices()` and `ListItemService::updatePrice()` created PriceHistory entries, doubling records on every refresh
+- **Scope**: Price history data integrity
+- **Severity**: High
+- **Resolution**: Removed `PriceHistory::create()` from `updateVendorPrices()`. Date: 2026-03-12.
+
+### Race condition on vendor price upsert
+- **Where found**: `backend/app/Services/Shopping/PriceTrackingService.php` — `updateVendorPrices()`
+- **What's wrong**: Manual `where()->first()` + separate `update()`/`create()` could create duplicate `(list_item_id, vendor)` rows under concurrent refreshes
+- **Scope**: ItemVendorPrice data integrity
+- **Severity**: Medium
+- **Resolution**: Changed to `firstOrNew` + `fill` + `save` pattern. Date: 2026-03-12.
+
+### N+1 queries in refreshList
+- **Where found**: `backend/app/Services/Shopping/PriceTrackingService.php` — `refreshList()`
+- **What's wrong**: Each `refreshItem()` call accessed `$item->shoppingList->user_id` triggering a separate query
+- **Scope**: Performance on list-wide refreshes
+- **Severity**: Medium
+- **Resolution**: Added `$list->loadMissing('items.shoppingList')` before loop. Date: 2026-03-12.
+
+### User::getSetting() method does not exist
+- **Where found**: `backend/app/Services/PriceSearch/PriceSearchService.php:77`
+- **What's wrong**: Called `$user->getSetting('preferences', 'location')` but User model has no `getSetting` method. Would throw `BadMethodCallException` on any shop_local search.
+- **Scope**: Shop-local product search
+- **Severity**: High
+- **Resolution**: Replaced with direct `Setting::where()` query matching the pattern used elsewhere. Date: 2026-03-12.
+
+### LLM response parsing lacked validation in PriceSearchService
+- **Where found**: `backend/app/Services/PriceSearch/PriceSearchService.php` — `aggregatePrices()`, `aggregateRawResults()`
+- **What's wrong**: `json_decode` could succeed on non-array responses (e.g., `{"error":"..."}`) causing `usort` to fail or return garbage. Also duplicated sorting/parsing logic.
+- **Scope**: Price search reliability
+- **Severity**: Medium
+- **Resolution**: Extracted `parseLlmResponse()` helper with markdown fence stripping, array-of-arrays validation. Extracted `sortByRelevanceAndPrice()` to DRY both methods. Date: 2026-03-12.
 
 ## Resolved
 

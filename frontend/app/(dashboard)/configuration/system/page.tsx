@@ -287,7 +287,7 @@ export default function SystemSettingsPage() {
                   <Input
                     id="app_name"
                     {...register("general.app_name")}
-                    placeholder="Sourdough"
+                    placeholder="DanaVision"
                   />
                   {errors.general?.app_name && (
                     <p className="text-sm text-destructive">

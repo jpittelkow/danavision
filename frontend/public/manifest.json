@@ -1,7 +1,7 @@
 {
-  "name": "Sourdough",
-  "short_name": "Sourdough",
-  "description": "Starter Application Framework for AI Development",
+  "name": "DanaVision",
+  "short_name": "DanaVision",
+  "description": "Smart Shopping Price Tracker",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

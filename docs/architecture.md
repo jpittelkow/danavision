@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-Sourdough uses a decoupled architecture:
+DanaVision uses a decoupled architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -89,6 +89,12 @@ Architecture Decision Records (ADRs) document all significant design decisions:
   - Key files: `backend/app/Services/UsageTrackingService.php`, `backend/app/Services/UsageStatsService.php`, `backend/app/Services/UsageAlertService.php`, `backend/app/Http/Controllers/Api/UsageController.php`
 - [ADR-030: File Manager](adr/030-file-manager.md) - Web-based file management with path validation and audit logging
   - Key files: `backend/app/Http/Controllers/Api/FileManagerController.php`, `backend/app/Services/StorageService.php`
+- [ADR-031: Shopping List & Price Search](adr/031-shopping-list-price-search.md) - Multi-vendor price comparison, unit price normalization, store preferences, list sharing, and deal scanning
+  - Key files: `backend/app/Services/Shopping/`, `backend/app/Services/PriceSearch/`, `backend/app/Services/Deals/`, `backend/app/Services/Sharing/`
+- [ADR-032: Ask Dana Conversational AI](adr/032-ask-dana-conversational-ai.md) - Agentic tool-use assistant with SSE streaming, 14 tools mapping to existing services
+  - Key files: `backend/app/Services/AskDana/`, `frontend/app/(dashboard)/ask-dana/`, `frontend/lib/use-ask-dana-stream.ts`
+- [ADR-033: Web Crawling System](adr/033-web-crawling-system.md) - Scheduled store crawling with CSS-first extraction and LLM fallback via Crawl4AI
+  - Key files: `backend/app/Services/Crawler/`, `backend/app/Services/Shopping/StoreCrawlService.php`, `backend/app/Jobs/CrawlStorePriceJob.php`
 
 ### Logging and Observability
 

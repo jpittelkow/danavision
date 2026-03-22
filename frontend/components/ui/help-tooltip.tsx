@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { HelpCircle } from "lucide-react";
 import {
   Tooltip,
@@ -25,8 +26,10 @@ export function HelpTooltip({
   className,
   iconClassName,
 }: HelpTooltipProps) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <Tooltip>
+    <Tooltip open={open} onOpenChange={setOpen}>
       <TooltipTrigger asChild>
         {children ?? (
           <button
@@ -36,6 +39,10 @@ export function HelpTooltip({
               className
             )}
             aria-label="Help"
+            onClick={(e) => {
+              e.preventDefault();
+              setOpen((prev) => !prev);
+            }}
           >
             <HelpCircle className={cn("h-4 w-4", iconClassName)} />
           </button>

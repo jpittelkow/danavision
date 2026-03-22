@@ -9,6 +9,7 @@ use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Laravel\Sanctum\HasApiTokens;
@@ -138,6 +139,72 @@ class User extends Authenticatable implements \Illuminate\Contracts\Auth\MustVer
     public function onboarding(): HasOne
     {
         return $this->hasOne(UserOnboarding::class);
+    }
+
+    /**
+     * Shopping lists owned by this user.
+     */
+    public function shoppingLists(): HasMany
+    {
+        return $this->hasMany(ShoppingList::class);
+    }
+
+    /**
+     * List shares for this user.
+     */
+    public function listShares(): HasMany
+    {
+        return $this->hasMany(ListShare::class);
+    }
+
+    /**
+     * Shopping lists shared with this user (accepted only).
+     */
+    public function sharedLists(): BelongsToMany
+    {
+        return $this->belongsToMany(ShoppingList::class, 'list_shares')
+            ->wherePivotNotNull('accepted_at')
+            ->withPivot('permission', 'accepted_at');
+    }
+
+    /**
+     * Store preferences for this user.
+     */
+    public function storePreferences(): HasMany
+    {
+        return $this->hasMany(UserStorePreference::class);
+    }
+
+    /**
+     * AI jobs for this user.
+     */
+    public function aiJobs(): HasMany
+    {
+        return $this->hasMany(AIJob::class);
+    }
+
+    /**
+     * AI prompts for this user.
+     */
+    public function aiPrompts(): HasMany
+    {
+        return $this->hasMany(AIPrompt::class);
+    }
+
+    /**
+     * Smart add queue items for this user.
+     */
+    public function smartAddQueue(): HasMany
+    {
+        return $this->hasMany(SmartAddQueueItem::class);
+    }
+
+    /**
+     * Search history entries for this user.
+     */
+    public function searchHistories(): HasMany
+    {
+        return $this->hasMany(SearchHistory::class);
     }
 
     /**

@@ -1,4 +1,4 @@
-# Sourdough Dockerfile
+# DanaVision Dockerfile
 # Multi-stage build for Laravel + Next.js in a single container
 
 #==============================================================================
@@ -22,7 +22,7 @@ COPY frontend/ ./
 # NEXT_PUBLIC_* vars are inlined at build time by Next.js.
 # Set Reverb app key so real-time features (live logs, notifications) work in production.
 # Must match the backend REVERB_APP_KEY (defaults defined in Stage 2 ENV declarations).
-ARG NEXT_PUBLIC_REVERB_APP_KEY=sourdough-key
+ARG NEXT_PUBLIC_REVERB_APP_KEY=danavision-key
 ENV NEXT_PUBLIC_REVERB_APP_KEY=${NEXT_PUBLIC_REVERB_APP_KEY}
 
 # Build Next.js app
@@ -33,10 +33,10 @@ RUN npm run build
 #==============================================================================
 FROM php:8.3-fpm
 
-LABEL maintainer="Sourdough"
-LABEL description="Sourdough - Foundation Application Framework"
-LABEL org.opencontainers.image.source="https://github.com/Sourdough-start/sourdough"
-LABEL org.opencontainers.image.description="Sourdough - Foundation Application Framework"
+LABEL maintainer="DanaVision"
+LABEL description="DanaVision - Smart shopping price tracker"
+LABEL org.opencontainers.image.source="https://github.com/danavision/danavision"
+LABEL org.opencontainers.image.description="DanaVision - Smart shopping price tracker"
 LABEL org.opencontainers.image.licenses="MIT"
 
 # Build arguments for version info
@@ -57,8 +57,8 @@ ENV BROADCAST_CONNECTION=reverb
 # Reverb defaults — must match the NEXT_PUBLIC_REVERB_APP_KEY baked into the frontend build.
 # To change the key, rebuild the image with --build-arg NEXT_PUBLIC_REVERB_APP_KEY=your-key
 # and set REVERB_APP_KEY=your-key at runtime. Runtime-only changes will NOT update the frontend.
-ENV REVERB_APP_ID=sourdough
-ENV REVERB_APP_KEY=sourdough-key
+ENV REVERB_APP_ID=danavision
+ENV REVERB_APP_KEY=danavision-key
 ENV REVERB_APP_SECRET=""
 ENV REVERB_HOST=127.0.0.1
 ENV REVERB_PORT=6001
@@ -99,6 +99,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libonig-dev \
     libicu-dev \
     libpq-dev \
+    python3 \
+    python3-pip \
+    python3-venv \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install -j$(nproc) \
         pdo_mysql \
@@ -111,6 +114,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         opcache \
         pcntl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install crawl4ai in a virtual environment to avoid system package conflicts
+RUN python3 -m venv /opt/crawl4ai \
+    && /opt/crawl4ai/bin/pip install --no-cache-dir crawl4ai \
+    && /opt/crawl4ai/bin/crawl4ai-setup
+ENV PATH="/opt/crawl4ai/bin:$PATH"
 
 # Install Meilisearch binary (Debian/glibc required; Alpine/musl incompatible)
 ARG MEILISEARCH_VERSION=1.34.2
@@ -132,8 +141,9 @@ COPY --chown=www-data:www-data backend/ ./backend/
 WORKDIR /var/www/html/backend
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
 
-# Remove git (not needed at runtime); keep npm for development mode (npm run dev)
-RUN apt-get purge -y --auto-remove git && rm -rf /var/lib/apt/lists/*
+# Keep git for development mode (composer install in bind-mount); keep npm for dev (npm run dev)
+# In production, git adds ~15MB but avoids needing separate dev/prod Dockerfiles
+RUN rm -rf /var/lib/apt/lists/*
 
 # Copy built frontend (standalone output - much smaller than full node_modules)
 WORKDIR /var/www/html

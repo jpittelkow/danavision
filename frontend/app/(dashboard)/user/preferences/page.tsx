@@ -28,7 +28,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Palette, Bell, Brain, Send, Smartphone, Download, Globe, ChevronDown, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Loader2, Palette, Bell, Brain, Send, Smartphone, Download, Globe, ChevronDown, SlidersHorizontal, Trash2, MapPin, Navigation } from "lucide-react";
 import { SaveButton } from "@/components/ui/save-button";
 
 import Link from "next/link";
@@ -55,6 +55,10 @@ interface UserPreferences {
   default_llm_mode?: "single" | "aggregation" | "council";
   notification_channels?: string[];
   timezone?: string | null;
+  home_address?: string | null;
+  home_zip_code?: string | null;
+  home_latitude?: number | null;
+  home_longitude?: number | null;
 }
 
 interface NotificationSetting {
@@ -121,7 +125,7 @@ function WebPushHelperText({ webpushEnabled, isSubscribed }: { webpushEnabled: b
   if (isAndroid && isSubscribed) {
     return (
       <p className="text-sm text-muted-foreground">
-        <strong>Android tip:</strong> If you&apos;re not receiving notifications, check that notifications are enabled for this app in your device&apos;s Settings &gt; Apps &gt; Sourdough &gt; Notifications.
+        <strong>Android tip:</strong> If you&apos;re not receiving notifications, check that notifications are enabled for this app in your device&apos;s Settings &gt; Apps &gt; DanaVision &gt; Notifications.
       </p>
     );
   }
@@ -482,7 +486,19 @@ function PreferencesPageContent() {
       if (updates.timezone !== undefined) {
         payload.timezone = updates.timezone;
       }
-      
+      if (updates.home_address !== undefined) {
+        payload.home_address = updates.home_address;
+      }
+      if (updates.home_zip_code !== undefined) {
+        payload.home_zip_code = updates.home_zip_code;
+      }
+      if (updates.home_latitude !== undefined) {
+        payload.home_latitude = updates.home_latitude;
+      }
+      if (updates.home_longitude !== undefined) {
+        payload.home_longitude = updates.home_longitude;
+      }
+
       // Ensure we have at least one field to update
       if (Object.keys(payload).length === 0) {
         errorLogger.captureMessage("No fields to update", "warning");
@@ -665,6 +681,118 @@ function PreferencesPageContent() {
                   {" "}Select &quot;Use system default&quot; to revert to automatic detection.
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Location */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Shopping Location
+              </CardTitle>
+              <CardDescription>
+                Set your home location to find nearby stores and compare local prices.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="home_address">Home Address</Label>
+                <Input
+                  id="home_address"
+                  placeholder="123 Main St, City, State"
+                  value={preferences.home_address ?? ""}
+                  onChange={(e) =>
+                    setPreferences((prev) => ({ ...prev, home_address: e.target.value }))
+                  }
+                  disabled={isOffline}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="home_zip_code">ZIP Code</Label>
+                  <Input
+                    id="home_zip_code"
+                    placeholder="12345"
+                    maxLength={10}
+                    value={preferences.home_zip_code ?? ""}
+                    onChange={(e) =>
+                      setPreferences((prev) => ({ ...prev, home_zip_code: e.target.value }))
+                    }
+                    disabled={isOffline}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="home_latitude">Latitude</Label>
+                  <Input
+                    id="home_latitude"
+                    type="number"
+                    step="any"
+                    placeholder="Auto-detected"
+                    value={preferences.home_latitude ?? ""}
+                    readOnly
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="home_longitude">Longitude</Label>
+                  <Input
+                    id="home_longitude"
+                    type="number"
+                    step="any"
+                    placeholder="Auto-detected"
+                    value={preferences.home_longitude ?? ""}
+                    readOnly
+                    className="bg-muted"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isOffline}
+                  onClick={() => {
+                    if (!navigator.geolocation) {
+                      toast.error("Geolocation is not supported by your browser");
+                      return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                        setPreferences((prev) => ({
+                          ...prev,
+                          home_latitude: position.coords.latitude,
+                          home_longitude: position.coords.longitude,
+                        }));
+                        toast.success("Location detected");
+                      },
+                      (error) => {
+                        toast.error(`Location error: ${error.message}`);
+                      }
+                    );
+                  }}
+                >
+                  <Navigation className="h-4 w-4 mr-1" />
+                  Use My Location
+                </Button>
+                <SaveButton
+                  type="button"
+                  isDirty={true}
+                  isSaving={isSaving}
+                  onClick={() =>
+                    savePreferences({
+                      home_address: preferences.home_address || null,
+                      home_zip_code: preferences.home_zip_code || null,
+                      home_latitude: preferences.home_latitude || null,
+                      home_longitude: preferences.home_longitude || null,
+                    })
+                  }
+                  disabled={isOffline}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Your location is used to discover nearby stores and get local pricing. Coordinates are auto-detected or derived from your address.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>

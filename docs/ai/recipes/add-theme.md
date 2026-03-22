@@ -1,6 +1,6 @@
 # Recipe: Add a Color Theme
 
-Add a new pre-set color theme to Sourdough. Each theme defines colors, radius, font sizes, font weights, spacing, and layout sizing for both light and dark modes.
+Add a new pre-set color theme to the application. Each theme defines colors, radius, font sizes, font weights, spacing, and layout sizing for both light and dark modes.
 
 ## Files to Create/Modify
 

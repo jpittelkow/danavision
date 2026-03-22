@@ -57,7 +57,7 @@ e2e/                            # Playwright E2E tests
 docker-compose up -d                    # Start dev environment
 docker-compose up -d --build            # Rebuild and start
 docker-compose logs -f                  # View logs
-docker exec sourdough-dev bash           # Shell into container
+docker exec danavision-dev bash           # Shell into container
 
 # Laravel (inside container)
 php artisan migrate                     # Run migrations

@@ -1,6 +1,10 @@
 # Roadmaps & Plans
 
-Development roadmaps and implementation history.
+Development roadmaps for DanaVision v2.
+
+## V1 Reference
+
+DanaVision v1 source code: `C:\Users\jpitt_6932a9v\code\danavision`. Reference this when building v2 features to ensure feature parity.
 
 ## Bug Tracker
 
@@ -12,41 +16,110 @@ Persistent log of suspected bugs and issues to investigate. Always kept up to da
 
 Currently in progress. Complete these before starting new work.
 
-_(None — all items archived. Pick from Planned Features below or add new items.)_
+### Ask Dana — AI Shopping Assistant
+
+**Status:** In Progress
+**Priority:** High
+
+Conversational AI assistant ("Ask Dana") that makes the app's data and capabilities accessible via natural language. Uses tool-use pattern with existing services. See [journal entry](journal/2026-03-21-ask-dana-ai-assistant.md).
+
+### Dashboard Widget Cleanup
+
+**Status:** Ready to Start
+**Priority:** Medium
+
+Remove all dashboard widgets except:
+- Welcome widget
+- Shopping widget
+- Shopping Activity widget
+
+Add quick-action buttons for:
+- Smart Add
+- Current Top Deals
 
 ## Next Up
 
 Ready to start. These are unblocked and can begin immediately.
 
-_(None — pick from Planned Features below or add new items.)_
+### Enhanced List Sharing
+
+**Status:** Ready to Start
+**Priority:** Low
+
+Expand the existing list sharing infrastructure (ListShare model, ListSharingService, ShareDialog) into a full collaborative sharing experience. Current state: basic invite-by-email with view/edit permissions, accept/decline flow, and notifications.
+
+Enhancements:
+- **Shareable links** — Generate public or password-protected URLs so users can share lists without requiring the recipient to have an account
+- **Real-time collaboration** — Use Reverb broadcasting so shared list edits appear live for all participants
+- **"Shared with me" view** — Dedicated page showing all lists shared with the current user, with accept/decline/leave actions
+- **Group sharing** — Share a list with an entire user group in one action
+- **Activity feed** — Show who added, checked off, or removed items on a shared list
+- **Per-item assignment** — Assign specific items to specific collaborators (e.g., "you grab the milk")
 
 ## Planned Features
 
 Requires foundation work or longer-term planning.
 
-- [ ] **OWASP ASVS Level 2 Audit** - Structured security audit against OWASP Application Security Verification Standard v4.0.3. 198 items across 14 verification categories. ~72% pass rate with 54 gaps identified and prioritized. (see [OWASP ASVS Audit](plans/owasp-asvs-audit-roadmap.md))
-- [x] **Re-evaluate Stripe Integration** - ~~Review the current Stripe Connect integration.~~ Complete — removed Stripe Connect, platform fees, and commercial license. Simplified to plain Stripe with feature-gating. Fully MIT. See [ADR-026](adr/026-stripe-integration.md).
-- [ ] **Documentation Review** - Comprehensive review of all project documentation for accuracy, completeness, and consistency. Audit ADRs, recipes, patterns, and guides against current codebase. Identify stale references, missing docs for new features, broken links, and gaps in onboarding material. Standardize formatting and cross-references across all doc files. (see [Documentation Review Roadmap](plans/documentation-review-roadmap.md))
-- [ ] **Get Cooking Script Audit** - Re-audit the "Get Cooking" onboarding script (`setup-new-project.md`) against current codebase. Previous audit (2026-03-02) scored 8/10 with 16 issues across 9 sections. Verify prior fixes were applied, identify new drift from recent features, and test the full onboarding flow end-to-end. (see [Get Cooking Audit Roadmap](plans/get-cooking-audit-roadmap.md))
-- [x] **AI-Readable Changelog Export** - ~~Add a downloadable markdown export of the changelog optimized for AI agents.~~ Complete — core export (service, API, UI, tests) plus admin-configurable settings for format, detail level, and instruction style. See [journal entry](journal/2026-03-10-ai-changelog-export-settings.md).
+### Web Crawling — Firecrawl Fallback (Optional)
 
-## Release Checklist
+**Status:** Planned
+**Priority:** Low
+**Depends on:** Shopping List Analysis (Phases 1–6 complete)
 
-Complete these tasks before each release:
+CrawlAI is the primary crawler (self-hosted, free). Firecrawl can be added as a paid SaaS fallback for stores with aggressive anti-bot protection. Key stubs exist:
+- `backend/app/Services/Crawler/FirecrawlService.php`
+- `backend/app/Services/Crawler/StoreDiscoveryService.php`
 
-- [x] **Documentation Architecture Review** - Fix cross-document inconsistencies, add architectural clarity, improve developer experience docs (see [Documentation Architecture Review](plans/documentation-architecture-review-roadmap.md))
-- [x] **Code Review Remediation (Phase 5)** - Remaining test coverage expansion (see [Code Review Remediation](plans/code-review-remediation-roadmap.md))
-- [x] **Final Code Review** - Review all modified files for bugs, debug code, hardcoded values, and adherence to patterns (see [Code Review recipe](ai/recipes/code-review.md))
-- [x] **Roadmap Cleanup** - Archive completed roadmaps, verify all links work, update stale entries (see Roadmap Maintenance below)
-- [ ] **User Build Verification** - Manually verify the Docker build works end-to-end (see Build Verification below)
+### RainforestAPI Integration
 
-## Completed
+**Status:** Planned
+**Priority:** Low
 
-See **[roadmap-archive.md](roadmap-archive.md)** for all completed roadmaps and journal entries.
+Amazon-specific price API for reliable Amazon product pricing. Complements SerpAPI which covers Google Shopping results.
+
+### Coupon & Ad Scanner (Photo-to-Pricing)
+
+**Status:** Planned
+**Priority:** Medium
+**Depends on:** Shopping List Analysis (Phases 1–6 complete), LLM Integration
+
+Photograph coupons, weekly mailers, and store ads to automatically extract deals and apply them to pricing logic. Key capabilities:
+
+- **Photo capture** — Camera or gallery upload of physical coupons, weekly circulars, and store flyers
+- **LLM-powered extraction** — Vision model (GPT-4o, Claude, Gemini) parses the image to extract: product name, discount amount/percentage, sale price, valid date range, store, and any conditions (min purchase, limit per customer, etc.)
+- **Date-aware pricing** — Extracted deals include start/end dates so the pricing engine only applies them during their active window
+- **Coupon stacking** — Combine scanned coupons with existing crawled store prices to show true effective price
+- **Deal library** — Saved deals viewable per store with expiration status (active, upcoming, expired)
+- **Shopping list integration** — Automatically match scanned deals to items on active shopping lists and surface savings
+
+### Daily Summary Email
+
+**Status:** Planned
+**Priority:** Medium
+**Depends on:** Notification Integration (Phase 4), Price Tracking (Phase 2)
+
+Scheduled email summarizing price drops, savings, all-time lows, and items below target price. Configurable send time per user.
+
+## Completed (DanaVision v2)
+
+- [x] **Shopping List Analysis — All 6 Phases** — Completed 2026-03-21. Full price search (SerpAPI, Kroger, CrawlAI, Firecrawl), store management, sharing, notifications, dashboard widgets, and scheduled crawling. See [plan](plans/generic-crafting-squid.md) and [journal](journal/2026-03-21-phase-6-scheduled-crawling.md).
+
+## Completed (Sourdough-era — Closed)
+
+All items below were inherited from the Sourdough template and are not applicable to DanaVision v2. Archived for reference.
+
+- [x] **OWASP ASVS Level 2 Audit** — Closed (Sourdough item)
+- [x] **Re-evaluate Stripe Integration** — Closed (Sourdough item)
+- [x] **Documentation Review** — Closed (Sourdough item)
+- [x] **Get Cooking Script Audit** — Closed (Sourdough item)
+- [x] **AI-Readable Changelog Export** — Closed (Sourdough item)
+- [x] **User Build Verification** — Closed (Sourdough item)
+
+See **[roadmap-archive.md](roadmap-archive.md)** for Sourdough-era completed roadmaps and journal entries.
 
 ## Integration Costs
 
-Reference for paid third-party integrations used by Sourdough. All integrations are optional — the app runs fully self-hosted with no paid services required. Costs only apply when an admin configures and enables a paid provider.
+Reference for paid third-party integrations used by DanaVision. All integrations are optional — the app runs fully self-hosted with no paid services required. Costs only apply when an admin configures and enables a paid provider.
 
 ### LLM Providers (per-token/per-request)
 

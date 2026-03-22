@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\MailSettingController;
 use App\Http\Controllers\Api\NotificationSettingController;
+use App\Http\Controllers\Api\DealScanController;
 use App\Http\Controllers\Api\JobController;
 use App\Http\Controllers\Api\StorageSettingController;
 use App\Http\Controllers\Api\FileManagerController;
@@ -51,6 +52,15 @@ use App\Http\Controllers\Api\GraphQLSettingController;
 use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\StripeSettingController;
 use App\Http\Controllers\Api\StripePaymentController;
+use App\Http\Controllers\Api\ShoppingListController;
+use App\Http\Controllers\Api\ListItemController;
+use App\Http\Controllers\Api\ListShareController;
+use App\Http\Controllers\Api\StoreController;
+use App\Http\Controllers\Api\SmartAddController;
+use App\Http\Controllers\Api\ProductSearchController;
+use App\Http\Controllers\Api\AIJobController;
+use App\Http\Controllers\Api\AIPromptController;
+use App\Http\Controllers\Api\AskDanaController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -540,5 +550,100 @@ Route::middleware(['auth:sanctum', 'verified', '2fa.setup'])->group(function () 
         Route::delete('/logo-dark', [BrandingController::class, 'deleteLogoDark'])->middleware('can:settings.edit');
         Route::delete('/favicon', [BrandingController::class, 'deleteFavicon'])->middleware('can:settings.edit');
     });
-    
+
+    // Shopping Lists
+    Route::apiResource('lists', ShoppingListController::class);
+    Route::post('/lists/{list}/refresh', [ShoppingListController::class, 'refresh']);
+    Route::post('/lists/{list}/analyze', [ShoppingListController::class, 'analyze']);
+    Route::get('/lists/{list}/analysis', [ShoppingListController::class, 'analysis']);
+
+    // List Items
+    Route::get('/items', [ListItemController::class, 'index']);
+    Route::post('/lists/{list}/items', [ListItemController::class, 'store']);
+    Route::put('/items/{item}', [ListItemController::class, 'update']);
+    Route::delete('/items/{item}', [ListItemController::class, 'destroy']);
+    Route::post('/items/{item}/refresh', [ListItemController::class, 'refresh']);
+    Route::post('/items/{item}/purchased', [ListItemController::class, 'markPurchased']);
+    Route::get('/items/{item}/history', [ListItemController::class, 'history']);
+    Route::post('/items/{item}/smart-fill', [ListItemController::class, 'smartFill']);
+
+    // Sharing
+    Route::get('/lists/{list}/shares', [ListShareController::class, 'index']);
+    Route::post('/lists/{list}/shares', [ListShareController::class, 'store']);
+    Route::put('/shares/{share}', [ListShareController::class, 'update']);
+    Route::delete('/shares/{share}', [ListShareController::class, 'destroy']);
+    Route::get('/shares/pending', [ListShareController::class, 'pending']);
+    Route::post('/shares/{share}/accept', [ListShareController::class, 'accept']);
+    Route::post('/shares/{share}/decline', [ListShareController::class, 'decline']);
+
+    // Stores
+    Route::get('/stores', [StoreController::class, 'index']);
+    Route::post('/stores', [StoreController::class, 'store']);
+    Route::get('/stores/preferences', [StoreController::class, 'userPreferences']);
+    Route::put('/stores/preferences', [StoreController::class, 'updatePreferences']);
+    Route::patch('/stores/priorities', [StoreController::class, 'updatePriorities']);
+    Route::get('/stores/suppressed', [StoreController::class, 'suppressedVendors']);
+    Route::get('/stores/nearby/availability', [StoreController::class, 'nearbyAvailability']);
+    Route::post('/stores/nearby/preview', [StoreController::class, 'nearbyPreview']);
+    Route::post('/stores/nearby/add', [StoreController::class, 'nearbyAdd']);
+    Route::get('/stores/address-search', [StoreController::class, 'searchAddress']);
+    Route::get('/stores/{store}', [StoreController::class, 'show']);
+    Route::put('/stores/{store}', [StoreController::class, 'update']);
+    Route::delete('/stores/{store}', [StoreController::class, 'destroy']);
+    Route::post('/stores/{store}/suppress', [StoreController::class, 'suppress']);
+    Route::post('/stores/{store}/restore', [StoreController::class, 'restore']);
+    Route::post('/stores/{store}/favorite', [StoreController::class, 'toggleFavorite']);
+    Route::post('/stores/{store}/parent', [StoreController::class, 'linkParent']);
+    Route::delete('/stores/{store}/parent', [StoreController::class, 'unlinkParent']);
+
+    // Smart Add
+    Route::post('/smart-add/upload', [SmartAddController::class, 'upload']);
+    Route::get('/smart-add/queue', [SmartAddController::class, 'queue']);
+    Route::post('/smart-add/{item}/accept', [SmartAddController::class, 'acceptItem']);
+    Route::delete('/smart-add/{item}', [SmartAddController::class, 'rejectItem']);
+
+    // Deals & Coupons
+    Route::post('/deals/scan', [DealScanController::class, 'scan']);
+    Route::get('/deals/queue', [DealScanController::class, 'queue']);
+    Route::post('/deals/scans/{scan}/accept-all', [DealScanController::class, 'acceptAll']);
+    Route::get('/deals/savings/{list}', [DealScanController::class, 'listSavings']);
+    Route::get('/deals', [DealScanController::class, 'index']);
+    Route::post('/deals', [DealScanController::class, 'store']);
+    Route::get('/deals/{deal}', [DealScanController::class, 'show']);
+    Route::put('/deals/{deal}', [DealScanController::class, 'update']);
+    Route::post('/deals/{deal}/accept', [DealScanController::class, 'acceptDeal']);
+    Route::delete('/deals/{deal}', [DealScanController::class, 'dismissDeal']);
+    Route::post('/deals/{deal}/match/{item}', [DealScanController::class, 'matchToItem']);
+    Route::delete('/deals/{deal}/match', [DealScanController::class, 'unmatch']);
+
+    // Product Search
+    Route::post('/product-search', [ProductSearchController::class, 'search']);
+    Route::post('/product-search/image', [ProductSearchController::class, 'imageSearch']);
+    Route::get('/search-history', [ProductSearchController::class, 'history']);
+
+    // AI Jobs
+    Route::get('/ai-jobs', [AIJobController::class, 'index']);
+    Route::get('/ai-jobs/{job}', [AIJobController::class, 'show']);
+    Route::post('/ai-jobs/{job}/cancel', [AIJobController::class, 'cancel']);
+
+    // AI Prompts (user custom prompts)
+    Route::get('/ai-prompts', [AIPromptController::class, 'index']);
+    Route::post('/ai-prompts', [AIPromptController::class, 'store']);
+    Route::get('/ai-prompts/active', [AIPromptController::class, 'active']);
+    Route::put('/ai-prompts/{prompt}', [AIPromptController::class, 'update']);
+    Route::delete('/ai-prompts/{prompt}', [AIPromptController::class, 'destroy']);
+
+    // Dashboard Shopping Stats
+    Route::get('/dashboard/shopping-stats', [DashboardController::class, 'shoppingStats']);
+
+    // Ask Dana (AI Assistant)
+    Route::prefix('ask-dana')->group(function () {
+        Route::get('/conversations', [AskDanaController::class, 'index']);
+        Route::post('/conversations', [AskDanaController::class, 'store']);
+        Route::get('/conversations/{conversation}', [AskDanaController::class, 'show']);
+        Route::patch('/conversations/{conversation}', [AskDanaController::class, 'update']);
+        Route::delete('/conversations/{conversation}', [AskDanaController::class, 'destroy']);
+        Route::post('/conversations/{conversation}/messages', [AskDanaController::class, 'sendMessage']);
+    });
+
 });

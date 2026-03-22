@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const APP_NAME_FALLBACK = "Sourdough";
+const APP_NAME_FALLBACK = "DanaVision";
 
 /**
  * PWA install prompt shown as a dialog after 2+ visits.

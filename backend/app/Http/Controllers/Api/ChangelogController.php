@@ -69,7 +69,7 @@ class ChangelogController extends Controller
         }
 
         $markdown = $this->exportService->generateExport($from, $to);
-        $appName = strtolower(str_replace(' ', '-', config('app.name', 'sourdough')));
+        $appName = strtolower(str_replace(' ', '-', config('app.name', 'danavision')));
         $filename = preg_replace('/[^a-zA-Z0-9._-]/', '-', "{$appName}-upgrade-guide-{$from}-to-{$to}.md");
 
         return response()->stream(

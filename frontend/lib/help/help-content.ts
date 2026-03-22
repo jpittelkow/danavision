@@ -1,4 +1,4 @@
-import { type LucideIcon, Book, Shield, Bell, Settings, User, Users, FileText, Brain, Database, BarChart3, Send, Terminal } from "lucide-react";
+import { type LucideIcon, Book, Shield, Bell, Settings, User, Users, FileText, Brain, Database, BarChart3, Send, Terminal, Bot } from "lucide-react";
 
 export interface HelpArticle {
   id: string;
@@ -29,11 +29,11 @@ export const userHelpCategories: HelpCategory[] = [
     articles: [
       {
         id: "welcome",
-        title: "Welcome to Sourdough",
+        title: "Welcome to DanaVision",
         tags: ["intro", "overview", "start"],
-        content: `# Welcome to Sourdough
+        content: `# Welcome to DanaVision
 
-Sourdough is a modern application template designed for building secure, feature-rich web applications.
+DanaVision is a smart shopping price tracker designed for building secure, feature-rich web applications.
 
 ## Key Features
 
@@ -207,6 +207,37 @@ Admins can customize AI export output under the **changelog** settings group:
 - **Format** — \`detailed\` (version-by-version + consolidated) or \`summary\` (consolidated only)
 - **Detail Level** — \`full\` (includes migration detection) or \`changes-only\` (changelog entries only)
 - **Instruction Style** — \`step-by-step\` (numbered guide), \`checklist\` (task list), or \`minimal\` (brief)`,
+      },
+    ],
+  },
+  {
+    slug: "ask-dana",
+    name: "Ask Dana",
+    icon: Bot,
+    articles: [
+      {
+        id: "ask-dana-overview",
+        title: "What is Ask Dana?",
+        tags: ["ai", "assistant", "chat", "dana"],
+        content: `# Ask Dana
+
+Ask Dana is your AI-powered shopping assistant. You can have natural language conversations to:
+
+- **Query your data** — "What's on my grocery list?", "How much am I spending?"
+- **Get insights** — "Where can I save the most?", "What items have dropped in price?"
+- **Find deals** — "Find me the best deals on chicken", "What's on sale?"
+- **Take actions** — "Add milk to my grocery list", "Refresh prices on my weekly list"
+- **Compare stores** — "Which store is cheapest for my list?"
+
+## How It Works
+
+Dana uses your configured AI provider (Claude or OpenAI) to understand your questions, then queries your shopping data to give you accurate, personalized answers.
+
+## Tips
+
+- Be specific about which list or item you're asking about
+- Dana can compare prices, analyze trends, and suggest the best time to buy
+- For actions that modify your data (adding items, creating lists), Dana will confirm before proceeding`,
       },
     ],
   },
@@ -722,7 +753,7 @@ Manage personal API keys for programmatic access to the GraphQL API.
 
 ## What Are API Keys?
 
-API keys let you access Sourdough programmatically via the GraphQL API. Each key is unique to you and acts as your identity for API requests. Keys must be kept secret — treat them like passwords.
+API keys let you access DanaVision programmatically via the GraphQL API. Each key is unique to you and acts as your identity for API requests. Keys must be kept secret — treat them like passwords.
 
 > **Note:** The API Keys section is only visible when the GraphQL API is enabled by an administrator.
 
@@ -1151,6 +1182,59 @@ Administrators can toggle between:
 ## Payment Tracking
 
 Payment events are tracked in the **Usage & Costs** dashboard for cost visibility.`,
+      },
+      {
+        id: "price-search-crawling",
+        title: "Price Search & Crawling",
+        tags: ["price", "crawl", "crawl4ai", "serpapi", "kroger", "firecrawl", "store", "scraping"],
+        content: `# Price Search & Crawling
+
+Configure price comparison providers and automated store crawling.
+
+## Price Search Providers
+
+DanaVision supports multiple providers for finding product prices:
+
+- **SerpAPI** — Google Shopping results (paid API)
+- **Kroger API** — Direct pricing for Kroger and 20+ sub-brands (free)
+- **Crawl4AI** — Self-hosted web crawler for scraping store websites (free)
+- **Firecrawl** — Paid SaaS web scraping fallback
+
+Configure API keys in **Configuration** → **Price Search** → **API Keys** tab.
+
+## Scheduled Price Checking
+
+The \`prices:check\` command runs hourly and refreshes prices for items not checked within the configured interval (default: 24 hours). It uses **all configured providers** automatically.
+
+## Scheduled Store Crawling
+
+When enabled, DanaVision automatically crawls store websites to keep cached prices fresh:
+
+- **Grocery / General stores** — every 6 hours
+- **Electronics / Pharmacy / Warehouse** — every 12 hours
+
+### Enabling Scheduled Crawling
+
+1. Start the Crawl4AI container: \`docker compose --profile crawl4ai up -d\`
+2. Go to **Configuration** → **Price Search** → **API Keys** tab
+3. Enable **Crawl4AI** and verify the base URL
+4. Go to the **Behavior** tab
+5. Enable **Scheduled Crawling**
+6. Set **Max Products Per Store** (default: 50)
+
+### How It Works
+
+- Stores with a search URL template configured are eligible for crawling
+- CSS selectors are used first (fast, no LLM cost), with LLM extraction as fallback
+- 500ms rate limiting between requests to avoid IP bans
+- Crawl jobs run in the background queue with automatic retry
+
+## Manual Triggers
+
+Admins can manually trigger crawl commands from **Configuration** → **Jobs**:
+
+- **prices:crawl-stores** — Crawl stores (supports --category and --force options)
+- **prices:check** — Refresh item prices`,
       },
     ],
   },

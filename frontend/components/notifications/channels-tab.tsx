@@ -518,7 +518,7 @@ function renderChannelFields(
             <Input id="discord_webhook_url" type="password" placeholder="Optional" {...register("discord_webhook_url")} className="min-h-[44px]" />
           </FormField>
           <FormField id="discord_bot_name" label="Bot name" error={errors.discord_bot_name?.message}>
-            <Input id="discord_bot_name" placeholder="Sourdough" {...register("discord_bot_name")} className="min-h-[44px]" />
+            <Input id="discord_bot_name" placeholder="DanaVision" {...register("discord_bot_name")} className="min-h-[44px]" />
           </FormField>
           <FormField id="discord_avatar_url" label="Avatar URL" error={errors.discord_avatar_url?.message}>
             <Input id="discord_avatar_url" placeholder="Optional" {...register("discord_avatar_url")} className="min-h-[44px]" />
@@ -533,7 +533,7 @@ function renderChannelFields(
             <Input id="slack_webhook_url" type="password" placeholder="Optional" {...register("slack_webhook_url")} className="min-h-[44px]" />
           </FormField>
           <FormField id="slack_bot_name" label="Bot name" error={errors.slack_bot_name?.message}>
-            <Input id="slack_bot_name" placeholder="Sourdough" {...register("slack_bot_name")} className="min-h-[44px]" />
+            <Input id="slack_bot_name" placeholder="DanaVision" {...register("slack_bot_name")} className="min-h-[44px]" />
           </FormField>
           <FormField id="slack_icon" label="Icon (e.g. :robot_face:)" error={errors.slack_icon?.message}>
             <Input id="slack_icon" placeholder=":robot_face:" {...register("slack_icon")} className="min-h-[44px]" />

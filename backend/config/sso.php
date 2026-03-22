@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Sourdough SSO Configuration
+ * DanaVision SSO Configuration
  *
  * Configure which SSO providers are enabled and their settings.
  * All providers are optional for self-hosted deployments.

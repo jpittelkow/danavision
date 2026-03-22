@@ -34,6 +34,14 @@ class ScheduledTaskService
             'description' => 'Soft-delete expired API keys and auto-revoke rotated keys past grace period',
             'dangerous' => false,
         ],
+        'prices:crawl-stores' => [
+            'description' => 'Crawl active stores to refresh cached prices',
+            'dangerous' => false,
+        ],
+        'prices:check' => [
+            'description' => 'Check and refresh prices for items past the configured interval',
+            'dangerous' => false,
+        ],
     ];
 
     /**
@@ -46,6 +54,8 @@ class ScheduledTaskService
         'log:check-suspicious' => [],
         'storage:check-alerts' => [],
         'api-keys:prune-expired' => ['--dry-run'],
+        'prices:crawl-stores' => ['--store', '--category', '--force'],
+        'prices:check' => ['--list'],
     ];
 
     /**

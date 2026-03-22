@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Sourdough Backup Configuration
+ * DanaVision Backup Configuration
  *
  * Configure backup and restore functionality.
  */

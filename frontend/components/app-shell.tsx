@@ -36,7 +36,7 @@ function AppShellContent({ children }: AppShellProps) {
         )}
       >
         <Header />
-        <main className="min-h-[calc(100vh-3.5rem)] bg-muted/30">
+        <main className="min-h-[calc(100vh-3.5rem)] bg-muted/50">
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</div>
         </main>
       </div>

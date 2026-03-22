@@ -43,7 +43,7 @@ If new terms were introduced, update the `content` field for the relevant help a
 ### 5. Reindex Search
 
 ```bash
-docker exec sourdough-dev bash -c "cd /var/www/html/backend && php artisan search:reindex pages"
+docker exec danavision-dev bash -c "cd /var/www/html/backend && php artisan search:reindex pages"
 ```
 
 ### 6. Verify

@@ -66,3 +66,46 @@ Schedule::command('usage:check-budgets')
 Schedule::command('api-keys:prune-expired')
     ->daily()
     ->withoutOverlapping(60);
+
+// Scheduled price checks for shopping list items
+Schedule::command('prices:check')
+    ->hourly()
+    ->withoutOverlapping(30);
+
+// Scheduled store crawling — grocery/general (every 6 hours)
+Schedule::command('prices:crawl-stores --category=grocery')
+    ->everySixHours()
+    ->withoutOverlapping(60);
+
+Schedule::command('prices:crawl-stores --category=general')
+    ->everySixHours()
+    ->withoutOverlapping(60);
+
+// Scheduled store crawling — other categories (twice daily, staggered)
+Schedule::command('prices:crawl-stores --category=electronics')
+    ->twiceDaily(3, 15)
+    ->withoutOverlapping(60);
+
+Schedule::command('prices:crawl-stores --category=home-improvement')
+    ->twiceDaily(4, 16)
+    ->withoutOverlapping(60);
+
+Schedule::command('prices:crawl-stores --category=warehouse')
+    ->twiceDaily(5, 17)
+    ->withoutOverlapping(60);
+
+Schedule::command('prices:crawl-stores --category=pharmacy')
+    ->twiceDaily(6, 18)
+    ->withoutOverlapping(60);
+
+Schedule::command('prices:crawl-stores --category=delivery')
+    ->twiceDaily(7, 19)
+    ->withoutOverlapping(60);
+
+// Expire scanned deals past their valid_to date
+Schedule::call(function () {
+    \App\Models\ScannedDeal::where('status', 'active')
+        ->whereNotNull('valid_to')
+        ->where('valid_to', '<', now()->toDateString())
+        ->update(['status' => 'expired']);
+})->name('deals:expire')->daily()->withoutOverlapping(60);

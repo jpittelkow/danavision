@@ -126,7 +126,7 @@ class BackupService
         ]);
 
         $timestamp = now()->format('Y-m-d_H-i-s');
-        $filename = "sourdough-backup-{$timestamp}.zip";
+        $filename = "danavision-backup-{$timestamp}.zip";
         $tempPath = storage_path("app/temp/{$filename}");
 
         // Ensure temp directory exists
@@ -216,7 +216,7 @@ class BackupService
     public function upload(UploadedFile $file): array
     {
         $timestamp = now()->format('Y-m-d_H-i-s');
-        $filename = "sourdough-backup-{$timestamp}.zip";
+        $filename = "danavision-backup-{$timestamp}.zip";
 
         Storage::disk($this->disk)->put($filename, file_get_contents($file->getRealPath()));
 

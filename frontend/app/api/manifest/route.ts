@@ -40,8 +40,8 @@ export async function GET() {
     });
 
     let faviconUrl: string | null = null;
-    let appName = 'Sourdough';
-    let shortName = 'SD';
+    let appName = 'DanaVision';
+    let shortName = 'DV';
     let themeColor = '#3b82f6';
     const backgroundColor = '#ffffff'; // Always white for PWA splash screen
 
@@ -90,7 +90,7 @@ export async function GET() {
     const manifest = {
       name: appName,
       short_name: shortName,
-      description: 'Starter Application Framework for AI Development',
+      description: 'Smart Shopping Price Tracker',
       icons,
       theme_color: themeColor,
       background_color: backgroundColor,
@@ -118,9 +118,9 @@ export async function GET() {
   } catch (error: unknown) {
     // Fallback to static manifest if backend is unavailable
     const fallbackManifest = {
-      name: 'Sourdough',
-      short_name: 'SD',
-      description: 'Starter Application Framework for AI Development',
+      name: 'DanaVision',
+      short_name: 'DV',
+      description: 'Smart Shopping Price Tracker',
       icons: [
         { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
         { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },

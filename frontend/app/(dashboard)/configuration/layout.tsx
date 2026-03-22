@@ -45,6 +45,9 @@ import {
   CreditCard,
   Receipt,
   Loader2,
+  ShoppingCart,
+  Store,
+  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -77,6 +80,15 @@ const navigationGroups: NavGroup[] = [
     ],
   },
   {
+    name: "App Features",
+    icon: Sparkles,
+    items: [
+      { name: "AI / LLM", href: "/configuration/ai", icon: Brain, description: "LLM providers and modes", permission: "settings.view" },
+      { name: "Price Search", href: "/configuration/price-search", icon: ShoppingCart, description: "Price comparison & store discovery", permission: "settings.view" },
+      { name: "Stores", href: "/configuration/stores", icon: Store, description: "Manage store preferences and discovery", permission: "settings.view" },
+    ],
+  },
+  {
     name: "Users & Access",
     icon: Users,
     items: [
@@ -105,7 +117,6 @@ const navigationGroups: NavGroup[] = [
     name: "Integrations",
     icon: Brain,
     items: [
-      { name: "AI / LLM", href: "/configuration/ai", icon: Brain, description: "LLM providers and modes", permission: "settings.view" },
       { name: "Storage", href: "/configuration/storage", icon: HardDrive, description: "File storage configuration", permission: "settings.view" },
       { name: "Search", href: "/configuration/search", icon: Search, description: "Manage search indexes", permission: "settings.view" },
       { name: "Stripe", href: "/configuration/stripe", icon: CreditCard, description: "Payment processing", permission: "settings.view", featureFlag: "stripe" },
@@ -304,7 +315,7 @@ function VersionFooter() {
     return null;
   }
 
-  const displayName = appName || "Sourdough";
+  const displayName = appName || "DanaVision";
   const shortSha = buildSha && buildSha !== "development" 
     ? buildSha.substring(0, 7) 
     : null;

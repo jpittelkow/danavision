@@ -1,7 +1,7 @@
 {
-    "name": "sourdough/backend",
+    "name": "danavision/backend",
     "type": "project",
-    "description": "Sourdough Backend - Laravel API",
+    "description": "DanaVision Backend - Laravel API",
     "keywords": ["laravel", "framework", "api"],
     "license": "MIT",
     "require": {

@@ -1,6 +1,6 @@
 # Add a Payment Flow
 
-How to create a new payment flow (e.g., one-time charge, subscription, donation) using Sourdough's Stripe module.
+How to create a new payment flow (e.g., one-time charge, subscription, donation) using the application's Stripe module.
 
 ## When to Use
 

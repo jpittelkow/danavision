@@ -36,7 +36,7 @@ function DeferredToaster() {
 function ConfiguredThemeProvider({ children }: { children: React.ReactNode }) {
   const { defaultTheme } = useAppConfig();
   return (
-    <ThemeProvider defaultTheme={defaultTheme} storageKey="sourdough-theme">
+    <ThemeProvider defaultTheme={defaultTheme} storageKey="danavision-theme">
       {children}
     </ThemeProvider>
   );

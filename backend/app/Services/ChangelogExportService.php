@@ -147,7 +147,7 @@ class ChangelogExportService
         string $detailLevel = 'full',
         string $instructionStyle = 'step-by-step',
     ): string {
-        $appName = config('app.name', 'Sourdough');
+        $appName = config('app.name', 'DanaVision');
         $safeAppName = str_replace('"', '\\"', $appName);
         $generatedAt = now()->toIso8601String();
         $totalVersions = count($entries);
@@ -308,7 +308,7 @@ class ChangelogExportService
      */
     private function buildEmptyMarkdown(string $from, string $to): string
     {
-        $appName = config('app.name', 'Sourdough');
+        $appName = config('app.name', 'DanaVision');
 
         $md = "# Upgrade Guide: {$appName} v{$from} → v{$to}\n\n";
         $md .= "No changelog entries found between these versions.\n\n";

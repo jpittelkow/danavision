@@ -220,7 +220,7 @@ Add matching entries with `url: "help:graphql-getting-started"` format.
 ### Step 9: Reindex Search
 
 ```bash
-docker exec sourdough-dev bash -c "cd /var/www/html/backend && php artisan search:reindex pages"
+docker exec danavision-dev bash -c "cd /var/www/html/backend && php artisan search:reindex pages"
 ```
 
 ### Step 10: Verify

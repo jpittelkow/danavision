@@ -9,8 +9,13 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 use App\Auth\ApiKeyGuard;
 use App\Enums\Permission;
+use App\Models\ShoppingList;
 use App\Models\User;
+use App\Policies\ShoppingListPolicy;
 use App\Services\ApiKeyService;
+use App\Services\PriceSearch\Providers\BestBuyApiProvider;
+use App\Services\PriceSearch\Providers\KrogerApiProvider;
+use App\Services\SettingService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -73,6 +78,24 @@ class AppServiceProvider extends ServiceProvider
             return new \App\Services\UrlValidationService();
         });
 
+        // Register Price Search API providers as singletons (shared with LocationOptionsResolver)
+        $this->app->singleton(KrogerApiProvider::class, function ($app) {
+            $ss = $app->make(SettingService::class);
+
+            return new KrogerApiProvider(
+                $ss->get('price_search', 'kroger_client_id'),
+                $ss->get('price_search', 'kroger_client_secret'),
+            );
+        });
+
+        $this->app->singleton(BestBuyApiProvider::class, function ($app) {
+            $ss = $app->make(SettingService::class);
+
+            return new BestBuyApiProvider(
+                $ss->get('price_search', 'bestbuy_api_key'),
+            );
+        });
+
     }
 
     /**
@@ -80,6 +103,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Register policies
+        Gate::policy(ShoppingList::class, ShoppingListPolicy::class);
+
         // Register all permissions as Gates (for can:permission.name)
         foreach (Permission::cases() as $perm) {
             Gate::define($perm->value, fn (User $user) => $user->hasPermission($perm));

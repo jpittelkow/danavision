@@ -48,6 +48,49 @@ export const SEARCH_PAGES: SearchPage[] = [
     url: "/user/security",
     keywords: ["password", "2fa", "two-factor", "mfa", "passkeys", "sso", "connected accounts"],
   },
+  // Shopping pages
+  {
+    id: "shopping-lists",
+    title: "Shopping Lists",
+    subtitle: "Manage your shopping lists",
+    url: "/lists",
+    keywords: ["lists", "shopping", "groceries", "tracking"],
+  },
+  {
+    id: "all-items",
+    title: "All Items",
+    subtitle: "View all tracked items across lists",
+    url: "/items",
+    keywords: ["items", "products", "all", "filter", "price", "drops", "target"],
+  },
+  {
+    id: "smart-add",
+    title: "Smart Add",
+    subtitle: "AI-powered product identification",
+    url: "/smart-add",
+    keywords: ["smart", "add", "ai", "image", "identify", "product", "camera"],
+  },
+  {
+    id: "product-search",
+    title: "Product Search",
+    subtitle: "Search for products across retailers",
+    url: "/search",
+    keywords: ["search", "product", "price", "compare", "image", "retailer"],
+  },
+  {
+    id: "deals",
+    title: "Deals & Coupons",
+    subtitle: "Scan coupons and circulars for deals",
+    url: "/deals",
+    keywords: ["deals", "coupons", "scan", "flyer", "circular", "mailer", "savings", "discount"],
+  },
+  {
+    id: "ask-dana",
+    title: "Ask Dana",
+    subtitle: "AI shopping assistant — ask about prices, deals, and lists",
+    url: "/ask-dana",
+    keywords: ["ai", "assistant", "chat", "dana", "help", "ask", "bot"],
+  },
   // Configuration pages (admin only)
   {
     id: "config-system",
@@ -144,6 +187,22 @@ export const SEARCH_PAGES: SearchPage[] = [
     url: "/configuration/changelog",
     adminOnly: false,
     keywords: ["changelog", "version", "release", "what's new", "updates", "export", "AI", "upgrade guide"],
+  },
+  {
+    id: "config-price-search",
+    title: "Configuration > Price Search",
+    subtitle: "Price comparison and store discovery",
+    url: "/configuration/price-search",
+    adminOnly: true,
+    keywords: ["price", "search", "crawl", "firecrawl", "serpapi", "google places", "store", "discovery", "shopping"],
+  },
+  {
+    id: "config-stores",
+    title: "Configuration > Stores",
+    subtitle: "Manage store preferences and discovery",
+    url: "/configuration/stores",
+    adminOnly: true,
+    keywords: ["stores", "store", "management", "preferences", "favorites", "suppressed", "custom", "local", "nearby", "discovery"],
   },
   {
     id: "config-ai",

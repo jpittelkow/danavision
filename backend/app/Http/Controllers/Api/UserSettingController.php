@@ -22,6 +22,10 @@ class UserSettingController extends Controller
             'notification_channels' => $user->getSetting('notifications', 'preferences', []),
             'timezone' => $user->getSetting('general', 'timezone'),
             'effective_timezone' => $user->getTimezone(),
+            'home_address' => $user->getSetting('shopping', 'home_address'),
+            'home_zip_code' => $user->getSetting('shopping', 'home_zip_code'),
+            'home_latitude' => $user->getSetting('shopping', 'home_latitude'),
+            'home_longitude' => $user->getSetting('shopping', 'home_longitude'),
         ]);
     }
 
@@ -39,6 +43,10 @@ class UserSettingController extends Controller
             'default_llm_mode' => ['sometimes', 'nullable', 'string', 'in:single,aggregation,council'],
             'notification_channels' => ['sometimes', 'nullable', 'array'],
             'timezone' => ['sometimes', 'nullable', 'string', 'in:' . implode(',', $validTimezones)],
+            'home_address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'home_zip_code' => ['sometimes', 'nullable', 'string', 'max:10'],
+            'home_latitude' => ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
+            'home_longitude' => ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
         ]);
 
         $user = $request->user();
@@ -49,6 +57,10 @@ class UserSettingController extends Controller
             'default_llm_mode'      => ['group' => 'defaults',      'key' => 'llm_mode'],
             'notification_channels' => ['group' => 'notifications', 'key' => 'preferences'],
             'timezone'              => ['group' => 'general',       'key' => 'timezone',     'clearable' => true],
+            'home_address'          => ['group' => 'shopping',      'key' => 'home_address', 'clearable' => true],
+            'home_zip_code'         => ['group' => 'shopping',      'key' => 'home_zip_code', 'clearable' => true],
+            'home_latitude'         => ['group' => 'shopping',      'key' => 'home_latitude', 'clearable' => true],
+            'home_longitude'        => ['group' => 'shopping',      'key' => 'home_longitude', 'clearable' => true],
         ];
 
         foreach ($settingMap as $field => $config) {
@@ -66,6 +78,12 @@ class UserSettingController extends Controller
             }
         }
 
+        // Clear cached provider location IDs when home address/coordinates change
+        $locationFields = ['home_address', 'home_zip_code', 'home_latitude', 'home_longitude'];
+        if (array_intersect_key($validated, array_flip($locationFields))) {
+            app(\App\Services\PriceSearch\LocationOptionsResolver::class)->clearCachedLocationIds($user);
+        }
+
         return response()->json([
             'message' => 'Preferences updated successfully',
             'preferences' => [
@@ -75,6 +93,10 @@ class UserSettingController extends Controller
                 'notification_channels' => $user->getSetting('notifications', 'preferences', []),
                 'timezone' => $user->getSetting('general', 'timezone'),
                 'effective_timezone' => $user->getTimezone(),
+                'home_address' => $user->getSetting('shopping', 'home_address'),
+                'home_zip_code' => $user->getSetting('shopping', 'home_zip_code'),
+                'home_latitude' => $user->getSetting('shopping', 'home_latitude'),
+                'home_longitude' => $user->getSetting('shopping', 'home_longitude'),
             ],
         ]);
     }

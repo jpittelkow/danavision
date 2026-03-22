@@ -97,7 +97,7 @@ export function Logo({ variant = "full", size = "md", className }: LogoProps) {
         role="img"
         aria-label={appName || 'App icon'}
       >
-        🍞
+        🛒
       </span>
     );
   }
@@ -145,7 +145,7 @@ export function Logo({ variant = "full", size = "md", className }: LogoProps) {
         role="img"
         aria-label={appName || 'App icon'}
       >
-        🍞
+        🛒
       </span>
       <span className={cn("font-semibold", sizes.text)} suppressHydrationWarning>{appName}</span>
     </div>

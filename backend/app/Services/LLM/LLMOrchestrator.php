@@ -94,13 +94,13 @@ class LLMOrchestrator
      * Execute an LLM query.
      */
     public function query(
-        User $user,
+        ?User $user,
         string $prompt,
         ?string $systemPrompt = null,
         ?string $mode = null,
         ?string $provider = null,
     ): array {
-        $mode = $mode ?? $user->getSetting('defaults', 'llm_mode', config('llm.mode'));
+        $mode = $mode ?? $user?->getSetting('defaults', 'llm_mode', config('llm.mode')) ?? config('llm.mode');
         $startTime = microtime(true);
 
         $result = match ($mode) {
@@ -118,14 +118,14 @@ class LLMOrchestrator
 
         if ($result['success']) {
             Log::info('LLM query completed', [
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
                 'mode' => $mode,
                 'provider' => $result['provider'] ?? $result['synthesis_provider'] ?? 'multiple',
                 'duration_ms' => $result['total_duration_ms'],
             ]);
         } else {
             Log::warning('LLM query failed', [
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
                 'mode' => $mode,
                 'error' => $result['error'] ?? 'Unknown',
             ]);
@@ -188,7 +188,7 @@ class LLMOrchestrator
             $response = $provider->query('Hello, please respond with "OK" to confirm the connection is working.');
             $durationMs = round((microtime(true) - $startTime) * 1000);
             Log::info('LLM provider test succeeded', [
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
                 'provider' => $providerName,
                 'duration_ms' => $durationMs,
             ]);
@@ -201,7 +201,7 @@ class LLMOrchestrator
             ];
         } catch (\Exception $e) {
             Log::warning('LLM provider test failed', [
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
                 'provider' => $providerName,
                 'error' => $e->getMessage(),
             ]);
@@ -218,11 +218,19 @@ class LLMOrchestrator
     /**
      * Single provider query.
      */
-    private function singleQuery(User $user, string $prompt, ?string $systemPrompt, ?string $providerName): array
+    private function singleQuery(?User $user, string $prompt, ?string $systemPrompt, ?string $providerName): array
     {
-        $providerConfig = $providerName
-            ? $user->aiProviders()->where('provider', $providerName)->first()
-            : $user->aiProviders()->primary()->first() ?? $user->aiProviders()->enabled()->first();
+        if ($user) {
+            $providerConfig = $providerName
+                ? $user->aiProviders()->where('provider', $providerName)->first()
+                : $user->aiProviders()->primary()->first() ?? $user->aiProviders()->enabled()->first();
+        } else {
+            // System-level query (no user context, e.g. scheduled crawling)
+            $providerConfig = $providerName
+                ? \App\Models\AIProvider::where('provider', $providerName)->where('is_enabled', true)->first()
+                : \App\Models\AIProvider::where('is_primary', true)->where('is_enabled', true)->first()
+                    ?? \App\Models\AIProvider::where('is_enabled', true)->first();
+        }
 
         if (!$providerConfig) {
             throw new \RuntimeException('No LLM provider configured');
@@ -255,7 +263,7 @@ class LLMOrchestrator
     /**
      * Aggregation mode: query all providers, primary synthesizes.
      */
-    private function aggregationQuery(User $user, string $prompt, ?string $systemPrompt): array
+    private function aggregationQuery(?User $user, string $prompt, ?string $systemPrompt): array
     {
         $providers = $this->getEnabledProviders($user);
 
@@ -333,7 +341,7 @@ class LLMOrchestrator
     /**
      * Council mode: all providers vote/contribute, consensus resolution.
      */
-    private function councilQuery(User $user, string $prompt, ?string $systemPrompt): array
+    private function councilQuery(?User $user, string $prompt, ?string $systemPrompt): array
     {
         $providers = $this->getEnabledProviders($user);
         $minProviders = config('llm.council.min_providers', 2);
@@ -627,9 +635,13 @@ class LLMOrchestrator
     /**
      * Get enabled providers for user.
      */
-    private function getEnabledProviders(User $user)
+    private function getEnabledProviders(?User $user)
     {
-        return $user->aiProviders()->enabled()->get();
+        if ($user) {
+            return $user->aiProviders()->enabled()->get();
+        }
+
+        return \App\Models\AIProvider::where('is_enabled', true)->get();
     }
 
     /**
@@ -721,7 +733,7 @@ class LLMOrchestrator
     /**
      * Log the LLM request.
      */
-    private function logRequest(User $user, string $mode, string $prompt, array $result): void
+    private function logRequest(?User $user, string $mode, string $prompt, array $result): void
     {
         if (!config('llm.logging_enabled')) {
             return;
@@ -729,7 +741,7 @@ class LLMOrchestrator
 
         try {
             AIRequestLog::create([
-                'user_id' => $user->id,
+                'user_id' => $user?->id,
                 'provider' => $result['provider'] ?? $result['synthesis_provider'] ?? 'multiple',
                 'model' => $result['model'] ?? null,
                 'mode' => $mode,
@@ -760,7 +772,7 @@ class LLMOrchestrator
                     $tokensIn,
                     $tokensOut,
                     $cost !== null ? (float) $cost : null,
-                    $user->id
+                    $user?->id
                 );
             }
         } catch (\Exception $e) {

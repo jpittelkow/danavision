@@ -5,26 +5,26 @@
   /* Font families */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Colors — frosted blue background, strong navy/blue accents */
-  --background: 210 55% 88%;
-  --foreground: 222 60% 8%;
-  --card: 210 48% 91%;
-  --card-foreground: 222 60% 8%;
-  --popover: 210 48% 91%;
-  --popover-foreground: 222 60% 8%;
-  --primary: 221 83% 45%;
+  /* Colors — clean light background, bold navy/blue accents */
+  --background: 210 22% 97%;
+  --foreground: 222 55% 10%;
+  --card: 210 16% 100%;
+  --card-foreground: 222 55% 10%;
+  --popover: 210 16% 100%;
+  --popover-foreground: 222 55% 10%;
+  --primary: 221 83% 48%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 210 55% 80%;
+  --secondary: 210 25% 90%;
   --secondary-foreground: 221 70% 14%;
-  --muted: 210 35% 82%;
-  --muted-foreground: 215 25% 33%;
-  --accent: 200 55% 80%;
-  --accent-foreground: 200 70% 14%;
+  --muted: 210 15% 92%;
+  --muted-foreground: 215 25% 40%;
+  --accent: 200 65% 48%;
+  --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 210 45% 72%;
-  --input: 210 45% 72%;
-  --ring: 221 83% 45%;
+  --border: 210 20% 86%;
+  --input: 210 20% 83%;
+  --ring: 221 83% 48%;
 
   /* Radius */
   --radius: 0.5rem;

@@ -1,5 +1,5 @@
 /**
- * Sourdough PWA Service Worker
+ * DanaVision PWA Service Worker
  *
  * Caching strategies:
  * - Cache-first: static assets (JS, CSS, images, fonts) - fast loads, versioned
@@ -11,9 +11,9 @@ importScripts('/workbox/workbox-sw.js');
 
 workbox.setConfig({ debug: false, modulePathPrefix: '/workbox/' });
 
-const CACHE_VERSION = 'sourdough-v0.10.4';
+const CACHE_VERSION = 'danavision-v0.1.0';
 const OFFLINE_URL = '/offline.html';
-const REQUEST_QUEUE_DB = 'sourdough-request-queue';
+const REQUEST_QUEUE_DB = 'danavision-request-queue';
 const REQUEST_QUEUE_STORE = 'requests';
 const SYNC_TAG = 'retry-failed-requests';
 
@@ -37,7 +37,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name.startsWith('sourdough-v') && !name.startsWith(CACHE_VERSION))
+          .filter((name) => name.startsWith('danavision-v') && !name.startsWith(CACHE_VERSION))
           .map((name) => caches.delete(name))
       );
     }).then(() => self.clients.claim())
