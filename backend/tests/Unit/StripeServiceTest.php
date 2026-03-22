@@ -18,6 +18,7 @@ function injectMockClient(StripeService $service, object $mockClient): void
  */
 function createEnabledServiceWithMock(): array
 {
+    config(['stripe.enabled' => true]);
     config(['stripe.secret_key' => 'sk_test_123']);
     config(['stripe.currency' => 'usd']);
 
@@ -48,6 +49,7 @@ describe('StripeService', function () {
         });
 
         it('returns true when secret key is present', function () {
+            config(['stripe.enabled' => true]);
             config(['stripe.secret_key' => 'sk_test_123']);
 
             expect($this->service->isEnabled())->toBeTrue();
@@ -56,6 +58,7 @@ describe('StripeService', function () {
 
     describe('createPaymentIntent', function () {
         it('returns error when amount is zero', function () {
+            config(['stripe.enabled' => true]);
             config(['stripe.secret_key' => 'sk_test_123']);
 
             $result = $this->service->createPaymentIntent([
@@ -67,6 +70,7 @@ describe('StripeService', function () {
         });
 
         it('returns error when amount is negative', function () {
+            config(['stripe.enabled' => true]);
             config(['stripe.secret_key' => 'sk_test_123']);
 
             $result = $this->service->createPaymentIntent([

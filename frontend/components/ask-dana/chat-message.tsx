@@ -103,6 +103,10 @@ export function ChatMessage({ message }: ChatMessageProps) {
         ) : (
           <div
             className="text-sm leading-relaxed [&_pre]:my-2 [&_code]:text-xs [&_ul]:my-1 [&_ol]:my-1 [&_li]:text-sm"
+            // Safe: formatMarkdown() calls escapeHtml() first, which escapes all HTML entities
+            // before applying markdown regex transforms. Only safe tags (<strong>, <em>, <code>, etc.)
+            // are introduced by the formatter itself — no raw user/LLM content passes through unescaped.
+            // nosemgrep: typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml
             dangerouslySetInnerHTML={{
               __html: formatMarkdown(message.content ?? ""),
             }}
