@@ -106,8 +106,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
             // Safe: formatMarkdown() calls escapeHtml() first, which escapes all HTML entities
             // before applying markdown regex transforms. Only safe tags (<strong>, <em>, <code>, etc.)
             // are introduced by the formatter itself — no raw user/LLM content passes through unescaped.
-            // nosemgrep: typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml
             dangerouslySetInnerHTML={{
+              // nosemgrep: typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml
               __html: formatMarkdown(message.content ?? ""),
             }}
           />
