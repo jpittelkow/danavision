@@ -1,6 +1,6 @@
 {
   "name": "danavision-frontend",
-  "version": "0.10.4",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "predev": "node scripts/patch-novu-exports.js",
