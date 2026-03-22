@@ -93,7 +93,7 @@
     "vitest": "^4.0.18"
   },
   "optionalDependencies": {
-    "@next/swc-linux-x64-gnu": "^16.1.6"
+    "@next/swc-linux-x64-gnu": "^16.2.1"
   },
   "overrides": {
     "rollup": ">=4.59.0"
