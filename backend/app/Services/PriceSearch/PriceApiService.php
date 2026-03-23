@@ -37,10 +37,17 @@ class PriceApiService
     {
         $results = [];
 
+        $available = [];
+        $skipped = [];
+
         foreach ($this->providers as $provider) {
             if (!$provider->isAvailable()) {
+                $skipped[] = $provider->getName();
+
                 continue;
             }
+
+            $available[] = $provider->getName();
 
             try {
                 $providerResults = $provider->search($query, $options);
@@ -58,6 +65,13 @@ class PriceApiService
                 ]);
             }
         }
+
+        Log::info('PriceApiService: search complete', [
+            'query' => $query,
+            'providers_used' => $available,
+            'providers_skipped' => $skipped,
+            'total_results' => count($results),
+        ]);
 
         return $results;
     }
@@ -96,6 +110,37 @@ class PriceApiService
             new SerpApiProvider($serpApiKey),
             new CrawlAIProvider($this->crawlAIService, $this->llmOrchestrator),
         ];
+    }
+
+    /**
+     * Fetch a product image URL for a given query using the first available provider.
+     *
+     * @param string $query The product search query
+     * @return string|null The image URL or null if not found
+     */
+    public function fetchProductImage(string $query): ?string
+    {
+        foreach ($this->providers as $provider) {
+            if (!$provider->isAvailable()) {
+                continue;
+            }
+
+            try {
+                $results = $provider->search($query, ['limit' => 1]);
+
+                if (!empty($results[0]['image_url'])) {
+                    return $results[0]['image_url'];
+                }
+            } catch (\Exception $e) {
+                Log::debug('PriceApiService: image fetch failed', [
+                    'provider' => $provider->getName(),
+                    'query' => $query,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
     }
 
     /**

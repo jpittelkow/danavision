@@ -18,7 +18,7 @@ class CrawlAIService
         private readonly SettingService $settingService,
     ) {
         $configuredUrl = rtrim(
-            $this->settingService->get('price_search', 'crawl4ai_base_url') ?? 'http://crawl4ai:11235',
+            $this->settingService->get('price_search', 'crawl4ai_base_url') ?? 'http://127.0.0.1:11235',
             '/'
         );
 

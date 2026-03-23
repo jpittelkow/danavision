@@ -8,6 +8,7 @@ use App\Models\SmartAddQueueItem;
 use App\Models\User;
 use App\Notifications\SmartAddCompleteNotification;
 use App\Services\LLM\LLMOrchestrator;
+use App\Services\PriceSearch\PriceApiService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -15,6 +16,7 @@ class SmartAddService
 {
     public function __construct(
         private readonly LLMOrchestrator $llmOrchestrator,
+        private readonly PriceApiService $priceApiService,
     ) {}
 
     /**
@@ -54,6 +56,7 @@ class SmartAddService
 
             if ($result['success']) {
                 $suggestions = $this->parseIdentificationResponse($result['response']);
+                $suggestions = $this->enrichWithImages($suggestions);
 
                 $aiJob->update([
                     'status' => 'completed',
@@ -112,6 +115,7 @@ class SmartAddService
 
             if ($result['success']) {
                 $suggestions = $this->parseIdentificationResponse($result['response']);
+                $suggestions = $this->enrichWithImages($suggestions);
 
                 $aiJob->update([
                     'status' => 'completed',
@@ -294,6 +298,35 @@ class SmartAddService
         }
 
         return $parsed;
+    }
+
+    /**
+     * Enrich AI suggestions with product images from price search providers.
+     */
+    private function enrichWithImages(array $suggestions): array
+    {
+        foreach ($suggestions as &$suggestion) {
+            $name = $suggestion['name'] ?? $suggestion['product_name'] ?? '';
+            $brand = $suggestion['brand'] ?? '';
+            $query = trim("{$brand} {$name}");
+
+            if ($query === '') {
+                continue;
+            }
+
+            try {
+                $suggestion['image_url'] = $this->priceApiService->fetchProductImage($query);
+            } catch (\Exception $e) {
+                Log::debug('SmartAddService: image enrichment failed', [
+                    'query' => $query,
+                    'error' => $e->getMessage(),
+                ]);
+                $suggestion['image_url'] = null;
+            }
+        }
+        unset($suggestion);
+
+        return $suggestions;
     }
 
     /**

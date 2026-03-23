@@ -7,6 +7,8 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -56,7 +58,7 @@ const DEFAULTS: PriceSearchForm = {
   walmart_api_key: "",
   bestbuy_api_key: "",
   crawl4ai_enabled: false,
-  crawl4ai_base_url: "http://crawl4ai:11235",
+  crawl4ai_base_url: "http://127.0.0.1:11235",
   crawl4ai_api_token: "",
   default_search_radius_miles: 25,
   price_check_interval_hours: 24,
@@ -68,6 +70,7 @@ const DEFAULTS: PriceSearchForm = {
 export default function PriceSearchSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [testingProviders, setTestingProviders] = useState<Set<string>>(new Set());
 
   const {
     register,
@@ -99,7 +102,7 @@ export default function PriceSearchSettingsPage() {
         walmart_api_key: ps.walmart_api_key || "",
         bestbuy_api_key: ps.bestbuy_api_key || "",
         crawl4ai_enabled: ps.crawl4ai_enabled ?? false,
-        crawl4ai_base_url: ps.crawl4ai_base_url || "http://crawl4ai:11235",
+        crawl4ai_base_url: ps.crawl4ai_base_url || "http://127.0.0.1:11235",
         crawl4ai_api_token: ps.crawl4ai_api_token || "",
         default_search_radius_miles: ps.default_search_radius_miles ?? 25,
         price_check_interval_hours: ps.price_check_interval_hours ?? 24,
@@ -137,6 +140,26 @@ export default function PriceSearchSettingsPage() {
       toast.error(getErrorMessage(error, "Failed to update price search settings"));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleTestProvider = async (provider: string) => {
+    setTestingProviders((prev) => new Set(prev).add(provider));
+    try {
+      const response = await api.post(`/price-search-settings/test/${provider}`);
+      if (response.data?.success) {
+        toast.success(response.data.message || "Connection successful");
+      } else {
+        toast.error(response.data?.error || "Connection test failed");
+      }
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Connection test failed"));
+    } finally {
+      setTestingProviders((prev) => {
+        const copy = new Set(prev);
+        copy.delete(provider);
+        return copy;
+      });
     }
   };
 
@@ -185,6 +208,18 @@ export default function PriceSearchSettingsPage() {
                     />
                   </div>
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testingProviders.has("serpapi")}
+                    onClick={() => handleTestProvider("serpapi")}
+                  >
+                    {testingProviders.has("serpapi") && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Test Connection
+                  </Button>
+                </CardFooter>
               </Card>
 
               {/* Firecrawl */}
@@ -230,6 +265,18 @@ export default function PriceSearchSettingsPage() {
                     />
                   </div>
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testingProviders.has("firecrawl")}
+                    onClick={() => handleTestProvider("firecrawl")}
+                  >
+                    {testingProviders.has("firecrawl") && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Test Connection
+                  </Button>
+                </CardFooter>
               </Card>
 
               {/* Google Places */}
@@ -255,6 +302,18 @@ export default function PriceSearchSettingsPage() {
                     />
                   </div>
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testingProviders.has("google_places")}
+                    onClick={() => handleTestProvider("google_places")}
+                  >
+                    {testingProviders.has("google_places") && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Test Connection
+                  </Button>
+                </CardFooter>
               </Card>
 
               {/* Kroger API */}
@@ -294,6 +353,18 @@ export default function PriceSearchSettingsPage() {
                     />
                   </div>
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testingProviders.has("kroger")}
+                    onClick={() => handleTestProvider("kroger")}
+                  >
+                    {testingProviders.has("kroger") && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Test Connection
+                  </Button>
+                </CardFooter>
               </Card>
 
               {/* Walmart API */}
@@ -320,6 +391,18 @@ export default function PriceSearchSettingsPage() {
                     />
                   </div>
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testingProviders.has("walmart")}
+                    onClick={() => handleTestProvider("walmart")}
+                  >
+                    {testingProviders.has("walmart") && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Test Connection
+                  </Button>
+                </CardFooter>
               </Card>
 
               {/* Best Buy API */}
@@ -346,6 +429,18 @@ export default function PriceSearchSettingsPage() {
                     />
                   </div>
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testingProviders.has("bestbuy")}
+                    onClick={() => handleTestProvider("bestbuy")}
+                  >
+                    {testingProviders.has("bestbuy") && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Test Connection
+                  </Button>
+                </CardFooter>
               </Card>
 
               {/* Crawl4AI */}
@@ -353,8 +448,8 @@ export default function PriceSearchSettingsPage() {
                 <CardHeader>
                   <CardTitle>Crawl4AI (Self-Hosted Scraping)</CardTitle>
                   <CardDescription>
-                    Free, self-hosted web crawler for scraping store product pages.
-                    Enable the crawl4ai Docker Compose profile to use.
+                    Built-in web crawler for scraping store product pages.
+                    Runs inside the main container via Supervisor.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -365,7 +460,7 @@ export default function PriceSearchSettingsPage() {
                         <HelpTooltip content={TOOLTIP_CONTENT.price_search.crawl4ai_enabled} />
                       </Label>
                       <p className="text-sm text-muted-foreground">
-                        Use Crawl4AI for store scraping (requires Docker container)
+                        Use Crawl4AI for store scraping
                       </p>
                     </div>
                     <Switch
@@ -386,7 +481,7 @@ export default function PriceSearchSettingsPage() {
                     <Input
                       id="crawl4ai_base_url"
                       {...register("crawl4ai_base_url")}
-                      placeholder="http://crawl4ai:11235"
+                      placeholder="http://127.0.0.1:11235"
                       autoComplete="off"
                     />
                   </div>
@@ -405,6 +500,18 @@ export default function PriceSearchSettingsPage() {
                     />
                   </div>
                 </CardContent>
+                <CardFooter className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={testingProviders.has("crawl4ai")}
+                    onClick={() => handleTestProvider("crawl4ai")}
+                  >
+                    {testingProviders.has("crawl4ai") && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Test Connection
+                  </Button>
+                </CardFooter>
               </Card>
             </div>
 

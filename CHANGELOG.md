@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.2]
+
+- Add price search provider connection testing endpoint and UI
+- Smart Add: enrich AI suggestions with product images from price search providers
+- Add Crawl4AI server as supervised process in Docker container
+- Move location preferences to user profile page with geolocation support
+- Improve PriceApiService logging for provider usage and search results
+
 ## [2.0.1]
 
 - Add single list item endpoint (`GET /items/{item}`) with vendor prices

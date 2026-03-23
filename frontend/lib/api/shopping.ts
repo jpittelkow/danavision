@@ -98,6 +98,7 @@ export interface SmartAddSuggestion {
   retailer?: string;
   price?: number;
   confidence?: number;
+  image_url?: string;
 }
 
 export interface SmartAddQueueItem {

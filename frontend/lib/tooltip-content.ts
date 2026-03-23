@@ -127,9 +127,9 @@ export const TOOLTIP_CONTENT = {
     bestbuy_api_key:
       "Free API key from the Best Buy Developer Portal (developer.bestbuy.com). Provides product search, pricing, store inventory, and reviews.",
     crawl4ai_enabled:
-      "Enable the self-hosted Crawl4AI web crawler for scraping store product pages. Requires the crawl4ai Docker Compose profile.",
+      "Enable the self-hosted Crawl4AI web crawler for scraping store product pages. Runs inside the main container.",
     crawl4ai_base_url:
-      "Base URL for the Crawl4AI service. Default is http://crawl4ai:11235 when running in Docker Compose.",
+      "Base URL for the Crawl4AI service. Default is http://127.0.0.1:11235 (runs inside the main container).",
     crawl4ai_api_token:
       "Optional API token for authenticating with the Crawl4AI service.",
     store_crawl_enabled:

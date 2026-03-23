@@ -297,7 +297,7 @@ return [
         'price_check_interval_hours' => ['env' => 'PRICE_CHECK_INTERVAL_HOURS', 'default' => 24],
         'max_vendor_prices_per_item' => ['env' => 'PRICE_MAX_VENDORS_PER_ITEM', 'default' => 10],
         'crawl4ai_enabled' => ['env' => 'CRAWL4AI_ENABLED', 'default' => false],
-        'crawl4ai_base_url' => ['env' => 'CRAWL4AI_BASE_URL', 'default' => 'http://crawl4ai:11235'],
+        'crawl4ai_base_url' => ['env' => 'CRAWL4AI_BASE_URL', 'default' => 'http://127.0.0.1:11235'],
         'crawl4ai_api_token' => ['env' => 'CRAWL4AI_API_TOKEN', 'default' => null, 'encrypted' => true],
         'kroger_client_id' => ['env' => 'KROGER_CLIENT_ID', 'default' => null, 'encrypted' => true],
         'kroger_client_secret' => ['env' => 'KROGER_CLIENT_SECRET', 'default' => null, 'encrypted' => true],

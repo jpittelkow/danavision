@@ -57,6 +57,7 @@ use App\Http\Controllers\Api\ListItemController;
 use App\Http\Controllers\Api\ListShareController;
 use App\Http\Controllers\Api\StoreController;
 use App\Http\Controllers\Api\SmartAddController;
+use App\Http\Controllers\Api\PriceSearchSettingController;
 use App\Http\Controllers\Api\ProductSearchController;
 use App\Http\Controllers\Api\AIJobController;
 use App\Http\Controllers\Api\AIPromptController;
@@ -621,6 +622,9 @@ Route::middleware(['auth:sanctum', 'verified', '2fa.setup'])->group(function () 
     Route::post('/product-search', [ProductSearchController::class, 'search']);
     Route::post('/product-search/image', [ProductSearchController::class, 'imageSearch']);
     Route::get('/search-history', [ProductSearchController::class, 'history']);
+
+    // Price Search Settings (permission: settings.edit for test)
+    Route::post('/price-search-settings/test/{provider}', [PriceSearchSettingController::class, 'testProvider'])->middleware('can:settings.edit');
 
     // AI Jobs
     Route::get('/ai-jobs', [AIJobController::class, 'index']);

@@ -13,6 +13,7 @@ import {
   Camera,
   Loader2,
   AlertTriangle,
+  Package,
 } from "lucide-react";
 import { usePageTitle } from "@/lib/use-page-title";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ export default function SmartAddPage() {
   const [textInput, setTextInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedListIds, setSelectedListIds] = useState<Record<string, string>>({});
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   // Fetch data
   const { data: queueResponse, isLoading: queueLoading } = useQuery({
@@ -392,27 +394,46 @@ export default function SmartAddPage() {
                   {(queueItem.product_data ?? queueItem.suggestions ?? []).map((suggestion, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between rounded-md border p-2 text-sm"
+                      className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm"
                     >
-                      <div>
-                        <p className="font-medium">
-                          {suggestion.product_name || suggestion.name}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {suggestion.retailer && (
-                            <span>{suggestion.retailer}</span>
-                          )}
-                          {(suggestion.price ?? suggestion.typical_price) != null && (
-                            <span>${(suggestion.price ?? suggestion.typical_price)!.toFixed(2)}</span>
-                          )}
-                          {suggestion.confidence != null && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] px-1"
-                            >
-                              {Math.round(suggestion.confidence * 100)}%
-                            </Badge>
-                          )}
+                      <div className="flex items-center gap-2 min-w-0">
+                        {suggestion.image_url && !failedImages.has(suggestion.image_url) ? (
+                          <img
+                            src={suggestion.image_url}
+                            alt={suggestion.product_name || suggestion.name || "Product"}
+                            className="h-10 w-10 rounded object-cover shrink-0 bg-muted"
+                            loading="lazy"
+                            onError={() => {
+                              if (suggestion.image_url) {
+                                setFailedImages((prev) => new Set(prev).add(suggestion.image_url!));
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
+                            <Package className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">
+                            {suggestion.product_name || suggestion.name}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            {suggestion.retailer && (
+                              <span>{suggestion.retailer}</span>
+                            )}
+                            {(suggestion.price ?? suggestion.typical_price) != null && (
+                              <span>${(suggestion.price ?? suggestion.typical_price)!.toFixed(2)}</span>
+                            )}
+                            {suggestion.confidence != null && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1"
+                              >
+                                {Math.round(suggestion.confidence * 100)}%
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
