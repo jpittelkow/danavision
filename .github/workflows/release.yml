@@ -109,7 +109,7 @@ jobs:
       - name: Update version files
         run: bash scripts/bump-version.sh "${{ steps.extract.outputs.version }}"
 
-      - name: Sync master to tag commit
+      - name: Sync main to tag commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -119,12 +119,12 @@ jobs:
           else
             git commit -m "Release v${{ steps.extract.outputs.version }}"
           fi
-          # Ensure master includes this tag commit (best-effort fast-forward)
-          git fetch origin master
-          if git merge-base --is-ancestor origin/master HEAD; then
-            git push origin HEAD:master
+          # Ensure main includes this tag commit (best-effort fast-forward)
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            git push origin HEAD:main
           else
-            echo "::warning::Cannot fast-forward master to tag commit — histories may have diverged"
+            echo "::warning::Cannot fast-forward main to tag commit — histories may have diverged"
           fi
 
       - name: Resolve build SHA
