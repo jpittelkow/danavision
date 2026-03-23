@@ -559,6 +559,7 @@ Route::middleware(['auth:sanctum', 'verified', '2fa.setup'])->group(function () 
 
     // List Items
     Route::get('/items', [ListItemController::class, 'index']);
+    Route::get('/items/{item}', [ListItemController::class, 'show']);
     Route::post('/lists/{list}/items', [ListItemController::class, 'store']);
     Route::put('/items/{item}', [ListItemController::class, 'update']);
     Route::delete('/items/{item}', [ListItemController::class, 'destroy']);

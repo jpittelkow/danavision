@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.1]
+
+- Add single list item endpoint (`GET /items/{item}`) with vendor prices
+- Move Shopping Location settings from preferences to profile page
+- Smart Add: per-item list selection and "no lists" warning with create link
+- Remove unnecessary SSRF validation on internal CrawlAI service URL
+- Seed missing notification templates migration
+
 ## 0.1.0
 
 - Initial project setup based on Sourdough

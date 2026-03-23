@@ -33,7 +33,7 @@ if ($CurrentBranch -eq "HEAD") {
     Write-Error "You are in detached HEAD state. Check out a branch before releasing."
     exit 1
 }
-if ($CurrentBranch -ne "master") {
+if ($CurrentBranch -ne "main") {
     Write-Warning "You are on branch '$CurrentBranch', not 'master'. Continue anyway? (y/N)"
     $Response = Read-Host
     if ($Response -ne "y" -and $Response -ne "Y") {

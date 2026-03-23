@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   Camera,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { usePageTitle } from "@/lib/use-page-title";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import Link from "next/link";
 import { getErrorMessage } from "@/lib/utils";
 import { useIsMobile } from "@/lib/use-mobile";
 import {
@@ -56,7 +58,7 @@ export default function SmartAddPage() {
 
   const [textInput, setTextInput] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
-  const [selectedListId, setSelectedListId] = useState<string>("");
+  const [selectedListIds, setSelectedListIds] = useState<Record<string, string>>({});
 
   // Fetch data
   const { data: queueResponse, isLoading: queueLoading } = useQuery({
@@ -332,6 +334,24 @@ export default function SmartAddPage() {
         </Card>
       )}
 
+      {/* No lists warning */}
+      {!queueLoading && lists.length === 0 && readyItems.length > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/50 p-4">
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              No shopping lists found
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+              Create a shopping list first so you can add items from the queue.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/lists/new">Create List</Link>
+          </Button>
+        </div>
+      )}
+
       {/* Review Queue */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold">
@@ -397,8 +417,13 @@ export default function SmartAddPage() {
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Select
-                          value={selectedListId}
-                          onValueChange={setSelectedListId}
+                          value={selectedListIds[`${queueItem.id}-${idx}`] ?? ""}
+                          onValueChange={(value) =>
+                            setSelectedListIds((prev) => ({
+                              ...prev,
+                              [`${queueItem.id}-${idx}`]: value,
+                            }))
+                          }
                         >
                           <SelectTrigger className="h-7 w-32 text-xs">
                             <SelectValue placeholder="Select list" />
@@ -416,13 +441,13 @@ export default function SmartAddPage() {
                           size="icon"
                           className="h-7 w-7 text-green-600 hover:text-green-700"
                           disabled={
-                            acceptMutation.isPending || !selectedListId
+                            acceptMutation.isPending || !selectedListIds[`${queueItem.id}-${idx}`]
                           }
                           onClick={() =>
                             acceptMutation.mutate({
                               id: queueItem.id,
                               selectedIndex: idx,
-                              listId: parseInt(selectedListId),
+                              listId: parseInt(selectedListIds[`${queueItem.id}-${idx}`]),
                             })
                           }
                           title="Accept"

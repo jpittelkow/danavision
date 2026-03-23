@@ -3,7 +3,6 @@
 namespace App\Services\Crawler;
 
 use App\Services\SettingService;
-use App\Services\UrlValidationService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -23,13 +22,8 @@ class CrawlAIService
             '/'
         );
 
-        $urlValidator = app(UrlValidationService::class);
-        if (! $urlValidator->validateUrl($configuredUrl)) {
-            Log::warning('CrawlAIService: configured base URL failed SSRF validation, falling back to default', [
-                'url' => $configuredUrl,
-            ]);
-            $configuredUrl = 'http://crawl4ai:11235';
-        }
+        // No SSRF validation here — this is a server-configured internal service URL
+        // (typically a Docker container hostname), not user-supplied input.
 
         $this->enabled = (bool) $this->settingService->get('price_search', 'crawl4ai_enabled');
         $this->baseUrl = $configuredUrl;

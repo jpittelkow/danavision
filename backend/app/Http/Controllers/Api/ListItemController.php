@@ -128,6 +128,18 @@ class ListItemController extends Controller
     }
 
     /**
+     * Show a single list item with vendor prices.
+     */
+    public function show(Request $request, ListItem $item): JsonResponse
+    {
+        $this->authorizeItemAccess($request, $item);
+
+        $item->load('vendorPrices');
+
+        return response()->json(['data' => $item]);
+    }
+
+    /**
      * Update a list item.
      */
     public function update(Request $request, ListItem $item): JsonResponse
