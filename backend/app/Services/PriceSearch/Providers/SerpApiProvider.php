@@ -47,10 +47,24 @@ class SerpApiProvider implements PriceProviderInterface
 
             $response = Http::timeout(30)->get(self::BASE_URL, $params);
 
+            // SerpAPI returns 400 for unrecognized location strings (e.g. raw street addresses).
+            // Retry without location to still return results.
+            if ($response->status() === 400 && isset($params['location'])) {
+                Log::warning('SerpApiProvider: retrying without location (400 from SerpAPI)', [
+                    'location' => $params['location'],
+                    'query' => $query,
+                ]);
+
+                unset($params['location']);
+                $response = Http::timeout(30)->get(self::BASE_URL, $params);
+            }
+
             if (!$response->successful()) {
                 Log::error('SerpApiProvider: API request failed', [
                     'status' => $response->status(),
                     'body' => $response->body(),
+                    'location' => $params['location'] ?? null,
+                    'query' => $query,
                 ]);
                 return [];
             }

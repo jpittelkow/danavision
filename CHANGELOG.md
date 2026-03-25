@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.0.3]
+
+- Fix SerpAPI 400 errors by retrying without location when address format is unrecognized
+- Trigger Docker image rebuild to include crawl4ai binary (pip install was missing from prior build)
+
 ## [2.0.2]
 
 - Add price search provider connection testing endpoint and UI
