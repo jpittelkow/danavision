@@ -116,10 +116,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install crawl4ai in a virtual environment to avoid system package conflicts
-# crawl4ai-setup downloads browser binaries for playwright/patchright
+# crawl4ai-setup downloads browser binaries; install them for www-data since
+# supervisord runs crawl4ai as www-data (browsers go to $HOME/.cache/)
 RUN python3 -m venv /opt/crawl4ai \
     && /opt/crawl4ai/bin/pip install --no-cache-dir crawl4ai \
-    && /opt/crawl4ai/bin/crawl4ai-setup
+    && mkdir -p /var/www/.crawl4ai /var/www/.cache \
+    && chown -R www-data:www-data /var/www/.crawl4ai /var/www/.cache \
+    && su -s /bin/sh www-data -c "/opt/crawl4ai/bin/crawl4ai-setup"
 ENV PATH="/opt/crawl4ai/bin:$PATH"
 
 # Copy crawl4ai HTTP wrapper (replaces removed crawl4ai-server CLI in >= 0.8)
@@ -176,6 +179,8 @@ RUN mkdir -p /var/www/html/backend/storage/app/public \
     && mkdir -p /var/www/html/backend/storage/logs \
     && mkdir -p /var/www/html/backend/database \
     && mkdir -p /var/www/html/data \
+    && mkdir -p /var/www/.crawl4ai \
+    && chown www-data:www-data /var/www/.crawl4ai \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /run/nginx \
     && mkdir -p /var/lib/meilisearch \

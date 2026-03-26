@@ -250,17 +250,17 @@ export default function AllItemsPage() {
                     </TableCell>
                     <TableCell className="text-right hidden md:table-cell">
                       {item.previous_price != null
-                        ? `$${item.previous_price.toFixed(2)}`
+                        ? `$${Number(item.previous_price).toFixed(2)}`
                         : "--"}
                     </TableCell>
                     <TableCell className="text-right hidden lg:table-cell">
                       {item.lowest_price != null
-                        ? `$${item.lowest_price.toFixed(2)}`
+                        ? `$${Number(item.lowest_price).toFixed(2)}`
                         : "--"}
                     </TableCell>
                     <TableCell className="text-right hidden lg:table-cell">
                       {item.target_price != null
-                        ? `$${item.target_price.toFixed(2)}`
+                        ? `$${Number(item.target_price).toFixed(2)}`
                         : "--"}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">

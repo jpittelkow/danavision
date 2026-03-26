@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.0.5]
+
+- Fix crawl4ai: install Playwright browsers as www-data user and create required directories
+
 ## [2.0.4]
 
 - Add crawl4ai HTTP wrapper server (replaces removed `crawl4ai-server` CLI in crawl4ai >= 0.8)

@@ -234,10 +234,10 @@ export function RecentDropsWidget() {
                   <div className="ml-3 flex items-center gap-2 text-right">
                     <div>
                       <p className="text-sm font-semibold text-green-600 dark:text-green-400">
-                        ${drop.current_price.toFixed(2)}
+                        ${Number(drop.current_price).toFixed(2)}
                       </p>
                       <p className="text-xs text-muted-foreground line-through">
-                        ${drop.previous_price.toFixed(2)}
+                        ${Number(drop.previous_price).toFixed(2)}
                       </p>
                     </div>
                     <Badge variant="secondary" className="text-xs text-green-600 dark:text-green-400">

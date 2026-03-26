@@ -393,12 +393,12 @@ export default function ListDetailPage() {
                       </TableCell>
                       <TableCell className="text-right hidden sm:table-cell">
                         {item.previous_price != null
-                          ? `$${item.previous_price.toFixed(2)}`
+                          ? `$${Number(item.previous_price).toFixed(2)}`
                           : "--"}
                       </TableCell>
                       <TableCell className="text-right hidden md:table-cell">
                         {item.lowest_price != null
-                          ? `$${item.lowest_price.toFixed(2)}`
+                          ? `$${Number(item.lowest_price).toFixed(2)}`
                           : "--"}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
@@ -473,7 +473,7 @@ export default function ListDetailPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             {item.purchased_price != null
-                              ? `$${item.purchased_price.toFixed(2)}`
+                              ? `$${Number(item.purchased_price).toFixed(2)}`
                               : "--"}
                           </TableCell>
                           <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">

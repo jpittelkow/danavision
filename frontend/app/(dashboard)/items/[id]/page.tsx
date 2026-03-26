@@ -276,7 +276,7 @@ export default function ItemDetailPage() {
           <CardContent>
             <span className="text-2xl font-medium">
               {item.previous_price != null
-                ? `$${item.previous_price.toFixed(2)}`
+                ? `$${Number(item.previous_price).toFixed(2)}`
                 : "--"}
             </span>
           </CardContent>
@@ -291,7 +291,7 @@ export default function ItemDetailPage() {
           <CardContent>
             <span className="text-2xl font-medium text-green-600 dark:text-green-400">
               {item.lowest_price != null
-                ? `$${item.lowest_price.toFixed(2)}`
+                ? `$${Number(item.lowest_price).toFixed(2)}`
                 : "--"}
             </span>
           </CardContent>
@@ -351,7 +351,7 @@ export default function ItemDetailPage() {
                 title="Click to edit target price"
               >
                 {item.target_price != null
-                  ? `$${item.target_price.toFixed(2)}`
+                  ? `$${Number(item.target_price).toFixed(2)}`
                   : "Set target"}
               </button>
             )}
