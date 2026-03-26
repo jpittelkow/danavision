@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.0.7]
+
+- Fix crawl4ai: explicitly install Playwright Chromium browser as www-data
+- Fix picomatch ReDoS vulnerability (npm audit fix)
+
 ## [2.0.6]
 
 - Fix crawl4ai Docker build: set HOME and make /var/www writable for crawl4ai-setup
