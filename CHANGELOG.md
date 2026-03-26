@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.4]
+
+- Add crawl4ai HTTP wrapper server (replaces removed `crawl4ai-server` CLI in crawl4ai >= 0.8)
+- Fix supervisord to use new Python-based crawl4ai server
+- Update google/protobuf to fix DoS vulnerability (GHSA-p2gh-cfq4-4wjc)
+
 ## [2.0.3]
 
 - Fix SerpAPI 400 errors by retrying without location when address format is unrecognized

@@ -116,10 +116,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install crawl4ai in a virtual environment to avoid system package conflicts
+# crawl4ai-setup downloads browser binaries for playwright/patchright
 RUN python3 -m venv /opt/crawl4ai \
     && /opt/crawl4ai/bin/pip install --no-cache-dir crawl4ai \
     && /opt/crawl4ai/bin/crawl4ai-setup
 ENV PATH="/opt/crawl4ai/bin:$PATH"
+
+# Copy crawl4ai HTTP wrapper (replaces removed crawl4ai-server CLI in >= 0.8)
+COPY docker/crawl4ai-server.py /var/www/html/docker/crawl4ai-server.py
 
 # Install Meilisearch binary (Debian/glibc required; Alpine/musl incompatible)
 ARG MEILISEARCH_VERSION=1.34.2
