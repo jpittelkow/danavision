@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.0.8]
+
+- Fix crawl4ai: install Playwright deps as root, browsers to shared cache, chown to www-data
+
 ## [2.0.7]
 
 - Fix crawl4ai: explicitly install Playwright Chromium browser as www-data
