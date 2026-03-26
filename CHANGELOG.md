@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.0.6]
+
+- Fix crawl4ai Docker build: set HOME and make /var/www writable for crawl4ai-setup
+
 ## [2.0.5]
 
 - Fix crawl4ai: install Playwright browsers as www-data user and create required directories

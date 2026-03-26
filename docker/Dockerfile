@@ -121,8 +121,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m venv /opt/crawl4ai \
     && /opt/crawl4ai/bin/pip install --no-cache-dir crawl4ai \
     && mkdir -p /var/www/.crawl4ai /var/www/.cache \
-    && chown -R www-data:www-data /var/www/.crawl4ai /var/www/.cache \
-    && su -s /bin/sh www-data -c "/opt/crawl4ai/bin/crawl4ai-setup"
+    && chown -R www-data:www-data /var/www /var/www/.crawl4ai /var/www/.cache \
+    && su -s /bin/sh www-data -c "HOME=/var/www /opt/crawl4ai/bin/crawl4ai-setup"
 ENV PATH="/opt/crawl4ai/bin:$PATH"
 
 # Copy crawl4ai HTTP wrapper (replaces removed crawl4ai-server CLI in >= 0.8)
