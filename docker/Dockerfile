@@ -116,15 +116,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install crawl4ai in a virtual environment to avoid system package conflicts
-# crawl4ai-setup downloads browser binaries; install them for www-data since
-# supervisord runs crawl4ai as www-data (browsers go to $HOME/.cache/)
+# PLAYWRIGHT_BROWSERS_PATH ensures browsers go to a known location accessible
+# by www-data at runtime (not /root/.cache which is root-only)
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/crawl4ai/browsers
 RUN python3 -m venv /opt/crawl4ai \
     && /opt/crawl4ai/bin/pip install --no-cache-dir crawl4ai \
-    && mkdir -p /var/www/.crawl4ai /var/www/.cache \
+    && mkdir -p /var/www/.crawl4ai /var/www/.cache /opt/crawl4ai/browsers \
     && chown -R www-data:www-data /var/www /var/www/.crawl4ai /var/www/.cache \
     && su -s /bin/sh www-data -c "HOME=/var/www /opt/crawl4ai/bin/crawl4ai-setup" \
     && /opt/crawl4ai/bin/playwright install --with-deps chromium \
-    && chown -R www-data:www-data /var/www/.cache
+    && chown -R www-data:www-data /opt/crawl4ai/browsers
 ENV PATH="/opt/crawl4ai/bin:$PATH"
 
 # Copy crawl4ai HTTP wrapper (replaces removed crawl4ai-server CLI in >= 0.8)

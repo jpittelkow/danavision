@@ -423,7 +423,7 @@ export default function SmartAddPage() {
                               <span>{suggestion.retailer}</span>
                             )}
                             {(suggestion.price ?? suggestion.typical_price) != null && (
-                              <span>${(suggestion.price ?? suggestion.typical_price)!.toFixed(2)}</span>
+                              <span>${Number(suggestion.price ?? suggestion.typical_price).toFixed(2)}</span>
                             )}
                             {suggestion.confidence != null && (
                               <Badge

@@ -29,7 +29,7 @@ export function DealSavingsBanner({ listId }: DealSavingsBannerProps) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-green-800 dark:text-green-200">
-            ${savings.total_savings.toFixed(2)} in deal savings
+            ${Number(savings.total_savings).toFixed(2)} in deal savings
           </p>
           <p className="text-xs text-green-600 dark:text-green-400">
             {savings.deals_applied} deal{savings.deals_applied !== 1 ? "s" : ""} on {savings.items_with_deals} item{savings.items_with_deals !== 1 ? "s" : ""}

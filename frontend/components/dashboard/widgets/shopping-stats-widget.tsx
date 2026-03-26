@@ -77,7 +77,7 @@ export function ShoppingStatCards() {
     },
     {
       title: "Potential Savings",
-      value: `$${data.total_savings.toFixed(2)}`,
+      value: `$${Number(data.total_savings).toFixed(2)}`,
       icon: DollarSign,
       variant: data.total_savings > 0 ? "success" as const : "default" as const,
     },

@@ -116,8 +116,9 @@ export function getErrorMessage(error: unknown, fallback: string): string {
  * Format a number as USD currency (e.g. $42.50).
  */
 export function formatCurrency(value: number): string {
-  if (!Number.isFinite(value)) return "$0.00";
-  return `$${value.toFixed(2)}`;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "$0.00";
+  return `$${n.toFixed(2)}`;
 }
 
 /**

@@ -10,7 +10,7 @@ export interface PriceBadgeProps {
 }
 
 function formatPrice(value: number): string {
-  return `$${value.toFixed(2)}`;
+  return `$${Number(value).toFixed(2)}`;
 }
 
 export function PriceBadge({ price, previousPrice, className }: PriceBadgeProps) {
@@ -18,10 +18,12 @@ export function PriceBadge({ price, previousPrice, className }: PriceBadgeProps)
     return <span className={cn("text-muted-foreground", className)}>--</span>;
   }
 
+  const numPrice = Number(price);
+  const numPrevious = Number(previousPrice);
   const hasPrevious =
-    previousPrice !== null && previousPrice !== undefined && previousPrice !== price;
-  const isDropped = hasPrevious && previousPrice > price;
-  const isRaised = hasPrevious && previousPrice < price;
+    previousPrice !== null && previousPrice !== undefined && numPrevious !== numPrice;
+  const isDropped = hasPrevious && numPrevious > numPrice;
+  const isRaised = hasPrevious && numPrevious < numPrice;
 
   return (
     <span className={cn("inline-flex items-center gap-1 font-medium", className)}>

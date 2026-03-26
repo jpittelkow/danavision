@@ -57,12 +57,12 @@ export function PriceChart({ data, targetPrice }: PriceChartProps) {
                 Math.floor(minPrice - padding),
                 Math.ceil(maxPrice + padding),
               ]}
-              tickFormatter={(v: number) => `$${v.toFixed(2)}`}
+              tickFormatter={(v: number) => `$${Number(v).toFixed(2)}`}
               tick={{ fontSize: 12 }}
               className="text-muted-foreground"
             />
             <Tooltip
-              formatter={(value: number) => [`$${value.toFixed(2)}`, "Price"]}
+              formatter={(value: number) => [`$${Number(value).toFixed(2)}`, "Price"]}
               labelFormatter={(label: string) => `Date: ${label}`}
             />
             <Line
@@ -79,7 +79,7 @@ export function PriceChart({ data, targetPrice }: PriceChartProps) {
                 stroke="hsl(var(--destructive))"
                 strokeDasharray="5 5"
                 label={{
-                  value: `Target: $${targetPrice.toFixed(2)}`,
+                  value: `Target: $${Number(targetPrice).toFixed(2)}`,
                   position: "insideTopRight",
                   fill: "hsl(var(--destructive))",
                   fontSize: 12,

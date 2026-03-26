@@ -7,7 +7,7 @@ export function formatUnitPrice(
   unitType: string | null | undefined
 ): string | null {
   if (unitPrice == null || unitType == null) return null;
-  return `$${unitPrice.toFixed(2)}/${unitType}`;
+  return `$${Number(unitPrice).toFixed(2)}/${unitType}`;
 }
 
 /**
@@ -16,5 +16,5 @@ export function formatUnitPrice(
  */
 export function formatPrice(price: number | null | undefined): string {
   if (price == null) return "—";
-  return `$${price.toFixed(2)}`;
+  return `$${Number(price).toFixed(2)}`;
 }

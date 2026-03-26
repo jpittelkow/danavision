@@ -408,7 +408,7 @@ export default function ItemDetailPage() {
                       {entry.retailer ?? "Unknown"}
                     </TableCell>
                     <TableCell className="text-right">
-                      ${entry.price.toFixed(2)}
+                      ${Number(entry.price).toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {new Date(entry.date ?? entry.captured_at ?? "").toLocaleDateString()}

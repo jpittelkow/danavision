@@ -96,7 +96,7 @@ function ProductResultCard({
               )}
               {product.price != null && (
                 <Badge variant="secondary">
-                  ${product.price.toFixed(2)}
+                  ${Number(product.price).toFixed(2)}
                 </Badge>
               )}
             </div>
