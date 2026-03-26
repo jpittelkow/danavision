@@ -11,7 +11,7 @@ importScripts('/workbox/workbox-sw.js');
 
 workbox.setConfig({ debug: false, modulePathPrefix: '/workbox/' });
 
-const CACHE_VERSION = 'danavision-v2.0.6';
+const CACHE_VERSION = 'danavision-v2.0.7';
 const OFFLINE_URL = '/offline.html';
 const REQUEST_QUEUE_DB = 'danavision-request-queue';
 const REQUEST_QUEUE_STORE = 'requests';
