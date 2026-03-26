@@ -1,5 +1,9 @@
 # Changelog
 
+## [2.0.9]
+
+- Fix crawl4ai: use PLAYWRIGHT_BROWSERS_PATH so Chromium is accessible to www-data at runtime (fixes connection refused on production)
+
 ## [2.0.8]
 
 - Fix crawl4ai: install Playwright deps as root, browsers to shared cache, chown to www-data
