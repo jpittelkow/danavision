@@ -25,6 +25,10 @@ class KrogerApiProvider implements PriceProviderInterface
     {
         $token = $this->getAccessToken();
         if (!$token) {
+            Log::warning('KrogerApiProvider: no access token available, skipping search', [
+                'query' => $query,
+            ]);
+
             return [];
         }
 
@@ -58,8 +62,15 @@ class KrogerApiProvider implements PriceProviderInterface
             }
 
             $data = $response->json();
+            $results = $this->formatResults($data['data'] ?? [], $locationId);
 
-            return $this->formatResults($data['data'] ?? [], $locationId);
+            Log::info('KrogerApiProvider: search complete', [
+                'query' => $query,
+                'results' => count($results),
+                'location_id' => $locationId,
+            ]);
+
+            return $results;
         } catch (\Exception $e) {
             Log::error('KrogerApiProvider: Search error', [
                 'query' => $query,

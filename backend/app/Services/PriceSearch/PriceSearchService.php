@@ -157,70 +157,30 @@ class PriceSearchService
             return $rawResults;
         }
 
-        $resultsJson = json_encode($rawResults, JSON_PRETTY_PRINT);
         $itemName = $item->product_name ?? 'Unknown Item';
         $itemUpc = $item->upc ?? '';
         $itemSku = $item->sku ?? '';
 
+        $indexedJson = $this->buildIndexedResultsJson($rawResults);
+
         $prompt = <<<PROMPT
-        Analyze the following shopping search results for the product: "{$itemName}" (UPC: {$itemUpc}, SKU: {$itemSku}).
+        Analyze the following indexed shopping search results for the product: "{$itemName}" (UPC: {$itemUpc}, SKU: {$itemSku}).
 
-        Raw search results:
-        {$resultsJson}
+        {$indexedJson}
 
-        Please structure these results into a clean list of vendor prices. For each result:
-        1. Verify the product is a genuine match (not an accessory or unrelated item)
-        2. Normalize the price to a numeric value
-        3. Include the retailer name and URL
-        4. Flag if the item appears out of stock
-        5. Remove duplicate listings from the same retailer (keep the lowest price)
+        For each result, decide whether it is a genuine match for the product (not an accessory or unrelated item).
+        Remove duplicates from the same retailer (keep the lowest price).
 
-        Return a JSON array of objects with these keys:
-        - product_name (string): The exact product name
-        - price (number|null): The price in USD, null if unavailable
-        - retailer (string): The retailer/vendor name
-        - url (string): Direct link to the product
-        - in_stock (boolean): Whether the item appears to be in stock
-        - image_url (string): Product image URL
+        Return a JSON array containing ONLY the results worth keeping. Each object must have:
+        - index (number): The original result index
         - relevance_score (number): 0-100 how relevant this result is to the searched item
+        - in_stock (boolean): Whether the item appears to be in stock
         - notes (string|null): Any relevant notes (e.g., "bulk pack", "subscription price")
 
-        Return ONLY the JSON array, no other text.
+        Omit irrelevant or duplicate results entirely. Return ONLY the JSON array, no other text.
         PROMPT;
 
-        $systemPrompt = 'You are a price comparison assistant. Return only valid JSON arrays. Do not include markdown formatting or code blocks.';
-
-        try {
-            $result = $this->llmOrchestrator->query(
-                user: $user,
-                prompt: $prompt,
-                systemPrompt: $systemPrompt,
-                mode: 'single',
-            );
-
-            if (!$result['success']) {
-                Log::warning('PriceSearchService: LLM aggregation failed', [
-                    'error' => $result['error'] ?? 'Unknown',
-                ]);
-                return $rawResults;
-            }
-
-            $structured = $this->parseLlmResponse($result['response']);
-
-            if ($structured === null) {
-                Log::warning('PriceSearchService: failed to parse LLM response as JSON', [
-                    'response' => $result['response'],
-                ]);
-                return $rawResults;
-            }
-
-            return $this->sortByRelevanceAndPrice($structured);
-        } catch (\Exception $e) {
-            Log::error('PriceSearchService: aggregation error', [
-                'error' => $e->getMessage(),
-            ]);
-            return $rawResults;
-        }
+        return $this->queryAndMergeAnnotations($rawResults, $prompt, $user, 'aggregation');
     }
 
     /**
@@ -228,30 +188,51 @@ class PriceSearchService
      */
     private function aggregateRawResults(string $query, array $rawResults, User $user): array
     {
-        $resultsJson = json_encode($rawResults, JSON_PRETTY_PRINT);
+        $indexedJson = $this->buildIndexedResultsJson($rawResults);
 
         $prompt = <<<PROMPT
-        Analyze the following shopping search results for: "{$query}".
+        Analyze the following indexed shopping search results for: "{$query}".
 
-        Raw search results:
-        {$resultsJson}
+        {$indexedJson}
 
-        Structure these results into a clean, deduplicated list of vendor prices.
-        Remove irrelevant results, normalize prices, and sort by best value.
+        For each result, decide whether it is relevant to the search query.
+        Remove duplicates from the same retailer (keep the lowest price).
 
-        Return a JSON array of objects with these keys:
-        - product_name (string)
-        - price (number|null)
-        - retailer (string)
-        - url (string)
-        - in_stock (boolean)
-        - image_url (string)
-        - relevance_score (number): 0-100
-        - notes (string|null)
+        Return a JSON array containing ONLY the results worth keeping. Each object must have:
+        - index (number): The original result index
+        - relevance_score (number): 0-100 how relevant this result is
+        - in_stock (boolean): Whether the item appears to be in stock
+        - notes (string|null): Any relevant notes (e.g., "bulk pack", "subscription price")
 
-        Return ONLY the JSON array, no other text.
+        Omit irrelevant or duplicate results entirely. Return ONLY the JSON array, no other text.
         PROMPT;
 
+        return $this->queryAndMergeAnnotations($rawResults, $prompt, $user, 'text aggregation');
+    }
+
+    /**
+     * Build a compact indexed summary of raw results for LLM consumption.
+     */
+    private function buildIndexedResultsJson(array $rawResults): string
+    {
+        $indexed = [];
+        foreach ($rawResults as $i => $result) {
+            $indexed[] = [
+                'index' => $i,
+                'product_name' => $result['product_name'] ?? $result['title'] ?? null,
+                'price' => $result['price'] ?? null,
+                'retailer' => $result['retailer'] ?? $result['source'] ?? null,
+            ];
+        }
+
+        return json_encode($indexed, JSON_PRETTY_PRINT);
+    }
+
+    /**
+     * Send annotation prompt to LLM and merge results back with original data.
+     */
+    private function queryAndMergeAnnotations(array $rawResults, string $prompt, User $user, string $context): array
+    {
         $systemPrompt = 'You are a price comparison assistant. Return only valid JSON arrays. Do not include markdown formatting or code blocks.';
 
         try {
@@ -263,22 +244,52 @@ class PriceSearchService
             );
 
             if (!$result['success']) {
+                Log::warning("PriceSearchService: LLM {$context} failed", [
+                    'error' => $result['error'] ?? 'Unknown',
+                ]);
                 return $rawResults;
             }
 
-            $structured = $this->parseLlmResponse($result['response']);
+            $annotations = $this->parseLlmResponse($result['response']);
 
-            if ($structured === null) {
+            if ($annotations === null) {
+                Log::warning("PriceSearchService: failed to parse LLM {$context} response as JSON", [
+                    'response' => $result['response'],
+                ]);
                 return $rawResults;
             }
 
-            return $this->sortByRelevanceAndPrice($structured);
+            return $this->mergeAnnotations($rawResults, $annotations);
         } catch (\Exception $e) {
-            Log::error('PriceSearchService: text aggregation error', [
+            Log::error("PriceSearchService: {$context} error", [
                 'error' => $e->getMessage(),
             ]);
             return $rawResults;
         }
+    }
+
+    /**
+     * Merge LLM annotations back into the original raw results.
+     */
+    private function mergeAnnotations(array $rawResults, array $annotations): array
+    {
+        $merged = [];
+
+        foreach ($annotations as $annotation) {
+            $index = $annotation['index'] ?? null;
+
+            if ($index === null || !isset($rawResults[$index])) {
+                continue;
+            }
+
+            $merged[] = array_merge($rawResults[$index], [
+                'relevance_score' => $annotation['relevance_score'] ?? 50,
+                'in_stock' => $annotation['in_stock'] ?? true,
+                'notes' => $annotation['notes'] ?? null,
+            ]);
+        }
+
+        return $this->sortByRelevanceAndPrice($merged);
     }
 
     /**
@@ -320,14 +331,51 @@ class PriceSearchService
 
         $decoded = json_decode($cleaned, true);
 
+        // If parsing failed, attempt to salvage truncated JSON arrays
         if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
-            return null;
+            $decoded = $this->salvageTruncatedJson($cleaned);
+            if ($decoded === null) {
+                return null;
+            }
         }
 
         // Ensure it's a list of arrays (not an associative object)
         if (empty($decoded) || !isset($decoded[0]) || !is_array($decoded[0])) {
             return null;
         }
+
+        return $decoded;
+    }
+
+    /**
+     * Attempt to salvage a truncated JSON array by finding the last complete object.
+     */
+    private function salvageTruncatedJson(string $json): ?array
+    {
+        $json = trim($json);
+
+        if (!str_starts_with($json, '[')) {
+            return null;
+        }
+
+        $lastBrace = strrpos($json, '},');
+        if ($lastBrace === false) {
+            $lastBrace = strrpos($json, '}');
+            if ($lastBrace === false) {
+                return null;
+            }
+        }
+
+        $decoded = json_decode(substr($json, 0, $lastBrace + 1) . ']', true);
+
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+            return null;
+        }
+
+        Log::info('PriceSearchService: salvaged truncated JSON response', [
+            'original_length' => strlen($json),
+            'salvaged_items' => count($decoded),
+        ]);
 
         return $decoded;
     }
