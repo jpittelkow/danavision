@@ -259,7 +259,20 @@ class PriceSearchService
                 return $rawResults;
             }
 
-            return $this->mergeAnnotations($rawResults, $annotations);
+            $merged = $this->mergeAnnotations($rawResults, $annotations);
+
+            // Log provider breakdown for debugging
+            $inputProviders = array_count_values(array_map(fn ($r) => $r['provider'] ?? 'unknown', $rawResults));
+            $outputProviders = array_count_values(array_map(fn ($r) => $r['provider'] ?? 'unknown', $merged));
+            Log::info("PriceSearchService: {$context} complete", [
+                'input_count' => count($rawResults),
+                'annotated_count' => count($annotations),
+                'output_count' => count($merged),
+                'input_providers' => $inputProviders,
+                'output_providers' => $outputProviders,
+            ]);
+
+            return $merged;
         } catch (\Exception $e) {
             Log::error("PriceSearchService: {$context} error", [
                 'error' => $e->getMessage(),
