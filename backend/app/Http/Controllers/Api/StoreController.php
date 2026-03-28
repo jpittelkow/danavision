@@ -49,6 +49,7 @@ class StoreController extends Controller
             'product_url_pattern' => ['nullable', 'string', 'max:2048'],
             'category' => ['nullable', 'string', 'max:100'],
             'logo_url' => ['nullable', 'url', 'max:2048'],
+            'is_local' => ['nullable', 'boolean'],
         ]);
 
         $store = $this->storeService->createStore($request->user(), $validated);
@@ -68,6 +69,7 @@ class StoreController extends Controller
             'product_url_pattern' => ['nullable', 'string', 'max:2048'],
             'category' => ['nullable', 'string', 'max:100'],
             'logo_url' => ['nullable', 'url', 'max:2048'],
+            'is_local' => ['nullable', 'boolean'],
         ]);
 
         $store = $this->storeService->updateStore($store, $validated);
