@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.15]
+
+- Add Google Places address autocomplete to profile page for setting home location
+- Add geocode endpoint to resolve place IDs to lat/lng coordinates
+- Improve geolocation error messaging for non-HTTPS environments
+
 ## [2.0.9]
 
 - Fix crawl4ai: use PLAYWRIGHT_BROWSERS_PATH so Chromium is accessible to www-data at runtime (fixes connection refused on production)
