@@ -47,21 +47,29 @@ class LocationOptionsResolver
         $lat = $location['latitude'] ?? null;
         $lng = $location['longitude'] ?? null;
 
-        if ($lat !== null && $lng !== null) {
-            $options['latitude'] = (float) $lat;
-            $options['longitude'] = (float) $lng;
+        if ($lat === null || $lng === null) {
+            Log::warning('LocationOptionsResolver: user has address but no coordinates, skipping store-specific lookups', [
+                'user_id' => $user->id,
+                'has_address' => !empty($location['address']),
+                'has_zip' => !empty($location['zip_code']),
+            ]);
 
-            // Kroger: resolve nearest store location ID
-            $krogerLocationId = $this->resolveKrogerLocationId($user, (float) $lat, (float) $lng);
-            if ($krogerLocationId !== null) {
-                $options['kroger_location_id'] = $krogerLocationId;
-            }
+            return $options;
+        }
 
-            // Best Buy: resolve nearest store ID
-            $bestBuyStoreId = $this->resolveBestBuyStoreId($user, (float) $lat, (float) $lng);
-            if ($bestBuyStoreId !== null) {
-                $options['bestbuy_store_id'] = $bestBuyStoreId;
-            }
+        $options['latitude'] = (float) $lat;
+        $options['longitude'] = (float) $lng;
+
+        // Kroger: resolve nearest store location ID
+        $krogerLocationId = $this->resolveKrogerLocationId($user, (float) $lat, (float) $lng);
+        if ($krogerLocationId !== null) {
+            $options['kroger_location_id'] = $krogerLocationId;
+        }
+
+        // Best Buy: resolve nearest store ID
+        $bestBuyStoreId = $this->resolveBestBuyStoreId($user, (float) $lat, (float) $lng);
+        if ($bestBuyStoreId !== null) {
+            $options['bestbuy_store_id'] = $bestBuyStoreId;
         }
 
         return $options;
