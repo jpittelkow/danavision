@@ -54,6 +54,7 @@ import {
   updateItem,
   type ShoppingItem,
   type PriceHistoryEntry,
+  type ItemVendorPrice,
 } from "@/lib/api/shopping";
 
 export default function ItemDetailPage() {
@@ -84,6 +85,9 @@ export default function ItemDetailPage() {
   });
 
   const history: PriceHistoryEntry[] = historyResponse?.data?.data ?? [];
+  const vendorPrices: ItemVendorPrice[] = (item?.vendor_prices ?? [])
+    .filter((vp) => vp.current_price != null)
+    .sort((a, b) => Number(a.current_price) - Number(b.current_price));
 
   usePageTitle(item?.product_name ?? "Item Details");
 
@@ -370,7 +374,7 @@ export default function ItemDetailPage() {
       />
 
       {/* Vendor Comparison */}
-      {history.length > 0 && (
+      {vendorPrices.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
@@ -382,36 +386,53 @@ export default function ItemDetailPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Retailer</TableHead>
-                  <TableHead className="text-right">Latest Price</TableHead>
-                  <TableHead className="text-right">Date</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">In Stock</TableHead>
+                  <TableHead className="text-right">Last Checked</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* Show latest entry per retailer */}
-                {Object.values(
-                  history.reduce(
-                    (acc, entry) => {
-                      const key = entry.retailer ?? "Unknown";
-                      if (
-                        !acc[key] ||
-                        new Date(entry.date ?? entry.captured_at ?? 0) > new Date(acc[key].date ?? acc[key].captured_at ?? 0)
-                      ) {
-                        acc[key] = entry;
-                      }
-                      return acc;
-                    },
-                    {} as Record<string, PriceHistoryEntry>
-                  )
-                ).map((entry, i) => (
-                  <TableRow key={i}>
+                {vendorPrices.map((vp) => (
+                  <TableRow key={vp.id}>
                     <TableCell className="font-medium">
-                      {entry.retailer ?? "Unknown"}
+                      {vp.product_url ? (
+                        <a
+                          href={vp.product_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:underline inline-flex items-center gap-1"
+                        >
+                          {vp.vendor}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        vp.vendor
+                      )}
+                      {vp.on_sale && (
+                        <Badge variant="destructive" className="ml-2 text-xs">
+                          Sale{vp.sale_percent_off ? ` ${vp.sale_percent_off}% off` : ""}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
-                      ${Number(entry.price).toFixed(2)}
+                      {vp.current_price != null ? `$${Number(vp.current_price).toFixed(2)}` : "—"}
+                      {vp.unit_price != null && vp.unit_type && (
+                        <span className="block text-xs text-muted-foreground">
+                          ${Number(vp.unit_price).toFixed(2)}/{vp.unit_type}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {vp.in_stock === false ? (
+                        <Badge variant="outline" className="text-xs">Out of stock</Badge>
+                      ) : vp.in_stock === true ? (
+                        <Badge variant="secondary" className="text-xs">In stock</Badge>
+                      ) : "—"}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
-                      {new Date(entry.date ?? entry.captured_at ?? "").toLocaleDateString()}
+                      {vp.last_checked_at
+                        ? new Date(vp.last_checked_at).toLocaleDateString()
+                        : "—"}
                     </TableCell>
                   </TableRow>
                 ))}

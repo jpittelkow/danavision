@@ -44,6 +44,27 @@ export interface ShoppingList {
   updated_at?: string;
 }
 
+export interface ItemVendorPrice {
+  id: number;
+  list_item_id: number;
+  store_id?: number | null;
+  vendor: string;
+  vendor_sku?: string | null;
+  product_url?: string | null;
+  current_price: number | null;
+  unit_price?: number | null;
+  unit_quantity?: number | null;
+  unit_type?: string | null;
+  package_size?: string | null;
+  previous_price?: number | null;
+  lowest_price?: number | null;
+  highest_price?: number | null;
+  on_sale?: boolean;
+  sale_percent_off?: number | null;
+  in_stock?: boolean;
+  last_checked_at?: string | null;
+}
+
 export interface ShoppingItem {
   id: number;
   shopping_list_id: number;
@@ -60,6 +81,7 @@ export interface ShoppingItem {
   purchased_at?: string | null;
   purchased_price?: number | null;
   url?: string;
+  vendor_prices?: ItemVendorPrice[];
   created_at?: string;
   updated_at?: string;
 }
