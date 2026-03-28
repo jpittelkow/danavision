@@ -589,6 +589,7 @@ Route::middleware(['auth:sanctum', 'verified', '2fa.setup'])->group(function () 
     Route::post('/stores/nearby/preview', [StoreController::class, 'nearbyPreview']);
     Route::post('/stores/nearby/add', [StoreController::class, 'nearbyAdd']);
     Route::get('/stores/address-search', [StoreController::class, 'searchAddress']);
+    Route::get('/stores/address-geocode', [StoreController::class, 'geocodePlace']);
     Route::get('/stores/{store}', [StoreController::class, 'show']);
     Route::put('/stores/{store}', [StoreController::class, 'update']);
     Route::delete('/stores/{store}', [StoreController::class, 'destroy']);

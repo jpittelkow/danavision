@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { useAuth, isAdminUser } from "@/lib/auth";
 import { api } from "@/lib/api";
+import { searchAddress, geocodePlace } from "@/lib/api/shopping";
 import { getErrorMessage } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,77 @@ export default function ProfilePage() {
   });
   const [isLocationSaving, setIsLocationSaving] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
+  const [addressQuery, setAddressQuery] = useState("");
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{ place_id: string; description: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleAddressInput = useCallback((value: string) => {
+    setAddressQuery(value);
+    setLocation((prev) => ({ ...prev, home_address: value }));
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (value.length < 3) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await searchAddress(value);
+        setAddressSuggestions(res.data.data ?? []);
+        setShowSuggestions(true);
+      } catch {
+        setAddressSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+  }, []);
+
+  const handleSelectAddress = async (placeId: string, description: string) => {
+    setShowSuggestions(false);
+    setAddressQuery(description);
+    setLocation((prev) => ({ ...prev, home_address: description }));
+    setIsGeocoding(true);
+    try {
+      const res = await geocodePlace(placeId);
+      const { address, latitude, longitude } = res.data.data;
+      setLocation((prev) => ({
+        ...prev,
+        home_address: address || description,
+        home_latitude: latitude,
+        home_longitude: longitude,
+      }));
+      setAddressQuery(address || description);
+      if (latitude && longitude) {
+        toast.success("Address resolved with coordinates");
+      } else {
+        toast.warning("Address found but coordinates unavailable");
+      }
+    } catch {
+      toast.error("Failed to resolve address coordinates");
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
 
   const {
     register,
@@ -99,6 +171,7 @@ export default function ProfilePage() {
         home_latitude: data.home_latitude ?? null,
         home_longitude: data.home_longitude ?? null,
       });
+      setAddressQuery(data.home_address ?? "");
     }).catch(() => {
       // Location settings may not exist yet
     });
@@ -126,6 +199,10 @@ export default function ProfilePage() {
       toast.error("Geolocation is not supported by your browser");
       return;
     }
+    if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") {
+      toast.error("Location detection requires HTTPS. Please use the address search instead, or access this site over HTTPS.");
+      return;
+    }
     setIsDetecting(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -139,7 +216,11 @@ export default function ProfilePage() {
       },
       (error) => {
         setIsDetecting(false);
-        toast.error(`Location error: ${error.message}`);
+        if (error.message?.includes("secure origin") || error.code === 1) {
+          toast.error("Location access denied. Use the address search to set your coordinates instead.");
+        } else {
+          toast.error(`Location error: ${error.message}`);
+        }
       },
       { timeout: 10000, enableHighAccuracy: false }
     );
@@ -295,17 +376,37 @@ export default function ProfilePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-2 relative" ref={suggestionsRef}>
             <Label htmlFor="home_address">Home Address</Label>
-            <Input
-              id="home_address"
-              placeholder="123 Main St, City, State"
-              value={location.home_address ?? ""}
-              onChange={(e) =>
-                setLocation((prev) => ({ ...prev, home_address: e.target.value }))
-              }
-              disabled={isOffline}
-            />
+            <div className="relative">
+              <Input
+                id="home_address"
+                placeholder="Start typing an address..."
+                value={addressQuery}
+                onChange={(e) => handleAddressInput(e.target.value)}
+                onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+                disabled={isOffline || isGeocoding}
+                autoComplete="off"
+              />
+              {(isSearching || isGeocoding) && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
+            {showSuggestions && addressSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-md max-h-60 overflow-auto">
+                {addressSuggestions.map((s) => (
+                  <button
+                    key={s.place_id}
+                    type="button"
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+                    onClick={() => handleSelectAddress(s.place_id, s.description)}
+                  >
+                    <MapPin className="inline-block h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                    {s.description}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">

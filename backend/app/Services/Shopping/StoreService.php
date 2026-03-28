@@ -384,6 +384,24 @@ class StoreService
     }
 
     /**
+     * Geocode a Google Place ID to get coordinates and formatted address.
+     */
+    public function geocodePlace(string $placeId): ?array
+    {
+        $details = $this->googlePlacesService->getPlaceDetails($placeId);
+
+        if (empty($details)) {
+            return null;
+        }
+
+        return [
+            'address' => $details['address'] ?? '',
+            'latitude' => $details['location']['lat'] ?? null,
+            'longitude' => $details['location']['lng'] ?? null,
+        ];
+    }
+
+    /**
      * Infer a store category from Google Places types.
      */
     private function inferCategory(array $types): string

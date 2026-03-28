@@ -538,6 +538,10 @@ export async function searchAddress(query: string) {
   return api.get<{ data: Array<{ place_id: string; description: string }> }>("/stores/address-search", { params: { query } });
 }
 
+export async function geocodePlace(placeId: string) {
+  return api.get<{ data: { address: string; latitude: number | null; longitude: number | null } }>("/stores/address-geocode", { params: { place_id: placeId } });
+}
+
 // ---------------------------------------------------------------------------
 // Deals & Coupons
 // ---------------------------------------------------------------------------

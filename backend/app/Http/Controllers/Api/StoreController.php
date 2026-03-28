@@ -269,4 +269,22 @@ class StoreController extends Controller
 
         return response()->json(['data' => $results]);
     }
+
+    /**
+     * Geocode a Google Place ID to get coordinates and formatted address.
+     */
+    public function geocodePlace(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'place_id' => ['required', 'string', 'max:500'],
+        ]);
+
+        $result = $this->storeService->geocodePlace($validated['place_id']);
+
+        if ($result === null) {
+            return response()->json(['message' => 'Could not resolve address'], 422);
+        }
+
+        return response()->json(['data' => $result]);
+    }
 }
