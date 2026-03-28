@@ -45,12 +45,9 @@ class PriceSearchService
 
         $options = ['limit' => 20];
 
-        // Use local pricing if item or its list has shop_local enabled
-        $shopLocal = $item->shop_local ?? $item->shoppingList?->shop_local ?? false;
-        if ($shopLocal) {
-            $locationOptions = $this->locationOptionsResolver->resolveOptions($user);
-            $options = array_merge($options, $locationOptions);
-        }
+        // Always resolve user location for provider-specific pricing (Kroger location ID, etc.)
+        $locationOptions = $this->locationOptionsResolver->resolveOptions($user);
+        $options = array_merge($options, $locationOptions);
 
         $rawResults = $this->priceApiService->search($query, $options);
 
@@ -80,7 +77,8 @@ class PriceSearchService
             'limit' => 20,
         ];
 
-        if ($shopLocal && $user) {
+        // Always resolve user location for provider-specific pricing
+        if ($user) {
             $locationOptions = $this->locationOptionsResolver->resolveOptions($user);
             $options = array_merge($options, $locationOptions);
         }
