@@ -23,6 +23,7 @@ import {
   suppressStore,
   restoreStore,
   toggleStoreFavorite,
+  updateStorePreferences,
   fetchSuppressedVendors,
 } from "@/lib/api/shopping";
 import { Button } from "@/components/ui/button";
@@ -85,15 +86,17 @@ function StoreCardSkeleton() {
 function StoreCard({
   store,
   onToggleFavorite,
+  onToggleEnabled,
   onSuppress,
   onDelete,
 }: {
   store: Store;
   onToggleFavorite: (id: number) => void;
+  onToggleEnabled: (id: number, enabled: boolean) => void;
   onSuppress: (id: number) => void;
   onDelete: (id: number) => void;
 }) {
-  const [enabled, setEnabled] = useState(store.user_enabled ?? store.is_active);
+  const enabled = store.user_enabled ?? store.is_active;
 
   return (
     <Card>
@@ -167,7 +170,7 @@ function StoreCard({
           </div>
           <Switch
             checked={enabled}
-            onCheckedChange={(checked) => setEnabled(checked)}
+            onCheckedChange={(checked) => onToggleEnabled(store.id, checked)}
             aria-label={`Enable ${store.name}`}
           />
         </div>
@@ -232,6 +235,23 @@ export default function StoresConfigurationPage() {
     () => stores.filter((s) => s.is_favorite),
     [stores]
   );
+
+  const handleToggleEnabled = async (id: number, enabled: boolean) => {
+    // Optimistic update
+    setStores((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, user_enabled: enabled } : s))
+    );
+    try {
+      await updateStorePreferences([{ store_id: id, enabled }]);
+      toast.success(`Store ${enabled ? "enabled" : "disabled"}`);
+    } catch (error: unknown) {
+      // Revert on failure
+      setStores((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, user_enabled: !enabled } : s))
+      );
+      toast.error(getErrorMessage(error, "Failed to update store"));
+    }
+  };
 
   const handleToggleFavorite = async (id: number) => {
     try {
@@ -444,6 +464,7 @@ export default function StoresConfigurationPage() {
                     key={store.id}
                     store={store}
                     onToggleFavorite={handleToggleFavorite}
+                    onToggleEnabled={handleToggleEnabled}
                     onSuppress={handleSuppress}
                     onDelete={handleDelete}
                   />
@@ -471,6 +492,7 @@ export default function StoresConfigurationPage() {
                   key={store.id}
                   store={store}
                   onToggleFavorite={handleToggleFavorite}
+                  onToggleEnabled={handleToggleEnabled}
                   onSuppress={handleSuppress}
                   onDelete={handleDelete}
                 />
