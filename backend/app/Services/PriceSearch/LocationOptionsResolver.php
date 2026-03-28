@@ -32,10 +32,16 @@ class LocationOptionsResolver
         $options = [];
 
         // SerpAPI: location string for geo-targeted Google Shopping
-        if (!empty($location['address'])) {
-            $options['location'] = $location['address'];
-        } elseif (!empty($location['zip_code'])) {
+        // SerpAPI rejects raw street addresses (400); prefer zip code which it handles reliably.
+        // Keep the full address available for other providers that may need it.
+        if (!empty($location['zip_code'])) {
             $options['location'] = $location['zip_code'];
+        } elseif (!empty($location['address'])) {
+            $options['location'] = $location['address'];
+        }
+
+        if (!empty($location['address'])) {
+            $options['address'] = $location['address'];
         }
 
         // CrawlAI: zip code for {zip} URL template substitution
