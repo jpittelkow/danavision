@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.16]
+
+- Fix vendor price comparison on item page — now shows all vendor results (Kroger, SerpAPI, CrawlAI) instead of only the best price from history
+- Fix SerpAPI location errors — use zip code instead of street address for geo-targeted results
+- Add unit pricing, in-stock status, sale badges, and product links to vendor comparison table
+
 ## [2.0.15]
 
 - Add Google Places address autocomplete to profile page for setting home location
