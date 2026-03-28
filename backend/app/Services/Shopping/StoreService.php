@@ -25,6 +25,7 @@ class StoreService
     public function getActiveStores(User $user): array
     {
         $stores = Store::where('is_active', true)
+            ->with('parentStore')
             ->orderBy('name')
             ->get();
 
@@ -396,6 +397,7 @@ class StoreService
 
         return [
             'address' => $details['address'] ?? '',
+            'zip_code' => $details['postal_code'] ?? null,
             'latitude' => $details['location']['lat'] ?? null,
             'longitude' => $details['location']['lng'] ?? null,
         ];

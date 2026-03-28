@@ -500,6 +500,7 @@ export interface NearbyPlace {
   location: { lat: number; lng: number };
   rating?: number;
   types?: string[];
+  distance_miles?: number;
 }
 
 export async function fetchStores() {
@@ -510,7 +511,7 @@ export async function fetchStore(id: number) {
   return api.get<{ data: Store }>(`/stores/${id}`);
 }
 
-export async function createStore(data: { name: string; domain?: string; search_url_template?: string; category?: string }) {
+export async function createStore(data: { name: string; domain?: string; search_url_template?: string; category?: string; is_local?: boolean }) {
   return api.post<{ data: Store }>("/stores", data);
 }
 
@@ -567,7 +568,7 @@ export async function searchAddress(query: string) {
 }
 
 export async function geocodePlace(placeId: string) {
-  return api.get<{ data: { address: string; latitude: number | null; longitude: number | null } }>("/stores/address-geocode", { params: { place_id: placeId } });
+  return api.get<{ data: { address: string; zip_code: string | null; latitude: number | null; longitude: number | null } }>("/stores/address-geocode", { params: { place_id: placeId } });
 }
 
 // ---------------------------------------------------------------------------

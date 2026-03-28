@@ -141,13 +141,17 @@ export default function ItemDetailPage() {
   const editMutation = useMutation({
     mutationFn: () => {
       const data: Record<string, unknown> = {};
-      if (editForm.product_name.trim()) data.product_name = editForm.product_name.trim();
+      const name = editForm.product_name.trim();
+      if (name && name !== item?.product_name) data.product_name = name;
       if (editForm.upc !== (item?.upc ?? "")) data.upc = editForm.upc.trim() || null;
       if (editForm.retailer !== (item?.retailer ?? "")) data.retailer = editForm.retailer.trim() || null;
       if (editForm.url !== (item?.url ?? "")) data.url = editForm.url.trim() || null;
       const tp = editForm.target_price.trim();
       if (tp !== (item?.target_price != null ? String(item.target_price) : "")) {
         data.target_price = tp ? parseFloat(tp) : null;
+      }
+      if (Object.keys(data).length === 0) {
+        return Promise.resolve({ data: { data: item } });
       }
       return updateItem(itemId, data);
     },

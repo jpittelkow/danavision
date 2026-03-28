@@ -86,6 +86,13 @@ export default function ProfilePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const handleAddressInput = useCallback((value: string) => {
     setAddressQuery(value);
     setLocation((prev) => ({ ...prev, home_address: value }));
@@ -119,10 +126,11 @@ export default function ProfilePage() {
     setIsGeocoding(true);
     try {
       const res = await geocodePlace(placeId);
-      const { address, latitude, longitude } = res.data.data;
+      const { address, zip_code, latitude, longitude } = res.data.data;
       setLocation((prev) => ({
         ...prev,
         home_address: address || description,
+        home_zip_code: zip_code || prev.home_zip_code,
         home_latitude: latitude,
         home_longitude: longitude,
       }));

@@ -101,6 +101,7 @@ class GooglePlacesService
                     'fields' => implode(',', [
                         'name',
                         'formatted_address',
+                        'address_components',
                         'formatted_phone_number',
                         'opening_hours',
                         'website',
@@ -135,10 +136,20 @@ class GooglePlacesService
 
             $result = $data['result'] ?? [];
 
+            // Extract postal code from address_components
+            $postalCode = null;
+            foreach ($result['address_components'] ?? [] as $component) {
+                if (in_array('postal_code', $component['types'] ?? [])) {
+                    $postalCode = $component['long_name'] ?? null;
+                    break;
+                }
+            }
+
             return [
                 'place_id' => $placeId,
                 'name' => $result['name'] ?? '',
                 'address' => $result['formatted_address'] ?? '',
+                'postal_code' => $postalCode,
                 'phone' => $result['formatted_phone_number'] ?? null,
                 'website' => $result['website'] ?? null,
                 'google_maps_url' => $result['url'] ?? null,
