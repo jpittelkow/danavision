@@ -134,7 +134,7 @@ class ListItemController extends Controller
     {
         $this->authorizeItemAccess($request, $item);
 
-        $item->load('vendorPrices');
+        $item->load('vendorPrices.store:id,name,slug,is_local');
 
         return response()->json(['data' => $item]);
     }

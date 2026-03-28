@@ -33,6 +33,7 @@ class KrogerApiProvider implements PriceProviderInterface
         }
 
         $locationId = $options['kroger_location_id'] ?? null;
+        $chainName = $options['kroger_chain_name'] ?? null;
         $limit = min($options['limit'] ?? 10, 50);
 
         $params = [
@@ -62,7 +63,7 @@ class KrogerApiProvider implements PriceProviderInterface
             }
 
             $data = $response->json();
-            $results = $this->formatResults($data['data'] ?? [], $locationId);
+            $results = $this->formatResults($data['data'] ?? [], $locationId, $chainName);
 
             Log::info('KrogerApiProvider: search complete', [
                 'query' => $query,
@@ -191,7 +192,7 @@ class KrogerApiProvider implements PriceProviderInterface
     /**
      * Format Kroger API product results into standard provider format.
      */
-    private function formatResults(array $products, ?string $locationId): array
+    private function formatResults(array $products, ?string $locationId, ?string $chainName = null): array
     {
         $results = [];
 
@@ -202,7 +203,7 @@ class KrogerApiProvider implements PriceProviderInterface
             $results[] = [
                 'product_name' => $product['description'] ?? '',
                 'price' => $price,
-                'retailer' => ($product['brand'] ?? null) ? "Kroger ({$product['brand']})" : 'Kroger',
+                'retailer' => $chainName ?? 'Kroger',
                 'url' => "https://www.kroger.com/p/{$product['productId']}",
                 'in_stock' => $this->checkInStock($product, $locationId),
                 'image_url' => $this->extractImage($product),

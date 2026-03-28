@@ -20,6 +20,7 @@ class UserStorePreference extends Model
         'enabled',
         'is_favorite',
         'location_id',
+        'chain_name',
     ];
 
     /**

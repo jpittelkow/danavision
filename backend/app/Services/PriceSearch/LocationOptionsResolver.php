@@ -66,10 +66,11 @@ class LocationOptionsResolver
         $options['latitude'] = (float) $lat;
         $options['longitude'] = (float) $lng;
 
-        // Kroger: resolve nearest store location ID
-        $krogerLocationId = $this->resolveKrogerLocationId($user, (float) $lat, (float) $lng);
-        if ($krogerLocationId !== null) {
-            $options['kroger_location_id'] = $krogerLocationId;
+        // Kroger: resolve nearest store location ID and chain name
+        $krogerLocation = $this->resolveKrogerLocation($user, (float) $lat, (float) $lng);
+        if ($krogerLocation !== null) {
+            $options['kroger_location_id'] = $krogerLocation['location_id'];
+            $options['kroger_chain_name'] = $krogerLocation['chain_name'];
         }
 
         // Best Buy: resolve nearest store ID
@@ -99,12 +100,14 @@ class LocationOptionsResolver
     }
 
     /**
-     * Resolve the nearest Kroger location ID for the user's home coordinates.
+     * Resolve the nearest Kroger location ID and chain name for the user's home coordinates.
      *
      * Checks cached value in UserStorePreference first, then falls back to
      * a live API lookup via KrogerApiProvider::searchLocations().
+     *
+     * @return array{location_id: string, chain_name: string}|null
      */
-    private function resolveKrogerLocationId(User $user, float $lat, float $lng): ?string
+    private function resolveKrogerLocation(User $user, float $lat, float $lng): ?array
     {
         $krogerStore = Store::where('slug', 'kroger')->first();
 
@@ -116,7 +119,10 @@ class LocationOptionsResolver
                 ->first();
 
             if ($pref) {
-                return $pref->location_id;
+                return [
+                    'location_id' => $pref->location_id,
+                    'chain_name' => $pref->chain_name ?? 'Kroger',
+                ];
             }
         }
 
@@ -133,21 +139,23 @@ class LocationOptionsResolver
             }
 
             $locationId = $locations[0]['location_id'] ?? null;
+            $chainName = $locations[0]['chain'] ?? 'Kroger';
 
             // Cache in UserStorePreference
             if ($krogerStore && $locationId) {
                 UserStorePreference::updateOrCreate(
                     ['user_id' => $user->id, 'store_id' => $krogerStore->id],
-                    ['location_id' => $locationId]
+                    ['location_id' => $locationId, 'chain_name' => $chainName]
                 );
 
-                Log::info('LocationOptionsResolver: cached Kroger location ID', [
+                Log::info('LocationOptionsResolver: cached Kroger location', [
                     'user_id' => $user->id,
                     'location_id' => $locationId,
+                    'chain_name' => $chainName,
                 ]);
             }
 
-            return $locationId;
+            return ['location_id' => $locationId, 'chain_name' => $chainName];
         } catch (\Exception $e) {
             Log::warning('LocationOptionsResolver: Kroger location lookup failed', [
                 'error' => $e->getMessage(),

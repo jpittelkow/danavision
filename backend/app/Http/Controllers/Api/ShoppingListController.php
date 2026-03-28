@@ -62,6 +62,7 @@ class ShoppingListController extends Controller
             'items.vendorPrices' => function ($query) {
                 $query->orderBy('current_price', 'asc');
             },
+            'items.vendorPrices.store:id,name,slug,is_local',
         ]);
 
         // Add computed fields

@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.17]
+
+- Filter price search results by user's enabled stores — disabled stores no longer appear in vendor comparison
+- Show Kroger sub-brand name (e.g., "Pick 'n Save") instead of generic "Kroger" based on nearest store location
+- Add "Local" badge to vendor comparison for stores marked as local to the user's area
+- Eager-load store data on vendor prices for both item detail and list detail pages
+
 ## [2.0.16]
 
 - Fix vendor price comparison on item page — now shows all vendor results (Kroger, SerpAPI, CrawlAI) instead of only the best price from history

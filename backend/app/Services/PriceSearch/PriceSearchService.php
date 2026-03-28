@@ -5,6 +5,7 @@ namespace App\Services\PriceSearch;
 use App\Models\ListItem;
 use App\Models\Setting;
 use App\Models\User;
+use App\Models\UserStorePreference;
 use App\Services\LLM\LLMOrchestrator;
 use App\Services\SettingService;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,7 @@ class PriceSearchService
         private readonly PriceApiService $priceApiService,
         private readonly SettingService $settingService,
         private readonly LocationOptionsResolver $locationOptionsResolver,
+        private readonly VendorNameResolver $vendorNameResolver,
     ) {}
 
     /**
@@ -408,24 +410,48 @@ class PriceSearchService
     }
 
     /**
-     * Filter out results from vendors the user has suppressed.
+     * Filter out results from vendors the user has suppressed or disabled.
      */
     private function filterSuppressedVendors(array $results, User $user): array
     {
+        // Step 1: filter by explicit suppressed vendors list
         $suppressed = Setting::where('user_id', $user->id)
             ->where('group', 'shopping')
             ->where('key', 'suppressed_vendors')
             ->first();
 
-        if (!$suppressed || empty($suppressed->value)) {
+        if ($suppressed && !empty($suppressed->value)) {
+            $suppressedList = array_map('strtolower', (array) $suppressed->value);
+
+            $results = array_values(array_filter($results, function (array $result) use ($suppressedList) {
+                $retailer = strtolower($result['retailer'] ?? '');
+                return !in_array($retailer, $suppressedList);
+            }));
+        }
+
+        // Step 2: filter by disabled stores in user preferences
+        $disabledStoreIds = UserStorePreference::where('user_id', $user->id)
+            ->where('enabled', false)
+            ->pluck('store_id')
+            ->toArray();
+
+        if (empty($disabledStoreIds)) {
             return $results;
         }
 
-        $suppressedList = array_map('strtolower', (array) $suppressed->value);
+        return array_values(array_filter($results, function (array $result) use ($disabledStoreIds) {
+            $storeId = $this->vendorNameResolver->resolveToId(
+                $result['retailer'] ?? '',
+                $result['url'] ?? null,
+            );
 
-        return array_values(array_filter($results, function (array $result) use ($suppressedList) {
-            $retailer = strtolower($result['retailer'] ?? '');
-            return !in_array($retailer, $suppressedList);
+            // Keep results that don't resolve to any known store
+            if ($storeId === null) {
+                return true;
+            }
+
+            // Remove results from disabled stores
+            return !in_array($storeId, $disabledStoreIds);
         }));
     }
 }

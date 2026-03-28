@@ -63,6 +63,12 @@ export interface ItemVendorPrice {
   sale_percent_off?: number | null;
   in_stock?: boolean;
   last_checked_at?: string | null;
+  store?: {
+    id: number;
+    name: string;
+    slug: string;
+    is_local: boolean;
+  } | null;
 }
 
 export interface ShoppingItem {

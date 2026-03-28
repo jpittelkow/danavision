@@ -13,6 +13,7 @@ import {
   Barcode,
   Target,
   ExternalLink,
+  MapPin,
 } from "lucide-react";
 import Link from "next/link";
 import { usePageTitle } from "@/lib/use-page-title";
@@ -407,6 +408,12 @@ export default function ItemDetailPage() {
                         </a>
                       ) : (
                         vp.vendor
+                      )}
+                      {vp.store?.is_local && (
+                        <Badge variant="outline" className="ml-2 text-xs gap-1">
+                          <MapPin className="h-3 w-3" />
+                          Local
+                        </Badge>
                       )}
                       {vp.on_sale && (
                         <Badge variant="destructive" className="ml-2 text-xs">
