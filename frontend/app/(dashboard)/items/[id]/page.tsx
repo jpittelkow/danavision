@@ -14,6 +14,7 @@ import {
   Target,
   ExternalLink,
   MapPin,
+  Pencil,
 } from "lucide-react";
 import Link from "next/link";
 import { usePageTitle } from "@/lib/use-page-title";
@@ -68,6 +69,14 @@ export default function ItemDetailPage() {
   const [purchasePrice, setPurchasePrice] = useState("");
   const [targetPrice, setTargetPrice] = useState("");
   const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    product_name: "",
+    upc: "",
+    retailer: "",
+    url: "",
+    target_price: "",
+  });
 
   // Fetch item details
   const { data: itemResponse, isLoading: itemLoading } = useQuery({
@@ -128,6 +137,41 @@ export default function ItemDetailPage() {
       toast.error(getErrorMessage(error, "Failed to update target price"));
     },
   });
+
+  const editMutation = useMutation({
+    mutationFn: () => {
+      const data: Record<string, unknown> = {};
+      if (editForm.product_name.trim()) data.product_name = editForm.product_name.trim();
+      if (editForm.upc !== (item?.upc ?? "")) data.upc = editForm.upc.trim() || null;
+      if (editForm.retailer !== (item?.retailer ?? "")) data.retailer = editForm.retailer.trim() || null;
+      if (editForm.url !== (item?.url ?? "")) data.url = editForm.url.trim() || null;
+      const tp = editForm.target_price.trim();
+      if (tp !== (item?.target_price != null ? String(item.target_price) : "")) {
+        data.target_price = tp ? parseFloat(tp) : null;
+      }
+      return updateItem(itemId, data);
+    },
+    onSuccess: () => {
+      toast.success("Item updated");
+      setEditDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["shopping-item", itemId] });
+    },
+    onError: (error: unknown) => {
+      toast.error(getErrorMessage(error, "Failed to update item"));
+    },
+  });
+
+  const openEditDialog = () => {
+    if (!item) return;
+    setEditForm({
+      product_name: item.product_name,
+      upc: item.upc ?? "",
+      retailer: item.retailer ?? "",
+      url: item.url ?? "",
+      target_price: item.target_price != null ? String(item.target_price) : "",
+    });
+    setEditDialogOpen(true);
+  };
 
   if (itemLoading) {
     return (
@@ -217,6 +261,15 @@ export default function ItemDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={openEditDialog}
+          >
+            <Pencil className="h-4 w-4" />
+            Edit
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -492,6 +545,93 @@ export default function ItemDetailPage() {
               {purchaseMutation.isPending
                 ? "Saving..."
                 : "Confirm Purchase"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Item</DialogTitle>
+            <DialogDescription>
+              Update the details for this item.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Product Name</Label>
+              <Input
+                id="edit-name"
+                value={editForm.product_name}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, product_name: e.target.value }))
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-upc">UPC / Barcode</Label>
+                <Input
+                  id="edit-upc"
+                  value={editForm.upc}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, upc: e.target.value }))
+                  }
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-retailer">Preferred Retailer</Label>
+                <Input
+                  id="edit-retailer"
+                  value={editForm.retailer}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, retailer: e.target.value }))
+                  }
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-url">Product URL</Label>
+              <Input
+                id="edit-url"
+                value={editForm.url}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, url: e.target.value }))
+                }
+                placeholder="https://..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-target">Target Price</Label>
+              <Input
+                id="edit-target"
+                type="number"
+                step="0.01"
+                min="0"
+                value={editForm.target_price}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, target_price: e.target.value }))
+                }
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => editMutation.mutate()}
+              disabled={editMutation.isPending || !editForm.product_name.trim()}
+            >
+              {editMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
