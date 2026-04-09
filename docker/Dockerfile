@@ -31,7 +31,7 @@ RUN npm run build
 #==============================================================================
 # Stage 2: Production Image
 #==============================================================================
-FROM php:8.3-fpm
+FROM php:8.5-fpm
 
 LABEL maintainer="DanaVision"
 LABEL description="DanaVision - Smart shopping price tracker"
